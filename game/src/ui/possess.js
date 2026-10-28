@@ -6,17 +6,22 @@
 import { possessed } from "../sim/possess.js";
 import { maxHp, fitness, ageDays, SOFT } from "../sim/villager.js";
 import { diggable } from "../sim/tasks.js";
-import { esc, bar, needColor } from "./dom.js";
+import { PRIORITY, usable, useFor, targetOfPick, USE_ERR } from "./usecmd.js";
+import { esc } from "./dom.js";
+import { svg } from "./icons.js";
+import { ring, avatar, tipAttr } from "./kit.js";
+import { item as paintItem } from "../render/sprites.js";
 import { pickAt } from "./pick.js";
 import { blockerText, pct, itemName } from "./text.js";
 import { hazardLines } from "../sim/underground.js";
 
-const PRIORITY = { fauna: -1, csite: 0, item: 1, plant: 2, furniture: 3 };
 const NEEDS = [["hunger", "Food"], ["thirst", "Water"], ["energy", "Energy"], ["warm", "Warmth"]];
+const SHORT = { use: "Use", eat: "Eat", drink: "Drink", sleep: "Sleep", tool: "Tool", torch: "Torch", support: "Support", drop: "Put down" };
+const NEED_ICON = { hunger: "food", thirst: "water", energy: "energy", warm: "warmth" };
 
 export function createPossess(game) {
   const { ui, cam } = game;
-  const root = document.getElementById("possbanner");
+  const root = document.getElementById("dkPossess"), plate = document.getElementById("plate");
   ui.sent = { dx: 0, dy: 0 }; ui.face = { dx: 0, dy: 1 }; ui.prevZoom = 0; ui.fbSeen = 0;
   game.possessed = () => possessed(game.sim);
 
@@ -40,6 +45,7 @@ export function createPossess(game) {
       ui.follow = v.id; ui.sent = { dx: 0, dy: 0 };
       if (game.renderer.z < v.z) game.renderer.setZ(v.z);
       game.toast("You are guiding " + v.name + ". WASD to walk, E to use what is next to you, Esc to let go.", 5000);
+      if (game.fpvAuto) game.fpvAuto();                                // S18: guiding is always first person (falls back to the top-down guide only without WebGL)
     },
     leave() {
       if (game.possessed()) game.sim.apply({ type: "release" });
@@ -53,17 +59,15 @@ export function createPossess(game) {
     },
   };
 
-  /** What to use: the clicked cell's entity if it is beside us, else rock. */
-  function interactAt(pk) {
-    const v = game.possessed(); if (!v) return;
-    const near = (e) => Math.abs(e.x - v.x) + Math.abs(e.y - v.y) <= 1 && Math.abs(e.z - v.z) <= 1;
-    const e = pk.ents.find(near);
-    if (e) { send({ tid: e.id }); return; }
-    if (pk.ents.length) { game.toast("Too far - walk next to it first (WASD)."); return; }
-    const rock = pk.z > 0 && diggable(game.sim, pk.x, pk.y, pk.z - 1);
-    if (rock) { send({ verb: "dig", x: pk.x, y: pk.y, z: pk.z - 1 }); return; }
-    game.toast("Nothing there to use.");
-  }
+  /** What to use: the clicked cell's entity if it is beside us, else rock (ui/usecmd.js: the first-person view sends the same command for the same target). */
+  function interactAt(pk) { const v = game.possessed(); if (v) game.useTarget(targetOfPick(game.sim, v, pk)); }
+  /** Use a target ({ent} | {cell}): one pinput, or a plain sentence on why not. */
+  game.useTarget = (tgt) => {
+    const v = game.possessed(); if (!v) return false;
+    const r = useFor(game.sim, v, tgt);
+    if (r.err) { game.toast(USE_ERR[r.err]); return false; }
+    send(r.extra); return true;
+  };
   /** E: the thing you are facing, else anything beside you, else the rock you face. */
   function interactKey() {
     const v = game.possessed(); if (!v) return;
@@ -72,9 +76,7 @@ export function createPossess(game) {
     cells.forEach(([x, y], ci) => {
       for (const dz of [0, 1, -1]) for (const id of sim.ents.at(x, y, v.z + dz)) {
         const e = sim.ents.get(id);
-        if (!(e.kind in PRIORITY) || id === v.id) continue;
-        if (e.kind === "plant" && !(e.species === "tree" || (e.species === "berry" && e.yield > 0) || (e.species === "tuft" && e.yield > 0))) continue;
-        if (e.kind === "item" && sim.stock && e.x >= sim.stock.x0 && e.x <= sim.stock.x1 && e.y >= sim.stock.y0 && e.y <= sim.stock.y1 && e.z === sim.stock.z && !(sim.ents.get(id).item === "berry" || sim.ents.get(id).item === "dried")) continue;
+        if (id === v.id || !usable(sim, e)) continue;
         const k = ci * 10 + PRIORITY[e.kind];
         if (k < bk) { bk = k; best = e; }
       }
@@ -90,7 +92,7 @@ export function createPossess(game) {
   }
   game.possessKey = (act) => {                           // called by input.js with the guide ACTION the pressed key is bound to (ui/keys.js)
     const verbs = { eat: "eat", drink: "drink", sleep: "sleep", drop: "drop", tool: "equip" };
-    if (act === "use") { interactKey(); return true; }
+    if (act === "use") { if (!(game.fpvUse && game.fpvUse())) interactKey(); return true; }          // S18: in first person the crosshair chooses the target (ui/fpv.js)
     if (act === "torch" || act === "support") {                // S12: a torch on the cell you face (else your own), a support on the cell you face
       const v = game.possessed(); if (!v) return true;
       const f = ui.face, fx = v.x + f.dx, fy = v.y + f.dy, w = game.sim.world;
@@ -125,11 +127,12 @@ export function createPossess(game) {
       if (!v) { if (ui.mode === "possess") { game.toast("The guiding spirit let go of " + (ui.pname || "the villager") + "."); ui.mode = "select"; if (ui.prevZoom) cam.zoom = ui.prevZoom; ui.prevZoom = 0; ui.follow = 0; } return; }
       if (ui.mode !== "possess") return;
       let dx = 0, dy = 0;
-      for (const k of game.keys) {                                  // insertion order: the most recently pressed wins (the walk actions, whatever keys they are bound to)
+      const fd = game.fpvDir ? game.fpvDir() : null;                // S18: in first person the held keys are relative to where you look
+      if (fd) { dx = fd[0]; dy = fd[1]; } else for (const k of game.keys) {                                  // insertion order: the most recently pressed wins (the walk actions, whatever keys they are bound to)
         if (k === "panLeft") { dx = -1; dy = 0; } else if (k === "panRight") { dx = 1; dy = 0; }
         else if (k === "panUp") { dy = -1; dx = 0; } else if (k === "panDown") { dy = 1; dx = 0; }
       }
-      if (dx || dy) ui.face = { dx, dy };
+      if ((dx || dy) && !fd) ui.face = { dx, dy };
       if (dx !== ui.sent.dx || dy !== ui.sent.dy) {
         ui.sent = { dx, dy };
         game.sim.apply({ type: "pinput", id: v.id, dx, dy, tid: 0, verb: "" });
@@ -139,25 +142,37 @@ export function createPossess(game) {
     resume() { if (game.possessed() && ui.mode !== "possess") game.setMode("possess"); },
     update() {
       const v = game.possessed();
+      document.body.classList.toggle("possessing", !!v);
       if (!root) return;
-      root.style.display = v ? "block" : "none";
+      root.style.display = v ? "flex" : "none";
+      if (plate) plate.style.display = "";
       if (!v) { last = ""; return; }
-      const sim = game.sim, fb = v.poss.fb, mh = maxHp(v, fitness(v, ageDays(sim, v)));
-      let h = `<div class="pb-head"><b>POSSESSING ${esc(v.name)}</b> <span class="dim">game speed capped at 2x, fast-forward off</span><button data-pk="release">Release (Esc)</button></div><div class="pb-needs">`;
-      for (const [k, label] of NEEDS) h += `<span>${label}</span>` + bar(v[k], { color: needColor(v[k], SOFT[k][0], SOFT[k][1]), text: pct(v[k]) });
-      h += `<span>Health</span>` + bar(v.hp / mh, { color: needColor(v.hp / mh, 0.6, 0.3), text: Math.round(v.hp) + "/" + Math.round(mh), title: "Guidance ends below 10% of full health" });
-      h += `<span>Fear</span>` + bar(v.fear || 0, { color: (v.fear || 0) > 0.6 ? "#e5594f" : "#9a86d6", marks: [{ at: 0.6, cls: "crit" }], text: pct(v.fear || 0) + ((v.fear || 0) > 0.6 ? " - steadfast" : ""), title: "Villagers run above 60% fear. You are Steadfast: you never flee." });
-      h += `</div><div class="pb-line">${v.eq ? "Holding a " + esc(itemName(v.eq.item).replace(/s$/, "")) + ". " : "Bare-handed. "}${v.carry ? "Carrying " + v.carry.n + " " + esc(v.carry.item) + ". " : ""}${v.job ? "Doing: " + esc(v.job.k.replace("_", " ")) + "." : "Standing by."}`;
-      if (sim.tick - fb[1] < 120 && fb[0]) h += ` <span class="pb-fb">${esc(blockerText(v.job ? v.job.k : "", fb[0]))}</span>`;
-      const km = game.keymap, K = (id) => `<kbd>${esc(km.label(id))}</kbd>`;
-      for (const t of hazardLines(sim, v.x, v.y, v.z)) h += `<div class="pb-haz">${esc(t)}</div>`;      // S12: a cracking roof, bad air, the dark
-      h += `</div><div class="pb-hint">Walk (hold) ${K("panUp")}${K("panLeft")}${K("panDown")}${K("panRight")} · ${K("use")} or click: chop / pick / gather / lift / build / dig / STRIKE what is next to you · <button data-pk="tool" title="Take a copper spear (or pick) from the stockpile in hand: stand in the stockpile">Take tool (${esc(km.label("tool"))})</button> <button data-pk="eat">Eat</button> <button data-pk="drink">Drink</button> <button data-pk="sleep">Sleep</button> <button data-pk="drop">Put down</button> <button data-pk="torch" title="A torch on the cell you face (a stick in hand; fire must be known)">Torch (${esc(km.label("torch"))})</button> <button data-pk="support" title="A timber support on the cell you face (timber in hand; framing must be known)">Support (${esc(km.label("support"))})</button> · needs drain as usual: you must feed them yourself</div>`;
+      const sim = game.sim, fb = v.poss.fb, mh = maxHp(v, fitness(v, ageDays(sim, v))), km = game.keymap;
+      // the dock in Possess mode (UI_SPEC §7): avatar + need rings, the held item, action keycaps. Words are tips and a hidden copy.
+      let h = `<div class="pk-av" data-test="possess-who">${avatar(v.hue, v.lin, 28)}<span class="pb-head sr"><b>POSSESSING ${esc(v.name)}</b> game speed capped at 2x, fast-forward off</span></div><div class="pk-rings">`;
+      for (const [k, label] of NEEDS) h += ring({ icon: NEED_ICON[k], v: v[k], soft: SOFT[k][0], crit: SOFT[k][1], px: 30, tip: `${label} ${pct(v[k])}`, test: "pk-" + k });
+      h += ring({ icon: "health", v: v.hp / mh, soft: 0.6, crit: 0.3, px: 30, tip: `Health ${Math.round(v.hp)}/${Math.round(mh)}\nGuidance ends below 10% of full health`, test: "pk-health" });
+      if ((v.fear || 0) > 0) h += ring({ icon: "fear", v: v.fear, px: 30, tip: `Fear ${pct(v.fear)}${v.fear > 0.6 ? " - steadfast" : ""}\nVillagers run above 60% fear. You are Steadfast: a guided villager never flees.`, test: "pk-fear" });
+      h += `</div><span class="sr">Food Water Energy Warmth Health ${Math.round(v.hp)}/${Math.round(mh)} Fear ${pct(v.fear || 0)}${(v.fear || 0) > 0.6 ? " - steadfast" : ""}. ${v.eq ? "Holding a " + esc(itemName(v.eq.item).replace(/s$/, "")) + ". " : "Bare-handed. "}${v.carry ? "Carrying " + v.carry.n + " " + esc(v.carry.item) + ". " : ""}${v.job ? "Doing: " + esc(v.job.k.replace("_", " ")) + ". " : ""}</span>`;
+      const heldTxt = v.carry ? `${v.carry.n} ${itemName(v.carry.item)}` : v.eq ? itemName(v.eq.item).replace(/s$/, "") : "bare hands";
+      h += `<div class="pk-held" data-test="held"${tipAttr(heldTxt + (v.carry ? "\nPut down" : ""), v.carry ? km.label("drop") : "")}><canvas width="32" height="32" data-held="${esc(v.carry ? "c" + v.carry.item : v.eq ? "e" + v.eq.item : "")}"></canvas>${v.carry ? `<b>${v.carry.n}</b>` : ""}</div>`;
+      const ACT = [["use", "use", "Use what is next to you\nChop, pick, dig, strike, build"], ["eat", "eat", "Eat"], ["drink", "drink", "Drink"], ["sleep", "sleep", "Sleep"], ["tool", "tool", "Take the spear or pick"], ["torch", "torch", "Set a torch\nOn the cell you face (needs a stick in hand)"], ["support", "support", "Post a timber support\nOn the cell you face (needs timber in hand)"], ["drop", "drop", "Put down"]];
+      h += `<div class="pk-act">` + ACT.map(([id, ic, tip]) => `<button class="btn big lab" data-pk="${id}" data-test="pk-${id}"${tipAttr(tip, km.label(id).split(" / ")[0])} aria-label="${esc(tip.split("\n")[0])}">${svg(ic, 20)}<span class="bl">${esc(SHORT[id])}</span><span class="kc">${esc(km.label(id).split(" / ")[0])}</span></button>`).join("")
+        + `<button class="btn big lab" data-pk="release" data-test="pk-release"${tipAttr("Release\nLet go of them", "Esc")} aria-label="Release">${svg("release", 20)}<span class="bl">Release</span><span class="kc">Esc</span></button></div>`;
+      const haz = hazardLines(sim, v.x, v.y, v.z);
+      if (haz.length) h += `<div class="pk-haz">` + haz.map(t => `<span${tipAttr(t)}>${svg(/roof/i.test(t) ? "underground" : /air/i.test(t) ? "warn" : "night", 18)}<span class="sr">${esc(t)}</span></span>`).join("") + `</div>`;
+      if (sim.tick - fb[1] < 120 && fb[0]) h += `<span class="pk-fb"${tipAttr(blockerText(v.job ? v.job.k : "", fb[0]))}>${svg("blocked", 18)}<span class="sr">${esc(blockerText(v.job ? v.job.k : "", fb[0]))}</span></span>`;
+      if (plate) { const ph = `${svg("possess", 16)}<b>${esc(v.name)}</b><kbd>Esc</kbd><span class="sr">Guiding ${esc(v.name)}</span>` + (game.state.speed > 2 ? `<span class="fv-lock"${tipAttr("Game speed is capped at 2x while you guide a villager")}>${svg("lock", 14)}</span>` : ""); if (plate._h !== ph) { plate._h = ph; plate.innerHTML = ph; } }
+      if (h !== last) {
+        last = h; root.innerHTML = h;
+        const cv = root.querySelector(".pk-held canvas"), k = cv && cv.dataset.held;
+        if (cv && k) { const c = cv.getContext("2d"); if (k[0] === "c" && v.carry) paintItem(c, v.carry.item, { n: Math.min(3, v.carry.n) }); else if (v.eq) paintItem(c, v.eq.item, { n: 1 }); }
+      }
       for (const [k, label] of NEEDS) {                                  // nothing relieves a guided villager's needs but you: say so when one turns critical
         const crit = v[k] < SOFT[k][1];
         if (crit && !warned[k]) game.toast(v.name + " is critically low on " + label.toLowerCase() + " - feed, water or rest them (" + km.label("eat") + ", " + km.label("drink") + ", " + km.label("sleep") + "), or release (Esc).", 6000);
         warned[k] = crit;
       }
-      if (h !== last) { last = h; root.innerHTML = h; }
     },
   };
 }

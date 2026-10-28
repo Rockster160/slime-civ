@@ -1,6 +1,7 @@
 // S7a: the discovery system and fire (GDD §15, §11.8, §11.9), fixture-based, every window <= 3 game days.
 //   node tests/discovery.js
 import assert from "node:assert/strict";
+import { ERA_RANK } from "../src/sim/phenomena.js";
 import { loadFixture } from "./fixture.js";
 import { instantHut, flatSpot, clearArea } from "./helpers.js";
 import { toJSON, restore } from "../src/sim/save.js";
@@ -14,7 +15,7 @@ import { haveTotal, storeInZone } from "../src/sim/items.js";
 import { plan } from "../src/sim/jobs.js";
 import { almanac } from "../src/ui/almanac.js";
 import { explain } from "../src/ui/text.js";
-import { DAY } from "../src/sim/clock.js";
+import { DUR_DAY } from "../src/sim/clock.js";
 
 const step = (sim, n) => { for (let i = 0; i < n; i++) sim.step(); };
 const adults = (sim) => sim.ents.ofKind("villager").filter(v => isAdult(sim, v));
@@ -25,16 +26,20 @@ const ok = (m) => console.log("ok " + ++n + " " + m);
 {
   const sim = loadFixture("settled");
   assert.ok(!can(sim, "FIRE_TENDING") && eraOf(sim) === "", "nobody knows fire at day 24");
+  for (const v of sim.ents.ofKind("villager")) delete v.fam.HIDE_WORKING;           // (the era must read Hearth: the fixture village has hunted by now, and a skinned hopper teaches hide working)
+  for (const f of sim.ents.ofKind("fauna").filter(e => e.sp === "hopper").slice()) sim.ents.remove(f.id);
+  sim.cache.kn = null;
   assert.equal(sim.apply({ type: "force", ev: "lightning" }), true);
   const fl = flames(sim);
   assert.equal(fl.length, 1); assert.equal(fl[0].src, "tree"); assert.equal(fl[0].heat, 2, "an open burning tree is heat level 2 (same function as everything else)");
   assert.ok(sim.ents.get(fl[0].tid).burn, "the tree is marked alight");
   let at = -1;
-  for (let i = 0; i < 2 * DAY && at < 0; i++) { sim.step(); if (can(sim, "FIRE_TENDING")) at = i; }
+  let eraAt = "", eraDisc = "";
+  for (let i = 0; i < 2 * DUR_DAY && at < 0; i++) { sim.step(); if (can(sim, "FIRE_TENDING")) { at = i; eraAt = eraOf(sim); eraDisc = sim.disc.era; } }
   assert.ok(at >= 0, "someone learned fire within two game days of a strike");
   const hs = holders(sim, "FIRE_TENDING");
   assert.ok(hs.every(v => v.fam.FIRE_TENDING >= 0.2), "witnesses start at 0.2 or better");
-  assert.equal(eraOf(sim), "Hearth"); assert.equal(sim.disc.era, "Hearth");
+  assert.ok(ERA_RANK[eraAt] >= ERA_RANK.Hearth && eraAt === eraDisc, "the era is Hearth or later: " + eraAt + " / " + eraDisc);       // (read the moment fire was learnt: later the village may learn more)
   const txt = sim.chron.entries.map(e => e.text).join("\n");
   assert.match(txt, /was first to keep a fire/); assert.match(txt, /Hearth age begins/);
   assert.ok(sim.disc.trace.some(t => t.k === "witness" && t.ok), "the trace holds the witness roll and its factors");
@@ -65,7 +70,7 @@ const ok = (m) => console.log("ok " + ++n + " " + m);
   assert.ok(before >= 12);
   assert.equal(sim.apply({ type: "investigate", ids: [v.id], item: "clay" }), true);
   let sawJob = false, cls = "";
-  for (let i = 0; i < DAY + 1200; i++) { sim.step(); if (v.job && v.job.k === "tinker") { sawJob = true; cls = v.job.c; } }
+  for (let i = 0; i < DUR_DAY + 1200; i++) { sim.step(); if (v.job && v.job.k === "tinker") { sawJob = true; cls = v.job.c; } }
   assert.ok(sawJob, "the asked villager tinkers"); assert.equal(cls, "standing", "asked tinkering is standing class (K8)");
   const after = haveTotal(sim, "clay");
   assert.ok(after < before, "an attempt consumes the material: clay " + before + " -> " + after);
@@ -135,7 +140,7 @@ const ok = (m) => console.log("ok " + ++n + " " + m);
   const v = adults(sim)[0];
   sim.apply({ type: "investigate", ids: [v.id] });
   const atRing = () => sim.disc.trace.some(t => t.k === "tinker" && t.site.endsWith(":" + h.id) && /^(ember|hearth)/.test(t.site));
-  for (let d = 0; d < 6 && !atRing(); d++) step(sim, DAY);                  // S16: a weighted draw (the ring is ~1/3 of it): a given 2-day window hits it about 7 times in 10, and the old map's stream happened to; allow six
+  for (let d = 0; d < 6 && !atRing(); d++) step(sim, DUR_DAY);                  // S16: a weighted draw (the ring is ~1/3 of it): a given 2-day window hits it about 7 times in 10, and the old map's stream happened to; allow six
   assert.ok(sim.disc.trace.some(t => t.k === "tinker" && t.site.endsWith(":" + h.id) && /^(ember|hearth)/.test(t.site)), "someone tinkered at the old coals (the ring is called ember while the craft is lost and hearth once somebody has found it again; it is the same ring, id " + h.id + "): " + JSON.stringify(sim.disc.trace.slice(-4)) + " " + JSON.stringify(v.job) + " " + JSON.stringify(v.why && v.why.rej) + can(sim, "FIRE_TENDING"));
   ok("loss: warning at one, LOSS + era regress at zero, tend_fire blocked; rediscovery odds ratio " + (p0 / pe).toFixed(2) + " (" + (1 / p0).toFixed(1) + " -> " + (1 / pe).toFixed(1) + " expected tries); " + (can(sim, "FIRE_TENDING") ? "rediscovered" : "still looking"));
 }
@@ -148,7 +153,7 @@ const ok = (m) => console.log("ok " + ++n + " " + m);
   h.fuel = 300;
   const fuelBefore = haveTotal(sim, "log") + haveTotal(sim, "stick"), start = h.fuel;
   let peak = h.fuel, job = false;
-  for (let i = 0; i < DAY + 600; i++) { sim.step(); peak = Math.max(peak, h.fuel); if (sim.ents.ofKind("villager").some(v => v.job && v.job.k === "tend_fire")) job = true; }
+  for (let i = 0; i < DUR_DAY + 600; i++) { sim.step(); peak = Math.max(peak, h.fuel); if (sim.ents.ofKind("villager").some(v => v.job && v.job.k === "tend_fire")) job = true; }
   assert.ok(job, "someone took the tend_fire chore"); assert.ok(peak > start + 800, "and put fuel on: " + start + " -> peak " + peak);
   assert.ok(haveTotal(sim, "log") + haveTotal(sim, "stick") < fuelBefore, "the fuel came out of the stockpile");
   assert.equal(h.lit, 1, "the fire stayed lit through the chore");
@@ -161,7 +166,7 @@ const ok = (m) => console.log("ok " + ++n + " " + m);
   put(b, h.x + 1, h.y + 25 < 127 ? h.y + 25 : h.y - 25);
   const bn = fireBonus(sim, a), bf = fireBonus(sim, b);
   assert.ok(bn >= FIRE_WARM[2] * (1 - 1 / 6) - 1e-9 && bf === 0, "bonus at the fire " + bn.toFixed(2) + ", far away " + bf);
-  const night = sim.tick - (sim.tick % DAY) + Math.floor(DAY * 0.9);
+  const night = sim.tick - (sim.tick % DUR_DAY) + Math.floor(DUR_DAY * 0.9);
   sim.tick = night;
   a.warm = 0.5; b.warm = 0.5; a.rest = 0; b.rest = 0;
   updateNeeds(sim, a); updateNeeds(sim, b);

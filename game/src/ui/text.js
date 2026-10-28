@@ -19,13 +19,16 @@ import { CRAFTS } from "../sim/phenomena.js";
 import { FIRE_R, smokeFire, SMOKE_R } from "../sim/fire.js";
 import { FAUNA, huntingPressure } from "../sim/fauna.js";
 import { CROP, cropStage } from "../sim/farm.js";
-import { DAY } from "../sim/clock.js";
+import { DUR_DAY } from "../sim/clock.js";
 import { crewOf, taskText } from "../sim/crews.js";
 import { BIOMES, biomeAt } from "../sim/biome.js";
 import { TORCH_R, LAMP_R } from "../sim/light.js";
 import { hazardLines, VENT_N, POCKET_N } from "../sim/underground.js";
 
 /** Every blocker enum the sim can emit (jobs.js, tasks.js, path.js, actions.js) has a sentence here; tests/ui_text.js enforces it. */
+/** UI_SPEC §12.1/§12.2: the blocker as a 1-3 word label (never a sentence) for icons, chips and pops. */
+export const BLOCKER_SHORT = { NO_PATH: "No path", BUDGET: "Too far", BLOCKED: "Blocked", NO_MATERIAL: "No material", NO_CAPACITY: "Full hands", NO_SEASON: "Out of season", RESERVED: "Taken", MAX_WORKERS: "Crowded", NO_STORAGE: "Store full", NO_SITE: "No site", NO_TARGET: "Nothing left", NO_WATER: "No water", GONE: "Gone", TOO_FAR: "Too far", UNSUPPORTED: "Not yet", NOTHING_TO_DIG: "Nothing to dig", NO_TOOL: "No tool", UNSAFE: "Unsafe", NO_STATION: "No station" };
+export const shortBlocker = (b) => BLOCKER_SHORT[b] || String(b || "").toLowerCase().replace(/_/g, " ").replace(/^./, c => c.toUpperCase()).split(" ").slice(0, 3).join(" ");
 export const BLOCKER_TEXT = {
   NO_PATH: "no way to get there",
   BUDGET: "the route is too long to work out",
@@ -43,6 +46,7 @@ export const BLOCKER_TEXT = {
   NO_WATER: "no water within reach",
   GONE: "the target is gone",
   TOO_FAR: "too far away - walk next to it first",
+  SCOUT_FAR: "too far from the camp to scout (160 cells at most)",
   UNSUPPORTED: "what is left is waiting for walls or floors to be finished first",
   NOT_ORE: "that is not a seen ore or clay seam (click a coloured cell you have uncovered)",
   NO_ROUTE: "a stair cannot go down there (water, built ground, the map edge, or no rock to stand on)",
@@ -313,7 +317,7 @@ export function explain(sim, v, next) {
   };
   if (w && !stale) {
     for (const k of Object.keys(PART_LABEL)) if (w.parts && w.parts[k] !== undefined && (w.parts[k] !== 0 || k === "base")) out.parts.push({ k, label: PART_LABEL[k], value: w.parts[k] });
-    for (const r of w.rej || []) out.rejected.push({ label: jobNoun(r.job, r.cls), text: blockerText(r.job, r.blocker, w, r), cls: r.cls, blocker: r.blocker });
+    for (const r of w.rej || []) out.rejected.push({ job: r.job, label: jobNoun(r.job, r.cls), text: blockerText(r.job, r.blocker, w, r), cls: r.cls, blocker: r.blocker });
   }
   out.notes = [];
   const sk = JOB_SKILL[jobK];
@@ -415,7 +419,7 @@ export function stationInfo(sim, e) {
   if (!STATION_NAME[e.f]) return null;
   const held = Object.keys(e.inv || {}).map(k => e.inv[k] + " " + itemName(k)).join(", ");
   const burning = e.bn > 0, rc = e.rcp ? RECIPES[e.rcp] : null;
-  const state = burning ? "burning: " + (rc ? rc.label : "a batch") + ", " + LEVEL_NAME[e.lv] + " heat, " + (e.bn / 1800).toFixed(1) + " days to go" : held ? "loaded with " + held + (rc ? " for " + rc.label : "") : "empty and cold";
+  const state = burning ? "burning: " + (rc ? rc.label : "a batch") + ", " + LEVEL_NAME[e.lv] + " heat, " + (e.bn / DUR_DAY).toFixed(1) + " days to go" : held ? "loaded with " + held + (rc ? " for " + rc.label : "") : "empty and cold";
   const fuels = e.f === "mound" ? ["log"] : e.f === "smoker" ? [] : e.f === "forge" ? ["charcoal", "coal"] : ["stick", "charcoal"];
   const need = {};
   for (const k of Object.keys(RECIPES)) if (RECIPES[k].station === e.f && RECIPES[k].fuel) need[RECIPES[k].fuel] = Math.max(need[RECIPES[k].fuel] || 0, RECIPES[k].need);
@@ -478,8 +482,8 @@ export function warnings(sim) {
   else if (wa > 0 && b.runway < crit * 1.6) out.push({ level: 1, title: "Food is getting tight", text: "Winter is coming: " + runwayText(b.runway) + " banked, " + crit.toFixed(1) + " needed to count as safe." });
   if (b.sc) out.push({ level: 2, title: "NEEDS SHELTER", text: (b.sneed || "Some") + " villager(s) have no leaf bed and it is (or will soon be) cold. They will build beds from grass: " + s.stock.grass + " in stock, " + BED_COST.n + " per bed." });
   const hp = huntingPressure(sim);
-  if (sim.tick > 3 * DAY && hp.gone) out.push({ level: 2, title: "NO HOPPERS LEFT", text: "The wild hoppers are all gone (the meadow carries about " + hp.cap + "). They come back slowly from the edges; stop hunting, or keep a pen." });
-  else if (sim.tick > 3 * DAY && hp.low) out.push({ level: 1, title: "Hoppers are getting scarce", text: hp.n + " left in the wild against about " + hp.cap + " the meadow carries. Hunting less lets the herd regrow; a pen breeds them." });
+  if (sim.tick > 3 * DUR_DAY && hp.gone) out.push({ level: 2, title: "NO HOPPERS LEFT", text: "The wild hoppers are all gone (the meadow carries about " + hp.cap + "). They come back slowly from the edges; stop hunting, or keep a pen." });
+  else if (sim.tick > 3 * DUR_DAY && hp.low) out.push({ level: 1, title: "Hoppers are getting scarce", text: hp.n + " left in the wild against about " + hp.cap + " the meadow carries. Hunting less lets the herd regrow; a pen breeds them." });
   const rot = rottingSoon(sim);
   if (rot.units >= 4) out.push({ level: 1, title: "Food is rotting", text: rot.units + " units of fresh food (" + rot.what + ") will spoil before they are eaten. Dry or smoke it, keep it in clay jars or a cold cellar, or forage less." });
   return out;

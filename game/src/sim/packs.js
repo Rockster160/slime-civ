@@ -7,7 +7,7 @@
 // grazer   a heavy grazer of the marsh and the licks (else the far meadow): slow, 120 health, big meat, hide and bone. Grazes round its herd's home and walks off from
 //          anyone who comes close, slowly. Hit, it TURNS on whoever hit it for a while (dangerous cornered) and breaks off when badly hurt. Penned (HUSBANDRY, a bigger pen) it
 //          grazes inside the fence like a hopper.
-import { DAY } from "./clock.js";
+import { DUR_DAY } from "./clock.js";
 import { NO_T } from "./util.js";
 import { isNight, seasonIdx } from "./season.js";
 
@@ -17,7 +17,7 @@ export const GROUP_R = 6;          // two villagers within this many cells of a 
 export const WOLF_SEE = 14;        // how far a wolf notices a hopper or villager by day; in a winter night it hunts farther
 export const WOLF_NIGHT = 60;
 export const WOLF_LEASH = 46;      // the farthest a pack ranges from its home
-export const WOLF_FED = 1.5 * DAY; // ticks a wolf is fed after a hopper
+export const WOLF_FED = 1.5 * DUR_DAY; // ticks a wolf is fed after a hopper
 export const TURN_TICKS = 500;     // how long a struck grazer keeps coming at the one who struck it
 
 const cheb = (a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));

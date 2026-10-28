@@ -9,6 +9,7 @@ import { esc, createPanel } from "./dom.js";
 import { dateOf, SEASON_NAMES } from "../sim/clock.js";
 import { ERA_FLOW, ERA_RANK } from "../sim/phenomena.js";
 import { thisWorld } from "../sim/depth.js";
+import { svg, ERA_LETTER } from "./icons.js";
 
 const when = (sim, t) => { const d = dateOf(t); return "year " + d.year + ", " + SEASON_NAMES[d.season].toLowerCase(); };
 
@@ -53,8 +54,8 @@ function traceLine(t) {
   return "t" + t.t + " " + t.k + " " + t.who + " " + t.row + " @" + t.site + f("sal", t.sal) + f("att", t.att) + f("int", t.int) + f("pr", t.pr) + f("jit", t.jit) + " = " + t.w + (t.ok ? " sticks" : " missed");
 }
 
-export function createAlmanacPanel(parent, game) {
-  const p = createPanel(parent, "almanac", "Almanac", { open: false });
+export function createAlmanacPanel(parent, game, opts = {}) {
+  const p = createPanel(parent, "almanac", "Almanac", { open: false, icon: "knowledge", flat: !!opts.flat });
   p.body.addEventListener("click", (e) => {
     const t = e.target.closest("[data-v]"); if (t) { const id = Number(t.dataset.v); if (game.sim.ents.get(id)) game.selectOnly(id, true); }
     if (e.target.closest("[data-trace]")) game.ui.showTrace = !game.ui.showTrace;
@@ -70,7 +71,7 @@ export function createAlmanacPanel(parent, game) {
     const { sim, ui } = game, a = almanac(sim);
     p.setHint(a.era ? a.era + " age" : "");
     let h = `<div class="alm-era">${a.era ? `<b>${esc(a.era)} age</b> <span class="dim">(set by the highest craft a living villager knows)</span>` : `<span class="dim">No age yet - the village knows no craft beyond foraging, gathering and knapping flint.</span>`}</div>`;
-    h += `<div class="alm-flow">` + a.flow.map(x => `<span class="${x.now ? "on" : x.held ? "past" : ""}" title="${esc(x.at ? "reached " + x.at + (x.nth ? " (number " + x.nth + " found)" : "") + (x.shelter ? "; shelter: " + x.shelter : "") : "not reached yet" + (x.shelter ? " (" + x.shelter + ")" : ""))}">${esc(x.name)}</span>`).join(" &rarr; ") + `</div>`;
+    h += `<div class="alm-flow" style="display:flex;gap:4px;align-items:center" data-test="era-track">` + a.flow.map(x => `<span class="era-b ${x.now ? "on" : ""}" style="${x.held || x.now ? "color:var(--tx)" : ""}" data-tip="${esc(x.name + (x.at ? "\nreached " + x.at + (x.nth ? " (number " + x.nth + " found)" : "") + (x.shelter ? "; shelter: " + x.shelter : "") : "\nnot reached yet" + (x.shelter ? " (" + x.shelter + ")" : "")))}">${esc(ERA_LETTER[x.name] || x.name.slice(0, 2))}</span>`).join(svg("chev-r", 12)) + `<span class="sr">${a.flow.map(x => esc(x.name)).join(" → ")}</span></div>`;
     if (a.order.length) h += `<div class="dim alm-ord">In the order found: ${a.order.map(n => esc(n)).join(", then ")}.</div>`;
     if (a.world.on) {                                            // S14: what is particular about this seed (OD-22)
       h += `<div class="sub alm-world">This world <span class="dim">(every seed bends its materials by up to 10%)</span></div>`;
@@ -95,7 +96,7 @@ export function createAlmanacPanel(parent, game) {
     else h += `<ul class="rej">` + a.deadEnds.slice(0, 8).map(t => `<li>${esc(t)}</li>`).join("") + (a.deadEnds.length > 8 ? `<li class="dim">...and ${a.deadEnds.length - 8} more</li>` : "") + `</ul>`;
     const ask = sim.disc.ask && sim.disc.ask.until > sim.tick ? sim.disc.ask : null;
     h += `<div class="btnrow"><button data-invest="1" title="Select one to three villagers, then press this: they try things out with what is in reach for three days, as a standing job (it never beats food or shelter).">Investigate (selected)</button>${ask ? `<button data-uninvest="1">Stop investigating</button> <span class="dim">${ask.ids.map(id => sim.ents.get(id) ? esc(sim.ents.get(id).name) : "").filter(Boolean).join(", ")} working on it</span>` : ""}</div>`;
-    h += `<div class="btnrow"><button data-trace="1" class="${ui.showTrace ? "on" : ""}" title="Debug: the last discovery rolls with every factor">${ui.showTrace ? "Hide" : "Show"} discovery trace (debug)</button></div>`;
+    if (game.dev) h += `<div class="btnrow"><button data-trace="1" data-test="trace-btn" class="${ui.showTrace ? "on" : ""}" title="Debug: the last discovery rolls with every factor">${ui.showTrace ? "Hide" : "Show"} discovery trace (debug)</button></div>`;
     if (ui.showTrace) h += `<pre class="alm-trace">` + (a.trace.slice(-16).reverse().map(t => esc(traceLine(t))).join("\n") || "no rolls yet") + `</pre>`;
     p.html(h);
   };

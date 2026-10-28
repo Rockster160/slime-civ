@@ -23,7 +23,7 @@ const G = (fn, arg) => page.evaluate(fn, arg);
 const shot = (name) => page.screenshot({ path: join(root, "tmp", "play-" + name + ".png") });
 const say = (m) => console.log(m);
 const ff = (n) => G((n) => __game.fastForward(n), n);
-const status = () => G(() => { const s = __game.sim; return { day: Math.floor(s.tick / 1800), pop: s.ents.ofKind("villager").length, runway: s.board.runway, deaths: Object.values(s.chron.recs).map(r => r.cause + "@d" + Math.floor(r.death / 1800)).join(" ") }; });
+const status = () => G(() => { const s = __game.sim; return { day: Math.floor(s.tick / 12000), pop: s.ents.ofKind("villager").length, runway: s.board.runway, deaths: Object.values(s.chron.recs).map(r => r.cause + "@d" + Math.floor(r.death / 1800)).join(" ") }; });
 const cellPx = (x, y) => G(([x, y]) => __game.cam.toScreen(x + 0.5, y + 0.5), [x, y]);
 const dragCells = async (a, b) => { const [ax, ay] = await cellPx(...a), [bx, by] = await cellPx(...b); await page.mouse.move(ax, ay); await page.mouse.down(); await page.mouse.move(bx, by, { steps: 6 }); await page.mouse.up(); };
 const clickCell = async (x, y) => { const [px, py] = await cellPx(x, y); await page.mouse.move(px, py); await page.mouse.click(px, py); };
@@ -151,7 +151,7 @@ for (let i = 0; i < 20; i++) {
 for (const s of log.filter((_, i) => i % 2 === 0)) say(`day ${s.day}: pop ${s.pop}, food ${s.runway} d, deaths so far: ${s.deaths || "none"}`);
 await G(() => { const g = __game; g.renderer.setZ(g.sim.stock.z + 1); });
 await page.waitForTimeout(300); await shot("9-end-of-year");
-const fin = await G(() => { const s = __game.sim, rooms = s.rooms.all().filter(r => r.enclosed).length; return { day: Math.floor(s.tick / 1800), pop: s.ents.ofKind("villager").length, rooms, cold: Object.values(s.chron.recs).filter(r => r.cause === "cold").length, starved: Object.values(s.chron.recs).filter(r => r.cause === "starvation").length, chron: s.chron.entries.slice(-6).map(e => e.text) }; });
+const fin = await G(() => { const s = __game.sim, rooms = s.rooms.all().filter(r => r.enclosed).length; return { day: Math.floor(s.tick / 12000), pop: s.ents.ofKind("villager").length, rooms, cold: Object.values(s.chron.recs).filter(r => r.cause === "cold").length, starved: Object.values(s.chron.recs).filter(r => r.cause === "starvation").length, chron: s.chron.entries.slice(-6).map(e => e.text) }; });
 say("END " + JSON.stringify(fin));
 await browser.close();
 if (errors.length) { console.log("CONSOLE ERRORS:\n" + errors.join("\n")); process.exit(1); }

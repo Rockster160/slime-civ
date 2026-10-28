@@ -23,10 +23,13 @@ import { activateChunk } from "./flora.js";
 import { cellXyz, chunkKX, chunkKY, chunkKey, cellIdx } from "./cellkey.js";
 import { packPlant, plantProps, isPackable } from "./dormant.js";
 
-export const SAVE_VERSION = 10;       // 10 = S17: compact (cell deltas per chunk, plants as arrays, the seen set as per-chunk bitsets, landmarks seen, chunk sleep state); a v9 save loads unchanged. 9 = S16: the endless world. Terrain is regrown from the seed (the spawn search is deterministic), so a save holds only the cells that differ from it (deltas), the list of active chunks (chunks: [key, active, changed, lastNear]) and the entities; seen = {c: revealed surface columns, l: other seen cells}. A save of the old fixed 128x128 map (v < 9) cannot be loaded: restore() refuses it with a message. 8 = S13: hidden genotype (g, gp, inb, wk), bonds (aff, mn, rel), grief (gr), hobby (hb), titles (ti), heirloom (hl), skill rust (rs, lu), grave entities. 7 = S12: biomes (sim.bio: 1 = the seed grows the biome map, 0 = a world made before it), cave-in state (ug). 6 = S7a: villager familiarity (fam), discovery state (disc), flames and hearths. 5 = 5 = S6: geology (new strata + ores), seen log, mining designations. 4 = S5: skills dig/build/craft, nine traits, clone and lesson fields
+export const SAVE_VERSION = 11;       // 11 = S18b: the clock rebase (a game day is 12000 ticks, was 1800; a life 500 days): every tick-stamped field (born, nx, bt, cd, timers, chronicle) is on the new clock, so a v9/v10 save is REFUSED (OLD_CLOCK), not migrated. 10 = S17: compact (cell deltas per chunk, plants as arrays, the seen set as per-chunk bitsets, landmarks seen, chunk sleep state); a v9 save loads unchanged. 9 = S16: the endless world. Terrain is regrown from the seed (the spawn search is deterministic), so a save holds only the cells that differ from it (deltas), the list of active chunks (chunks: [key, active, changed, lastNear]) and the entities; seen = {c: revealed surface columns, l: other seen cells}. A save of the old fixed 128x128 map (v < 9) cannot be loaded: restore() refuses it with a message. 8 = S13: hidden genotype (g, gp, inb, wk), bonds (aff, mn, rel), grief (gr), hobby (hb), titles (ti), heirloom (hl), skill rust (rs, lu), grave entities. 7 = S12: biomes (sim.bio: 1 = the seed grows the biome map, 0 = a world made before it), cave-in state (ug). 6 = S7a: villager familiarity (fam), discovery state (disc), flames and hearths. 5 = 5 = S6: geology (new strata + ores), seen log, mining designations. 4 = S5: skills dig/build/craft, nine traits, clone and lesson fields
 
 /** What a save of the old fixed-size world says when it is opened (S16 decision: the endless world does not emulate the 128 x 128 map). */
 export const OLD_WORLD = "This save was made in the old fixed-size world, which no longer exists: the world is endless now. Start a new game.";
+
+/** What a save from before the clock rebase says when it is opened (S18b, D35): its ages, timers and chronicle are all counted in 1800-tick days. Refused like the old world, never guessed at. */
+export const OLD_CLOCK = "This save was made when a game day lasted 90 seconds. A day is now 10 minutes long and every age, timer and plant in the save is counted on the old clock, so it cannot be loaded. Start a new game.";
 
 /**
  * v2/v3 -> v4 (S5), per villager: gather and chop XP are dropped (those are skill-less now, D21), build XP stays,
@@ -34,7 +37,8 @@ export const OLD_WORLD = "This save was made in the old fixed-size world, which 
  * start at average. Pure and deterministic: the same old save always migrates to the same new state.
  */
 export function migrate(data) {
-  if (data.v >= 9) return data;           // (v9 -> v10 is a change of shape only: the loaders below read both)
+  if (data.v >= 11) return data;
+  if (data.v >= 9) throw new Error(OLD_CLOCK);     // v9 and v10 are the endless world on the 1800-tick day (v9 -> v10 was a change of shape only)
   if (data.v >= 2) throw new Error(OLD_WORLD);
   if (data.v === 7) return v7to8(data);                  // v7 -> v8 (S13): people depth
   if (data.v === 6) return v7to8(v6to7(data));           // v6 -> v7 (S12): the world keeps the biome-free map it was made on
@@ -157,6 +161,7 @@ export function snapshot(sim) {
     crews: sim.crews,
     ug: sim.ug,
     bio: sim.bio,
+    pond: sim.pond,                              // S17: 1 = the world was grown with the camp's pond (terrain regrows from the seed, so the save must say)
     dp: sim.dp,
     zones: sim.zones,
     ironman: sim.ironman ? 1 : 0,
@@ -171,14 +176,14 @@ export function restore(data) {
   data = JSON.parse(typeof data === "string" ? data : JSON.stringify(data));   // never share state with the caller
   if (!(data.v >= 2 && data.v <= SAVE_VERSION)) throw new Error("Unsupported save version " + data.v);
   data = migrate(data);
-  const sim = Sim.create(data.seed, { villagers: 0, restore: true, spawn: { x: data.spawn[0], y: data.spawn[1] }, biomes: data.bio !== 0, depth: !!(data.dp && data.dp.on) });      // S14: a world made without the depth content regrows without it
+  const sim = Sim.create(data.seed, { villagers: 0, restore: true, spawn: { x: data.spawn[0], y: data.spawn[1] }, biomes: data.bio !== 0, depth: !!(data.dp && data.dp.on), pond: data.pond === 1 });      // S14: a world made without the depth content regrows without it
   sim.ironman = data.ironman === 1;
-  for (const [k, act, mod, last, dz, pk] of data.chunks) {                  // S16: the chunks that were resident: the active ones regrown from the seed (a tree's OBSTACLE flag; the plants themselves are in the entity list), then the changed cells laid over
+  for (const [k, act, mod, last, dz, pk, pi] of data.chunks) {                  // S16: the chunks that were resident: the active ones regrown from the seed (a tree's OBSTACLE flag; the plants themselves are in the entity list), then the changed cells laid over
     const cx = chunkKX(k), cy = chunkKY(k);
     if (act) activateChunk(sim.world, null, sim.def, cx, cy, 0); else sim.world.resident(cx, cy);
     const c = sim.world.peekResident(cx, cy);
     c.act = act; c.mod = mod; c.last = last;
-    if (dz) { c.dz = dz; c.pk = pk; }                              // S17: asleep (packed plants come back as they were)
+    if (dz) { c.dz = dz; c.pk = pk; c.pi = pi; }                              // S17: asleep (packed plants come back as they were)
   }
   sim.world.applyDeltas(data.dc ? unpackDeltas(data.dc) : data.deltas);
   sim.ents.load(unpackEnts(data.entities));

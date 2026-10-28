@@ -11,6 +11,7 @@
 // When a batch ends (stationsTick) the products drop loose at the station for the baseline hauling, the lighter earns craft XP for what
 // came out (difficulty 0.7 kiln, 0.9 smelt), the phenomena whose context matched fire with the lighter performing (so a kiln run teaches
 // KILN_FIRING and a smelt teaches SMELTING), and the craft's familiarity is nudged up.
+import { DUR_DAY } from "./clock.js";
 import { stationHeat } from "./heat.js";
 import { smokeFire } from "./fire.js";
 import { PICKS, SPEAR_USES } from "./gear.js";
@@ -105,7 +106,7 @@ export function missing(st, rc) {
   for (const k of Object.keys(rc.inputs)) { const n = rc.inputs[k] - ((st.inv && st.inv[k]) || 0); if (n > 0) out[k] = n; }
   return out;
 }
-export const STALE_LOAD = 1800;      // ticks (a game day) an unlit load may sit in a station that nobody finished
+export const STALE_LOAD = DUR_DAY;      // ticks (a game day) an unlit load may sit in a station that nobody finished
 /** May recipe `key` use this station? Yes if it is empty or loaded for `key`; with a tick, also if it has held another recipe's load unlit for a day (the job that loaded it was called off: S16 found a workbench stuck for good that way). */
 export const loadedFor = (st, key, t) => !st.rcp || st.rcp === key || (t !== undefined && !(st.bn > 0) && t - (st.lt || 0) >= STALE_LOAD);
 

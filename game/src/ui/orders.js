@@ -2,12 +2,18 @@
 // sim.apply, the order bar (selected count + verb buttons) and the small popup
 // shown when a right-click is ambiguous. The sim only ever sees apply(cmd).
 import { isAdult } from "../sim/villager.js";
-import { inZone } from "../sim/items.js";
+import { inZone, stockZoneAt } from "../sim/items.js";
 import { berrySeason } from "../sim/season.js";
 import { itemName, BLOCKER_TEXT } from "./text.js";
 import { DIG } from "../sim/dig.js";
 import { FAUNA } from "../sim/fauna.js";
 import { can } from "../sim/knowledge.js";
+import { exploredAt } from "../sim/seen.js";
+import { svg } from "./icons.js";
+import { avatar, tipAttr } from "./kit.js";
+import { esc } from "./dom.js";
+
+const VERB_ICON = { forage: "forage", chop: "chop", gather: "gather", haul: "haul", dig: "dig", hunt: "hunt", capture: "capture", scout: "scout", move: "move" };
 
 export const VERBS = [
   { verb: "forage", label: "Forage", tip: "Pick berries from bushes around the target" },
@@ -17,6 +23,7 @@ export const VERBS = [
   { verb: "dig", label: "Dig", tip: "Dig out the rock or soil around the target (a 5x5 patch). Gives stone and dirt for building" },
   { verb: "hunt", label: "Hunt", tip: "Hunt the hoppers around the target; the meat is hauled to the stockpile. Villagers fight nothing else on their own" },
   { verb: "capture", label: "Capture", tip: "Catch the wild hoppers around the target alive and walk them to a finished pen (needs husbandry and a staked-out pen)" },
+  { verb: "scout", label: "Scout", tip: "Walk to unexplored land and reveal it (right-click unexplored land, or right-click the minimap)" },
   { verb: "move", label: "Move", tip: "Walk to the spot" },
 ];
 const VERB_LABEL = Object.fromEntries(VERBS.map(v => [v.verb, v.label]));
@@ -30,10 +37,11 @@ export function optionsAt(game, pick) {
       if (e.species === "tree" && !e.burn) add("chop", e, "tree");
       else if (e.species === "berry") add("forage", e, "berry bush");
       else if (e.species === "tuft") add("gather", e, "grass tuft");
-    } else if (e.kind === "item" && !inZone(sim.stock, e.x, e.y)) add("haul", e, e.n + " " + itemName(e.item));
+    } else if (e.kind === "item" && !stockZoneAt(sim, e.x, e.y, e.z)) add("haul", e, e.n + " " + itemName(e.item));
     else if (e.kind === "fauna" && FAUNA[e.sp].huntable && !e.tame) { add("hunt", e, FAUNA[e.sp].label); if (can(sim, "HUSBANDRY") && sim.farm.pens.some(p => p.built)) add("capture", e, FAUNA[e.sp].label + " alive"); }
   }
   if (pick.z > 0 && DIG[game.sim.world.mat(pick.x, pick.y, pick.z - 1)] && game.sim.world.mat(pick.x, pick.y, pick.z - 1) > 2 && game.sim.world.mat(pick.x, pick.y, pick.z - 1) !== 4) add("dig", null, "the rock here");     // rock (hard, soft, flint, malachite) or clay offers digging
+  if (!exploredAt(sim.seen, pick.x, pick.y)) add("scout", null, "there");       // S17: unexplored land: the default order is to go and look
   add("move", null, "here");
   return out;
 }
@@ -50,6 +58,10 @@ export function issueOrder(game, opt, pick) {
   if (!ui.sel.length) { game.toast("Select villagers first (click or drag a box)."); return false; }
   if (!vs.length) { game.toast("Children cannot take orders. Select an adult."); return false; }
   if (opt.verb === "forage" && !berrySeason(sim.tick) && opt.tid) { game.toast("Berry bushes bear nothing in winter."); return false; }
+  if (opt.verb === "scout") {
+    const ok = game.scoutTo(pick.x, pick.y);
+    return ok;
+  }
   if (opt.verb === "move" && (pick.z < 0 || !sim.world.isWalkable(pick.x, pick.y, pick.z))) { game.toast("They cannot stand there."); return false; }
   const cmd = { type: "order", ids: vs.map(v => v.id), verb: opt.verb };
   if (opt.tid) cmd.tid = opt.tid; else { cmd.x = pick.x; cmd.y = pick.y; cmd.z = opt.verb === "dig" ? pick.z - 1 : pick.z; }
@@ -88,7 +100,7 @@ function openMenu(game, opts, pick, sx, sy) {
   menuEl.style.top = Math.min(sy, window.innerHeight - 40 - opts.length * 28) + "px";
   for (const o of opts) {
     const b = document.createElement("button");
-    b.textContent = VERB_LABEL[o.verb] + (o.verb === "move" ? " here" : " " + o.what);
+    b.innerHTML = svg(VERB_ICON[o.verb], 16) + "<span>" + esc(VERB_LABEL[o.verb] + (o.verb === "move" ? " here" : " " + o.what)) + "</span>";
     b.onclick = () => { closeMenu(); issueOrder(game, o, pick); };
     menuEl.appendChild(b);
   }
@@ -96,35 +108,34 @@ function openMenu(game, opts, pick, sx, sy) {
 }
 export { closeMenu };
 
+/** The Orders mode of the dock (UI_SPEC §5): the selection as avatars with a count, one icon button per verb (words in the tip and a hidden copy), Cancel. */
 export function createOrderBar(root, game) {
   const { ui } = game;
-  root.innerHTML = `<span class="ob-count"></span><span class="ob-verbs"></span>
-    <button class="ob-cancel" title="Clear the orders of the selected villagers (X)">Cancel orders</button>
-    `;
+  root.innerHTML = `<span class="ob-count" data-test="order-count"></span><span class="grp ob-verbs"></span><span class="grp"><button class="btn ico ob-cancel big" data-test="dock-cancel"${tipAttr("Cancel orders\nClear the orders of the selected villagers", "X")} aria-label="Cancel orders">${svg("cancel", 22)}</button></span>`;
   const count = root.querySelector(".ob-count"), verbs = root.querySelector(".ob-verbs");
   const btns = {};
   for (const v of VERBS) {
     const b = document.createElement("button");
-    b.textContent = v.label; b.title = v.tip + ". Click, then click the map. (Or just right-click.)";
+    b.className = "btn big lab"; b.dataset.test = "dock-verb"; b.dataset.verb = v.verb;
+    b.dataset.tip = v.label + "\n" + v.tip + ". Click, then click the map. (Or just right-click.)"; b.setAttribute("aria-label", v.label);
+    b.innerHTML = svg(VERB_ICON[v.verb], 20) + `<span class="bl">${v.label}</span>`;
     b.onclick = () => { ui.targeting = ui.targeting === v.verb ? null : v.verb; };
     verbs.appendChild(b); btns[v.verb] = b;
   }
-  root.querySelector(".ob-cancel").onclick = () => {
-    if (game.ui.sel.length) game.cancelOrders(game.ui.sel);
-  };
+  root.querySelector(".ob-cancel").onclick = () => { if (game.ui.sel.length) game.cancelOrders(game.ui.sel); };
   let last = "";
   return {
     update() {
       const n = ui.sel.length, adults = orderable(game).length;
-      root.style.display = n ? "flex" : "none";
       for (const k in btns) btns[k].classList.toggle("on", ui.targeting === k);
       if (!ui.targeting) ui.crewTarget = 0;
       btns.capture.style.display = can(game.sim, "HUSBANDRY") ? "" : "none";                // S10: shown once the village knows husbandry
+      root.style.display = n && ui.mode !== "build" && ui.mode !== "possess" ? "flex" : "none";
       const s = n + (n === 1 ? " villager" : " villagers") + " selected" + (adults < n ? " (" + adults + " can take orders)" : "");
-      root.style.display = n && ui.mode !== "build" ? "flex" : "none";
       const h = ui.targeting ? "Click the map to " + VERB_LABEL[ui.targeting].toLowerCase() + " (Esc to stop)" : "Right-click a target";
-      const key = s + h;
-      if (key !== last) { last = key; count.textContent = ui.targeting ? s + ". " + h : s; }
+      const av = ui.sel.slice(0, 3).map(id => game.sim.ents.get(id)).filter(Boolean).map(v => avatar(v.hue, v.lin, 22, false)).join("");
+      const key = s + h + av;
+      if (key !== last) { last = key; count.innerHTML = av + `<b>${n}</b><span class="cap sel">selected</span><span class="sr">${esc(s)}${ui.targeting ? ". " + esc(h) : ""}</span>`; count.dataset.tip = s + "\n" + h; }
     },
   };
 }

@@ -13,6 +13,7 @@
 // epoch changes (a critical flag flips, an order arrives) or a personal need
 // turns urgent. The job in progress is scored like any other candidate (no
 // switch cost for itself), so "keep going" and "switch" are one comparison.
+import { DUR_DAY } from "./clock.js";
 import { fnv1aStr } from "./hash.js";
 import { mix32 } from "./rng.js";
 import { clamp, dist3, r1 } from "./util.js";
@@ -240,7 +241,7 @@ function genNeeds(ctx) {
   // Commitment (§09): once a villager has started to sleep (or is walking to bed to), they finish to SLEEP_DONE. 400 x 0.9 = 360 beats any
   // order (<= 345), so a digger far from his bed is not pulled off a half-slept night (S5's known gap); hunger, thirst and cold
   // above u = 0.9 still win (the need rank breaks ties), and a village emergency still outranks the rest.
-  if (ctx.cur && ctx.cur.k === "sleep") ue = Math.max(ue, v.energy < SLEEP_DONE ? SLEEP_COMMIT : 0.35);
+  if (ctx.cur && ctx.cur.k === "sleep") ue = Math.max(ue, v.energy < SLEEP_DONE || (ctx.night && v.energy < 0.98) ? SLEEP_COMMIT : 0.35);      // S18b: and a sleep begun at night lasts the night (one sleep a night, not naps broken by the first chore)
   if (ue > 0) addRest(ctx, "sleep", ue);
   let uw = urgency(v.warm, ...SOFT.warm);
   if (ctx.cur && ctx.cur.k === "huddle") uw = Math.max(uw, 0.3);
@@ -1130,7 +1131,7 @@ function genTinker(ctx) {
   const cls = asked ? "standing" : "leisure";
   const c = { kind: "tinker", cls, urg: asked ? 0.6 : 1, grp: "tinker", skill: null, key: "tinker:0" };
   const all = tinkerCandidates(sim);
-  const cooled = (k) => ctx.t - (sim.disc.cd[cdKey(k.site, k.item)] ?? -1e9) >= 1800;
+  const cooled = (k) => ctx.t - (sim.disc.cd[cdKey(k.site, k.item)] ?? -1e9) >= DUR_DAY;      // S18b: a retry of the same experiment waits a game day (it was 1800 ticks = 1 day)
   const mine = v.carry ? v.carry.item : "";                             // already holding the material (taken for this experiment): carry on with it
   let ready = all.filter(k => (asked || k.nov) && cooled(k) && (k.item === "deadwood" || sv.stock[k.item] > 0 || k.item === mine) && (!k.with || sv.stock[k.with] > 0));
   if (mine) ready = ready.filter(k => k.item === mine);

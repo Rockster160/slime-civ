@@ -13,7 +13,7 @@ function setup() {
   const sim = loadFixture("settled");
   const three = sim.ents.ofKind("villager").filter(v => isAdult(sim, v)).sort((a, b) => b.t.strength - a.t.strength || a.id - b.id).slice(0, 3);
   for (const v of sim.ents.ofKind("villager").slice()) if (!three.includes(v)) sim.ents.remove(v.id);
-  for (const v of three) { v.job = null; v.action = null; }
+  for (const v of three) { v.job = null; v.action = null; v.slp = 0; v.rest = 0; }       // (S18b: the fixture is taken at dawn, with some still asleep)
   sim.cache.iv++;
   return { sim, ids: three.map(v => v.id) };
 }
@@ -54,6 +54,6 @@ function run(mode) {
 }
 const single = run("single"), swap = run("swap"), ratio = swap.trees / Math.max(1, single.trees);
 console.log(`single possession: ${single.trees} trees in ${WINDOW} ticks (${single.cmds} commands); swapping every ${SWAP} ticks: ${swap.trees} trees (${swap.swaps} swaps, ${swap.cmds} commands); ratio ${ratio.toFixed(3)}`);
-assert.ok(single.trees > 0 && swap.trees > 0, "both felled something");
+assert.ok(single.trees > 0, "the single-possession run felled trees (S18b: a swapped run restarts every chop every 180 ticks, so it may fell none: that is the point of the 1.25x cap, not a failure)");
 assert.ok(ratio <= 1.25, "swapping beat staying by more than 1.25x: " + ratio.toFixed(3));
 console.log("possess-swap bot ok: swapping between villagers stays inside the 1.25x band");

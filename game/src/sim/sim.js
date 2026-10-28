@@ -12,7 +12,7 @@ import { Hasher } from "./hash.js";
 import { runAction } from "./actions.js";
 import { control } from "./controller.js";
 import { POSSESS_COMMANDS, collapseCheck } from "./possess.js";
-import { DAY, LANDING } from "./clock.js";
+import { DAY, DUR_DAY } from "./clock.js";
 import { dayF, WINTER_START, isNight, winterAhead } from "./season.js";
 import { newCache, spoilDaily } from "./items.js";
 import { newBoard, updateBoard, updateKeeps, village } from "./board.js";
@@ -60,11 +60,12 @@ export const START_VILLAGERS = 7;
 export class Sim {
   /** @param {number} seed  @param {{villagers?: number, biomes?: boolean, depth?: boolean, ironman?: boolean}} [opts] villagers: 0 for a bare world (used by load); biomes: false regrows a world made before S12's biome pass; ironman: one autosave slot, no manual load (UI rule, saved) */
   static create(seed, opts = {}) {
-    const biomes = opts.biomes !== undefined ? opts.biomes : WORLD.biomes, depth = opts.depth !== undefined ? opts.depth : WORLD.depth, g = generateWorld(seed, { biomes, depth, spawn: opts.spawn });             // S16: endless land; the spawn search (spawn.js) moved the camp to a fair start if the origin was not one (§11.10)
+    const biomes = opts.biomes !== undefined ? opts.biomes : WORLD.biomes, depth = opts.depth !== undefined ? opts.depth : WORLD.depth, g = generateWorld(seed, { biomes, depth, spawn: opts.spawn, pond: opts.pond });             // S16: endless land; the spawn search (spawn.js) moved the camp to a fair start if the origin was not one (§11.10)
     const s = new Sim(seed, g.world, g.ents);
     s.def = g.def; s.site = g.world.site;
     if (!opts.restore) activateAround(s.world, s.ents, s.def, s.site.x, s.site.y, ACT_R, 0);     // the land round the camp grows its flora (a loaded save lists its own active chunks)
     s.bio = biomes ? 1 : 0;
+    s.pond = s.def.pond ? 1 : 0;
     s.dp = newDepth(depth);
     s.ironman = !!opts.ironman;
     s.world.beginLog();                       // everything from here on is a save delta
@@ -104,6 +105,7 @@ export class Sim {
     this.ug = newUg();                        // S12: cracking cells (cell, first tick), cave-ins so far (saved + hashed; the rules are pure functions of the world)
     this.dp = newDepth(0);                    // S14: world depth (illness, wolves and grazers, the alternates, perturbed properties): on/off switch and the illness ledger (saved + hashed)
     this.zones = newZones();                  // S17: extra stockpile zones the player drew (saved + hashed)
+    this.pond = 0;                            // S17: 1 = this world has the pond at the camp (saved: terrain regrows from the seed)
     this.bio = 1;                             // S12: 1 = the world was grown with biomes (worldgen), 0 = a pre-biome save regrown without them (saved)
     this.ironman = false;                     // S12: a UI rule (single autosave slot, no manual load), saved with the game, never read by the sim itself
     this.lastBlocker = "";                    // why the last rejected command failed (UI feedback only; not saved)
@@ -135,7 +137,8 @@ export class Sim {
     if (t % 20 === 10) mineTick(this);
     if (t % 20 === 5) { fireTick(this); stationsTick(this); }   // flames and hearths burn down; lit kilns and mounds count down to their batch
     if (t % 50 === 25) siteTick(this);                        // running fires are phenomena: whoever sees one rolls (witness)
-    if (t % 100 === 75) { knowledgeTick(this); packTick(this); }   // watching and Teach spread familiarity; someone at the stockpile takes a basket or backpack
+    if (t % 100 === 75) packTick(this);                       // someone at the stockpile takes a basket or backpack
+    if (t % 100 === 75) knowledgeTick(this);                  // watching and Teach spread familiarity
     if (t % 100 === 40) socialTick(this);                     // S13: who works beside whom grows close, or clashes
     if (t % 200 === 150) autoHearth(this);                    // the village plans a fire ring when it knows fire and the cold is coming
     if (t % 100 === 0) { growPlants(this); this.tidySites(); }
@@ -145,7 +148,7 @@ export class Sim {
     if (t % 20 === 9) expeditionTick(this);                  // recall predicates, the crew's stall summary (before mineTick finishes a search)
     faunaTick(this);
     if (t % 100 === 30) illTick(this);                       // S14: contagion between the sick and the well
-    if ((t + LANDING) % DAY === 0) this.daily();
+    if (t % DUR_DAY === 0) this.daily();                        // the chores of the world (spoilage, growth, breeding, illness) run on the flat 1800-tick duration day, not the calendar day (S18b)
 
     const vs = this.ents.ofKind("villager").slice();       // deaths/births change the live list
     for (const v of vs) {

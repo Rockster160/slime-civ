@@ -1,7 +1,7 @@
 // Fog of knowledge (GDD §13.8): which cells has anybody laid eyes on?
 //
-// sim.seen = {b: Uint8Array(W*H*D) 0/1, log: [idx...] cells seen AFTER generation, ver, known: {mat: [idx...]}, ready}
-// Only the log is saved (as run-length pairs): the starting set (the surface and every rock face open to the
+// sim.seen = {b: Map chunk -> Uint8Array 0/1, cs: revealed surface columns, log: [idx...] cells seen AFTER generation, lm: landmarks, ver, known: {mat: [idx...]}, ready}
+// Saved compactly (see the end of this file): the starting set (the surface and every rock face open to the
 // air) is rebuilt from the terrain by initSeen. `known` is derived: ore and clay cells that are seen, so seek-X
 // can ask "where have we seen malachite?" without reading the map (it must not know about unseen ore).
 //
@@ -25,7 +25,7 @@ const CELLS = 16 * 16 * D;
 
 /**
  * b: Map chunkKey -> Uint8Array(16*16*D) 0/1 (a chunk's worth of cells is made the first time anything in it is seen); cs: Map chunkKey -> Uint8Array(256), the surface
- * COLUMNS revealed (cols: their cell indices at z 0, in reveal order, saved); log: cells seen by other means after generation; bbox: the explored area.
+ * COLUMNS revealed (ncols: how many; saved as per-chunk bitsets); lm: landmarks seen [[kind, x, y]] (scout.js); log: cells seen by other means after generation; bbox: the explored area.
  */
 export function newSeen() { return { b: new Map(), cs: new Map(), ncols: 0, log: [], lm: [], ver: 0, known: {}, ready: false, bbox: null }; }
 

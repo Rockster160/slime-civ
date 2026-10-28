@@ -28,7 +28,7 @@ import { SKILLS, level } from "../../src/sim/skills.js";
 import { isAdult } from "../../src/sim/villager.js";
 import { storeInZone } from "../../src/sim/items.js";
 import { levelGround } from "../helpers.js";
-import { DAY } from "../../src/sim/clock.js";
+import { DUR_DAY } from "../../src/sim/clock.js";
 
 const YEAR = process.argv.includes("--year");
 const MARGIN = 0.25;
@@ -49,7 +49,7 @@ function k6Bot() {
     }
     if (sim.tick % 200 !== 0) return;
     const { x0, y0, z } = plot, w = sim.world;
-    if (sim.tick % 1800 === 0) {
+    if (sim.tick % DUR_DAY === 0) {
       storeInZone(sim, "stick", 120); storeInZone(sim, "grass", 60); storeInZone(sim, "log", 20);
     }
     for (const v of sim.ents.ofKind("villager")) { v.hunger = Math.max(v.hunger, 0.6); v.thirst = Math.max(v.thirst, 0.6); v.warm = Math.max(v.warm, 0.6); }
@@ -101,7 +101,7 @@ const median = (a) => { const s = a.slice().sort((p, q) => p - q), n = s.length;
 
 const sim = loadFixture("settled"), bot = k6Bot();
 const start = Object.fromEntries(sim.ents.ofKind("villager").map(v => [v.id, SKILLS.map(s => v.sk[s].xp)]));
-const ticks = YEAR ? 180000 : 30 * DAY;
+const ticks = YEAR ? 180000 : 30 * DUR_DAY;
 for (let t = 0; t < ticks; t++) { bot(sim); sim.step(); }
 const vs = sim.ents.ofKind("villager").filter(v => isAdult(sim, v));
 let ok = true;

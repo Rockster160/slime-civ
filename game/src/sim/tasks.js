@@ -49,6 +49,12 @@ const E = (sim, s) => sim.ents.get(s.tid);
 
 /** Everyone has foraged all their life: gathering has no skill (Appendix B), so it runs 30% above a bare-handed novice instead (D21). */
 export const GATHER_BASE = 1.5;
+/**
+ * S18b (D35, revised): hunger runs at its old flat rate (a ration per ~1800 ticks), but a berry picked in 17 ticks fed the village in a few percent of
+ * its time and K3's 40-60% of early labour on food read 5%. Gathering FOOD by hand is therefore slower: a berry, a tuber patch, a root dig and a
+ * harvested unit take FORAGE_SLOW times as long as they did (tuned so tests/k3.js reads 30-70%). Walking, chopping, digging, building keep their ticks.
+ */
+export const FORAGE_SLOW = 24;
 export const SUN_DRY_BASE = 1.45;      // sun-drying is start knowledge (Appendix B), so its craft needs no learning to be useful
 
 /**
@@ -71,7 +77,7 @@ const VERBS = {
   goto: { dur: 1, skill: null, check: () => null, work: () => "done" },
 
   pick: {   // take a berry from a bush
-    dur: 25, skill: null, tr: "speed", base: GATHER_BASE,
+    dur: 25 * FORAGE_SLOW, skill: null, tr: "speed", base: GATHER_BASE,
     check(sim, v, s) { const p = E(sim, s); return p && p.species === "berry" && p.yield > 0 && carryRoom(v, "berry") > 0 ? null : "GONE"; },
     work(sim, v, s) {
       const p = E(sim, s);
@@ -82,7 +88,7 @@ const VERBS = {
     },
   },
   root: {   // winter forage (§11.17): dig edible roots/grubs where a grass tuft stood. 3 rations per ~240 ticks of work (a patch holds a few), about 1/3 of berry picking
-    dur: 240, skill: null, tr: "speed", base: GATHER_BASE,
+    dur: 240 * FORAGE_SLOW, skill: null, tr: "speed", base: GATHER_BASE,
     check(sim, v, s) { const p = E(sim, s); return p && p.species === "tuft" && p.yield > 0 && carryRoom(v, "berry") > 0 ? null : "GONE"; },
     work(sim, v, s) {
       const p = E(sim, s);
@@ -319,7 +325,7 @@ const VERBS = {
     },
   },
   harvest: { // gather the ripe crop a unit at a time into the hands (the baseline hauling stores it); the plot is tilled again when it is empty
-    dur: 12, skill: null, tr: "speed", base: GATHER_BASE,
+    dur: 12 * FORAGE_SLOW, skill: null, tr: "speed", base: GATHER_BASE,
     check(sim, v, s) { const p = E(sim, s); return p && p.kind === "plot" && ripe(p) && p.yl > 0 && carryRoom(v, p.cr) > 0 ? null : "GONE"; },
     work(sim, v, s) {
       const p = E(sim, s), item = p.cr;
@@ -508,7 +514,7 @@ const VERBS = {
     },
   },
   tuber: {  // dig a tuber plant: food that keeps in winter. 3 rations per ~200 ticks of work
-    dur: 200, skill: null, tr: "speed", base: GATHER_BASE,
+    dur: 200 * FORAGE_SLOW, skill: null, tr: "speed", base: GATHER_BASE,
     check(sim, v, s) { const p = E(sim, s); return p && p.species === "tuber" && p.yield > 0 && carryRoom(v, "tuber") > 0 ? null : "GONE"; },
     work(sim, v, s) {
       const p = E(sim, s);

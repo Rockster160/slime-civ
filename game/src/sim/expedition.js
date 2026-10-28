@@ -18,14 +18,14 @@ import { survey, ITEMS } from "./items.js";
 import { log } from "./chronicle.js";
 import { CAMP } from "./board.js";
 import { cancelAction } from "./jobstate.js";
-import { DAY } from "./clock.js";
+import { DUR_DAY } from "./clock.js";
 import { World } from "./world.js";
 import { crewById, crewOf, CREW_COMMANDS } from "./crews.js";
 
 export const EXP_ITEMS = [...SEEK_ITEMS, "any"];
 export const EXP_N = 2;              // units to bring back: one cell's worth (a sample; the player can send them again for more)
 export const EXP_DEPTH = 3;          // the find must lie at least this far below the surface (a non-surface resource)
-export const EXP_TIME = Math.round(2.5 * DAY);     // time runs out
+export const EXP_TIME = 4500;     // time runs out: 4500 ticks [225 s at 1x]. S18b: kept as ticks (it was 2.5 days of 1800), the walk and the pack are real-time; the food packed is per game day, so it lasts longer
 export const RECALL_HP = 0.5;        // anyone below this share of their health -> turn back
 export const RECALL_FOOD = 0.3;      // anyone this hungry -> turn back (food at half the provisions, §13.4, in the village's terms)
 export const HOME_TIME = 1500;       // ticks to get back before the report is written anyway

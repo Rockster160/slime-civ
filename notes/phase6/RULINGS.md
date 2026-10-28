@@ -17,6 +17,7 @@ The critic's verdict is accepted: one cohesive design, over-scoped. These ruling
 - **P5/P15 (two world models):** do NOT build both. Do a ≤1-week desk spike comparing on paper, plus a throwaway mining+room test in the default 3D z-level grid only. Build the layered-2D alternative only if that spike fails.
 
 ## K2 — Time units (critique R1)
+> **Superseded by S18b / D35 (2026-10-28):** the calendar day is now 12000 ticks (10 real min), a life 5 game years; durations are flat ticks except age and the calendar. The 90 s day below is the old clock.
 - **Canonical clock:** at 1× speed the sim runs 20 ticks per real second. 1 game day = 90 real seconds = 1800 ticks. A game year is 100 days, about 2.5 h. A life is about 4 game years, about 10 h.
 - **Forbid "game minutes" and "game hours"** for short constants. Express short constants in **ticks**, with real seconds at 1× in brackets. Express long constants in game days or years.
 - Convert every existing short constant so the intended real-time feel is preserved. Examples: switchCost commitment, the 30 s rescue window, reservation grace, and the rested curve.

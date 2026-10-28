@@ -5,7 +5,7 @@
 //   A penned hopper is the S8 creature with tame=1, pen=<pen id> (fauna.js: it stays inside, never bolts). Orders: `capture` (catch + carry + release).
 //   Grass hauled into the pen is eaten (FOD_PER_HEAD a day each); fed adult pairs breed (hopperDay with the pen's own rate), the unfed starve after FOD_HUNGRY days.
 //   The pen's keep-N is the number of adults to keep: the surplus is slaughtered by a standing job (jobs.js genPens) for meat and a hide.
-import { DAY } from "./clock.js";
+import { DUR_DAY } from "./clock.js";
 import { NO_T } from "./util.js";
 import { log, once } from "./chronicle.js";
 import { dropLoose } from "./items.js";
@@ -29,7 +29,7 @@ export const penGrazers = (sim, pen) => sim.ents.ofKind("fauna").filter(e => e.s
 export const penAnimals = (sim, pen) => sim.ents.ofKind("fauna").filter(e => e.tame && e.pen === pen.id);
 export const penLoad = (sim, pen) => penHoppers(sim, pen).length + GRAZER_LOAD * penGrazers(sim, pen).length;
 export const penArea = (p) => (p.x1 - p.x0 + 1) * (p.y1 - p.y0 + 1);
-export const adultsOf = (sim, list) => list.filter(e => Math.floor((sim.tick - e.bd) / DAY) >= HOPPER_LIFE.adult);
+export const adultsOf = (sim, list) => list.filter(e => Math.floor((sim.tick - e.bd) / DUR_DAY) >= HOPPER_LIFE.adult);
 /** A finished pen with room for another, nearest to (x,y); null when there is none. */
 export function openPen(sim, x, y, sp = "hopper") {
   let best = null, bd = 1e9;
@@ -118,7 +118,7 @@ export function penDaily(sim) {
       log(sim, "MILESTONE", "A penned animal starved: the pen ran out of grass.", [], { pen: pen.id }, 1);
       continue;
     }
-    const cap = Math.max(1, penCap(pen) - (load - hs.length)), res = hopperDay(hs.map(e => Math.floor((sim.tick - e.bd) / DAY)), cap, () => r.float(), { breed: pen.hg === 0 && pen.fod > 0 ? PEN_BREED : 0, edge: false });
+    const cap = Math.max(1, penCap(pen) - (load - hs.length)), res = hopperDay(hs.map(e => Math.floor((sim.tick - e.bd) / DUR_DAY)), cap, () => r.float(), { breed: pen.hg === 0 && pen.fod > 0 ? PEN_BREED : 0, edge: false });
     for (const i of res.die) sim.ents.remove(hs[i].id);
     for (let k = 0; k < res.born; k++) {
       const c = [pen.x0 + r.int(pen.x1 - pen.x0 + 1), pen.y0 + r.int(pen.y1 - pen.y0 + 1), pen.z];

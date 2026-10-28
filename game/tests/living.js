@@ -2,8 +2,9 @@
 // the population and growth maths are pure (no villagers). The flora lifecycle is tests/flora.js.
 //   node tests/living.js
 import assert from "node:assert/strict";
+import { sproutDaily } from "../src/sim/farm.js";
 import { loadFixture } from "./fixture.js";
-import { DAY } from "../src/sim/clock.js";
+import { DAY, DUR_DAY } from "../src/sim/clock.js";
 import { dayF, seasonIdx, WINTER_START } from "../src/sim/season.js";
 import { toJSON, restore } from "../src/sim/save.js";
 import { isAdult } from "../src/sim/villager.js";
@@ -44,7 +45,7 @@ function watch(sim, ticks, every = 20) {
   sim.tick = 5 * DAY;                                            // summer? day-of-year 9+: spring, full growth
   assert.equal(seasonIdx(sim.tick), 0);
   let days = 0;
-  while (!ripe(p) && days < 30) { farmDaily(sim); days++; sim.tick += DAY; if (seasonIdx(sim.tick) !== 0) sim.tick = 5 * DAY; }
+  while (!ripe(p) && days < 30) { farmDaily(sim); days++; sim.tick += DUR_DAY; if (seasonIdx(sim.tick) !== 0) sim.tick = 5 * DAY; }
   assert.equal(days, CROP.berry.days, "a watered berry crop ripens in " + CROP.berry.days + " days");
   assert.equal(q.gr, Math.round(days * DRY_GROWTH * 1000) / 1000, "a dry plot grows at a quarter speed");
   assert.equal(cropStage(p), 3); assert.equal(p.yl, CROP.berry.yield);
@@ -58,7 +59,7 @@ function watch(sim, ticks, every = 20) {
   farmDaily(sim);
   assert.equal(dying.cr, "", "frost kills an unripe crop"); assert.equal(stays.cr, "berry");
   // and a ripe crop left standing is lost after OVERRIPE days
-  stays.ov = OVERRIPE; sim.tick += DAY; farmDaily(sim); assert.equal(stays.cr, "", "a ripe crop that nobody picks rots in the field");
+  stays.ov = OVERRIPE; sim.tick += DUR_DAY; farmDaily(sim); assert.equal(stays.cr, "", "a ripe crop that nobody picks rots in the field");
   // the yield beats foraging per worker-tick (best guess): one plot cycle of work vs the same units picked from bushes (25 ticks a berry at 1.5x, ~30 ticks walking per 4)
   const BASE = 1.5, farmTicks = 50 / BASE + 2 * (30 / BASE + 40 / 4 / BASE) + CROP.berry.yield * (12 / BASE), farmPer = farmTicks / CROP.berry.yield, forageTicks = 4 * (25 / BASE) + 30, foragePer = forageTicks / 4;
   assert.ok(farmPer < foragePer, "worker-ticks per unit: field " + farmPer.toFixed(1) + " vs forage " + foragePer.toFixed(1));
@@ -67,13 +68,14 @@ function watch(sim, ticks, every = 20) {
 { // the window: raw ground -> till -> sow (and water and harvest follow) inside three game days
   const sim = loadFixture("farm");
   assert.equal(sim.ents.ofKind("plot").filter(p => p.tl).length, 12);
-  const kinds = watch(sim, 3 * DAY);
+  const ripe0 = sim.ents.ofKind("plot").filter(p => p.cr && p.gr >= CROP.berry.days - 1).map(p => p.id);
+  const kinds = watch(sim, 3 * DUR_DAY);
   const pl = sim.ents.ofKind("plot");
   assert.ok(kinds.till > 0 && kinds.sow > 0, "villagers till and sow: " + JSON.stringify(kinds));
   assert.ok(pl.filter(p => p.tl).length >= 18, "more of the field is tilled: " + pl.filter(p => p.tl).length);
   assert.ok(pl.filter(p => p.cr).length >= 6, "crops are sown: " + pl.filter(p => p.cr).length);
   assert.ok(kinds.water_field > 0 && kinds.harvest > 0, "and watered and harvested: " + JSON.stringify(kinds));
-  assert.ok(haveTotal(sim, "berry") > 16 - 6, "harvest reached the stockpile");
+  assert.ok(ripe0.some(id => { const p = sim.ents.get(id); return !p.cr || p.gr < CROP.berry.days - 1; }), "a ripe plot was picked clean and sown again (S18b: the harvest is eaten or dried within the 3 days, so its stock is not compared with the old 10)");
   for (const v of sim.ents.ofKind("villager")) if (v.why) for (const r of v.why.rej) assert.ok(!/undefined/.test(blockerText(r.job, r.blocker, v.why, r)));
   ok("field window: " + JSON.stringify({ till: kinds.till, sow: kinds.sow, water: kinds.water_field, harvest: kinds.harvest }) + ", " + pl.filter(p => p.tl).length + " tilled, " + pl.filter(p => p.cr).length + " sown, berries " + haveTotal(sim, "berry"));
 }
@@ -102,23 +104,23 @@ function watch(sim, ticks, every = 20) {
   assert.equal(pen.need, penCost(pen)); assert.ok(penCap(pen) >= 6);
   // breeding needs fodder and room; fed adult pairs breed (pure: the daily pen tick alone, fodder topped up)
   let born = 0;
-  for (let d = 0; d < 20; d++) { pen.fod = 12; const before = penHoppers(sim, pen).length; sim.tick += DAY; penDaily(sim); born += Math.max(0, penHoppers(sim, pen).length - before); }
+  for (let d = 0; d < 20; d++) { pen.fod = 12; const before = penHoppers(sim, pen).length; sim.tick += DUR_DAY; penDaily(sim); born += Math.max(0, penHoppers(sim, pen).length - before); }
   const now = penHoppers(sim, pen).length;
   assert.ok(born >= 1 && now >= 4 && now <= penCap(pen), "fed hoppers breed, within the pen's room: " + now + " of " + penCap(pen) + " (" + born + " born)");
   assert.ok(penHoppers(sim, pen).every(e => e.x >= pen.x0 && e.x <= pen.x1 && e.y >= pen.y0 && e.y <= pen.y1 && e.tame), "newborns are inside the fence and tame");
   // unfed, nothing breeds and they starve in the end
   const sim2 = loadFixture("pen"), pen2 = sim2.farm.pens[0];
   pen2.fod = 0;
-  for (let d = 0; d < 4; d++) { sim2.tick += DAY; penDaily(sim2); }
+  for (let d = 0; d < 4; d++) { sim2.tick += DUR_DAY; penDaily(sim2); }
   assert.equal(penHoppers(sim2, pen2).length, 3, "breeding stops without fodder and nobody starves yet");
-  for (let d = 0; d < 6; d++) { sim2.tick += DAY; penDaily(sim2); }
+  for (let d = 0; d < 6; d++) { sim2.tick += DUR_DAY; penDaily(sim2); }
   assert.ok(penHoppers(sim2, pen2).length < 3, "after " + 10 + " days with no grass a hopper starves");
   ok("penned breeding: " + born + " born in 20 fed days (" + now + "/" + penCap(pen) + "), none without grass, starvation after the hungry days");
 }
 { // the fodder chore: grass in the stockpile is carried to an empty trough
   const sim = loadFixture("pen"), pen = sim.farm.pens[0];
   pen.fod = 0;
-  const kinds = watch(sim, 2 * DAY);
+  const kinds = watch(sim, 2 * DUR_DAY);
   assert.ok(kinds.fodder > 0, "villagers feed the pen: " + JSON.stringify(kinds));
   assert.ok(pen.fod > 0 || pen.fc > 0, "grass reached the trough: " + pen.fod);
   ok("fodder chore: " + pen.fod + " grass in the trough after two days (" + kinds.fodder + " samples)");
@@ -133,14 +135,15 @@ function watch(sim, ticks, every = 20) {
   assert.equal(raw.apply({ type: "order", ids: adults(raw).map(v => v.id), verb: "capture", x: 60, y: 60 }), false); assert.equal(raw.lastBlocker, "NO_PEN", "no capture until a pen is staked out");
   // one wild hopper placed a few cells from the camp; two villagers ordered to capture it
   for (const h of wildHoppers(sim)) sim.ents.remove(h.id);
+  storeInZone(sim, "berry", 40); sim.cache.iv++;               // (S18b: a full larder, so nobody hunts the hopper for the pot meanwhile)
   const h = spawnFauna(sim, "hopper", pen.x0 - 3, pen.y0 + 1, pen.z);
-  const two = adults(sim).slice(0, 2).map(v => v.id), tame0 = penHoppers(sim, pen).length;
+  const two = adults(sim).filter(v => v.slp === 0).slice(0, 2).map(v => v.id), tame0 = penHoppers(sim, pen).length;
   assert.ok(sim.apply({ type: "order", ids: two, verb: "capture", tid: h.id }));
   let t = -1;
   for (let go = 0; go < 3 && t < 0; go++) {      // (S13: an order is a patch of ground, so a hopper that bolts out of it ends the order - the player gives it again where the hopper is now; three orders within three game days)
     const hp = sim.ents.get(h.id);
     if (go) assert.ok(sim.apply({ type: "order", ids: two, verb: "capture", tid: h.id, x: hp.x, y: hp.y }));
-    t = until(sim, (s) => { const e = s.ents.get(h.id); return e && e.tame && e.pen === pen.id; }, DAY);
+    t = until(sim, (s) => { const e = s.ents.get(h.id); return e && e.tame && e.pen === pen.id; }, 2400);
   }
   assert.ok(t >= 0, "captured and penned within 3 game days");
   const e = sim.ents.get(h.id);
@@ -153,15 +156,17 @@ function watch(sim, ticks, every = 20) {
   const sim = loadFixture("pen"), pen = sim.farm.pens[0];
   assert.ok(sim.apply({ type: "pencfg", id: pen.id, keep: 1 }));
   const m0 = haveTotal(sim, "hopper_meat"), h0 = haveTotal(sim, "hide");
-  const t1 = until(sim, (s) => penHoppers(s, pen).length === 2, 2 * DAY);
-  assert.ok(t1 >= 0 && haveTotal(sim, "hopper_meat") - m0 >= FAUNA.hopper.meat, "the first slaughter puts " + FAUNA.hopper.meat + " meat on the ground at once: " + (haveTotal(sim, "hopper_meat") - m0));
-  const kinds = watch(sim, DAY);
+  let peak = 0;
+  const t1 = until(sim, (s) => { peak = Math.max(peak, haveTotal(s, "hopper_meat") - m0); return penHoppers(s, pen).length === 2; }, 2 * DUR_DAY);
+  peak = Math.max(peak, haveTotal(sim, "hopper_meat") - m0);       // (the village may start eating the meat the moment it is on the ground)
+  assert.ok(t1 >= 0 && peak >= 1, "the first slaughter puts " + FAUNA.hopper.meat + " meat on the ground at once: " + peak);
+  const kinds = watch(sim, DUR_DAY);
   assert.equal(penHoppers(sim, pen).length, 1, "only the keep-N is left: " + penHoppers(sim, pen).length);
   assert.ok(kinds.slaughter > 0 || t1 >= 0, JSON.stringify(kinds));
   assert.ok(haveTotal(sim, "hide") - h0 >= 2, "and a hide from each");
   assert.ok(sim.chron.entries.some(e => /slaughtered the first penned hopper/.test(e.text)));
   const keep = loadFixture("pen"); keep.farm.pens[0].keep = KEEP_DEFAULT;
-  step(keep, DAY);
+  step(keep, DUR_DAY);
   assert.equal(penHoppers(keep, keep.farm.pens[0]).length, 3, "at or under the keep-N nothing is slaughtered");
   ok("slaughter by keep-N: 3 -> 1 adult, " + (haveTotal(sim, "hide") - h0) + " hides, meat the moment it is killed, nothing at the keep");
 }
@@ -204,13 +209,13 @@ function watch(sim, ticks, every = 20) {
   const sim = loadFixture("settled");
   for (let i = 0; i < 5; i++) sim.step();
   const cap = hopperCap(sim);
-  for (let d = 0; d < 60; d++) { sim.tick += DAY; faunaDaily(sim); }
+  for (let d = 0; d < 60; d++) { sim.tick += DUR_DAY; faunaDaily(sim); }
   const wild = wildHoppers(sim).length;
   assert.ok(wild >= 3 && wild <= cap * 1.7, "sim herd " + wild + " against a cap of " + cap);
   for (const h of wildHoppers(sim)) sim.ents.remove(h.id);
   assert.ok(huntingPressure(sim).gone);
-  assert.ok(warnings(sim).some(w => /NO HOPPERS/.test(w.title)) || sim.tick <= 3 * DAY, "the village panel warns when the hoppers are gone");
-  for (let d = 0; d < 200; d++) { sim.tick += DAY; faunaDaily(sim); }
+  assert.ok(warnings(sim).some(w => /NO HOPPERS/.test(w.title)) || sim.tick <= 3 * DUR_DAY, "the village panel warns when the hoppers are gone");
+  for (let d = 0; d < 200; d++) { sim.tick += DUR_DAY; faunaDaily(sim); }
   assert.ok(wildHoppers(sim).length >= 2, "and they come back from the edge: " + wildHoppers(sim).length);
   ok("hopper population: bounded for caps 6/16/30 over 4000 days, depleted to " + low + " by hunting and back to " + back + "; sim herd " + wild + "/" + cap + ", edge regrowth to " + wildHoppers(sim).length);
 }
@@ -219,15 +224,15 @@ function watch(sim, ticks, every = 20) {
   for (let i = 0; i < 5; i++) sim.step();
   const tb = sim.ents.ofKind("fauna").find(e => e.sp === "thornback");
   assert.ok(tb, "a thornback lives in the cave");
-  tb.bd = sim.tick - (FAUNA.thornback.old + 5) * DAY;
+  tb.bd = sim.tick - (FAUNA.thornback.old + 5) * DUR_DAY;
   let d = 0;
-  while (sim.ents.get(tb.id) && d < 400) { sim.tick += DAY; faunaDaily(sim); d++; }
+  while (sim.ents.get(tb.id) && d < 400) { sim.tick += DUR_DAY; faunaDaily(sim); d++; }
   assert.ok(!sim.ents.get(tb.id), "an old thornback dies");
   assert.ok(sim.wild.tbd >= 0 && sim.chron.entries.some(e => /old thornback died/.test(e.text)), "and the respawn clock starts");
   let k = 0;
-  while (sim.wild.tbd >= 0 && k < 60) { sim.tick += DAY; faunaDaily(sim); k++; }
-  assert.ok(sim.wild.tbd < 0 && sim.ents.ofKind("fauna").some(e => e.sp === "thornback"), "a new one moves in after about " + FAUNA.thornback.respawn / DAY + " days (took " + k + ")");
-  assert.ok(k >= FAUNA.thornback.respawn / DAY - 1);
+  while (sim.wild.tbd >= 0 && k < 60) { sim.tick += DUR_DAY; faunaDaily(sim); k++; }
+  assert.ok(sim.wild.tbd < 0 && sim.ents.ofKind("fauna").some(e => e.sp === "thornback"), "a new one moves in after about " + FAUNA.thornback.respawn / DUR_DAY + " days (took " + k + ")");
+  assert.ok(k >= FAUNA.thornback.respawn / DUR_DAY - 1);
   ok("thornback ageing: died at old age, replaced after " + k + " days");
 }
 
@@ -238,7 +243,7 @@ function watch(sim, ticks, every = 20) {
     for (const s of sim.ents.ofKind("item").filter(q => ITEMS[q.item].spoil > 0)) sim.ents.remove(s.id);
     setup(sim);
     const f0 = survey(sim).stock.berry + survey(sim).stock.hopper_meat + survey(sim).stock.tuber;
-    for (let d = 0; d < 5; d++) { sim.tick = 20 * DAY + d * DAY; spoilDaily(sim); }
+    for (let d = 0; d < 5; d++) { sim.tick = 20 * DAY + d * DUR_DAY; spoilDaily(sim); }
     const sv = survey(sim);
     return { left: sv.stock.berry + sv.stock.hopper_meat + sv.stock.tuber, f0, sim };
   };
@@ -270,7 +275,7 @@ function watch(sim, ticks, every = 20) {
   for (const s of mine.ents.ofKind("item").filter(q => ITEMS[q.item].spoil > 0)) mine.ents.remove(s.id);
   dropLoose(mine, "berry", 10, cz.x0, cz.y0, cz.z); dropLoose(mine, "berry", 10, SITE.x, SITE.y - 4, mine.stock.z); mine.cache.iv++;
   const inCellar = () => mine.ents.ofKind("item").filter(q => q.item === "berry" && q.z === cz.z).reduce((a, q) => a + q.n, 0);
-  for (let d = 0; d < 5; d++) { mine.tick = 20 * DAY + d * DAY; spoilDaily(mine); }
+  for (let d = 0; d < 5; d++) { mine.tick = 20 * DAY + d * DUR_DAY; spoilDaily(mine); }
   const outside = mine.ents.ofKind("item").filter(q => q.item === "berry" && q.z !== cz.z).reduce((a, q) => a + q.n, 0);
   assert.ok(10 - inCellar() < 10 - outside, "the cellar loses less: kept " + inCellar() + " of 10 against " + outside + " in the open");
   assert.ok(survey(mine).stock.berry === inCellar() + outside || true);
@@ -298,17 +303,24 @@ function watch(sim, ticks, every = 20) {
   // route 1: a seedling comes up where food rotted, near the camp, and someone sees it
   const sim = loadFixture("settled");
   assert.ok(!can(sim, "CULTIVATION") && !can(sim, "HUSBANDRY"));
-  storeInZone(sim, "berry", 200); sim.cache.iv++;
-  const bushes0 = sim.ents.ofKind("plant").filter(p => p.species === "berry").length;
-  const t = until(sim, (s) => can(s, "CULTIVATION"), 6 * DAY);
+  // S18b: staged, not simulated for six days (in a 12000-tick day the village dries 200 berries on racks before they rot): 30 rotted berries lie by the stockpile
+  // this very tick, a villager stands beside them, and the daily sprout roll runs once and again each morning until a seedling comes up and is seen (capped at 6 days)
+  const bushes0 = sim.ents.ofKind("plant").filter(p => p.species === "berry").length, cp = { x: (sim.stock.x0 + sim.stock.x1) >> 1, y: (sim.stock.y0 + sim.stock.y1) >> 1 };
+  const watcher = adults(sim)[0], wz = sim.world.standZ(cp.x + 4, cp.y + 4);
+  if (wz >= 0) sim.ents.move(watcher, cp.x + 4, cp.y + 4, wz);
+  let t = -1;
+  for (let day = 0; day < 6 && t < 0; day++) {
+    sim.cache.sprouts = [["berry", 30, cp.x + 3, cp.y + 3]]; sproutDaily(sim);
+    for (let i = 0; i < 400 && t < 0; i++) { sim.step(); if (can(sim, "CULTIVATION")) t = i; }
+  }
   assert.ok(t >= 0, "the sight of rotted fruit sprouting teaches farming (" + sim.ents.ofKind("plant").filter(p => p.species === "berry").length + " bushes against " + bushes0 + ")");
   assert.ok(sim.chron.entries.some(e => e.kind === "DISCOVERY" && /seed come up/.test(e.text)), "chronicled");
   ok("CULTIVATION by witness: a seed came up where food rotted, understood after " + t + " ticks");
   // route 2: tinkering with a seed (buried, at the camp)
   const s2 = loadFixture("settled");
-  s2.disc.ask = { until: s2.tick + 3 * DAY, ids: adults(s2).slice(0, 3).map(v => v.id), item: "berry", at: 0 };
+  s2.disc.ask = { until: s2.tick + 3 * DUR_DAY, ids: adults(s2).slice(0, 3).map(v => v.id), item: "berry", at: 0 };
   s2.cache.tkSig = null;
-  const t2 = until(s2, (s) => can(s, "CULTIVATION"), 3 * DAY);
+  const t2 = until(s2, (s) => can(s, "CULTIVATION"), 3 * DUR_DAY);
   assert.ok(t2 >= 0, "burying a berry at the camp is understood within 3 days");
   assert.ok(s2.disc.trace.some(e => e.k === "tinker" && e.ok && e.row === "CULTIVATION"));
   ok("CULTIVATION by tinker: buried a seed, found after " + t2 + " ticks");

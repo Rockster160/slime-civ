@@ -7,7 +7,7 @@
 //   ep  epoch: bumps whenever a flag/order changes so villagers re-plan at once
 //   fc  food-critical flag   uvf its urgency u_v   fneed jobs it may open
 //   sc  shelter-critical     uvs                   runway = effective food days per head
-import { DAY, DAYS_PER_YEAR } from "./clock.js";
+import { DUR_DAY, DAYS_PER_YEAR } from "./clock.js";
 import { clamp } from "./util.js";
 import { dayF, WINTER_START, winterAhead, coldAhead, forecastMin } from "./season.js";
 import { survey, haveTotal, inZone, zoneCapacity, ITEM_KINDS, ITEMS, storeCell } from "./items.js";
@@ -94,7 +94,7 @@ export function updateBoard(sim) {
 
   if (!b.fc && eff < critT) {
     b.fc = 1; b.ep++;
-    if (eff < CRIT_BASE && t - b.crisisT > DAY * 10) {
+    if (eff < CRIT_BASE && t - b.crisisT > DUR_DAY * 10) {
       b.crisisT = t;
       log(sim, "DISASTER", "Food is running short: about " + eff.toFixed(1) + " days left in the stockpile.", [], { runway: b.runway }, 2);
     }

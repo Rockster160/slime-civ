@@ -3,6 +3,8 @@
 // The biome map itself is covered by tests/geology.js (20 seeds), tests/underground.js and the ui_smoke.
 import { WORLD } from "../src/sim/worldgen.js";
 WORLD.biomes = false;
+WORLD.dormant = false;    // S17: far changed land stays awake, as it did when these tests were tuned (tests/dormant.js covers the sleeping)
+WORLD.pond = false;       // S17: the pond at the camp (water at the door) is new; the older tests and fixtures were tuned without it
 WORLD.depth = false;      // S14: the world-depth content (illness, wolves and grazers, salt/peat/herb, perturbed properties) is off too: those tests were tuned before it, and their fixtures were made without it
 // S16: these tests hard-code positions round the OLD camp (64, 64): the camp is placed there if it is a fair start (otherwise the spawn search runs as in the game; tests/endless.js,
 // tests/geology.js and the ui_smoke use it). Everything else - the terrain, caves, stream, ores - is the endless world's.

@@ -9,7 +9,7 @@
 // thornback  the one wounding fauna: 150 HP, lives in the cave lair, patrols near it, aggressive inside its territory, rare outside it
 //            (aggro 5 beyond the territory, a leash), retreats when hurt, regenerates slowly, leaves carrion; a new one may move in after a long time.
 // More fauna later = one more row (and a behaviour name).
-import { DAY } from "./clock.js";
+import { DUR_DAY } from "./clock.js";
 import { log, once } from "./chronicle.js";
 import { award } from "./titles.js";
 import { dropLoose } from "./items.js";
@@ -29,7 +29,7 @@ import { depthOn, dryAir, deposits } from "./depth.js";
 export const FAUNA = {
   hopper: { label: "hopper", beh: "hopper", hp: 18, tpc: 7, huntable: 1, tamable: 1, scare: 0, meat: 2, hide: 1, roam: 6, flee: { r: 4, tpc: 5, steps: 4, rest: 40 },
     curio: "A small hopping creature that bolts the moment anyone comes close. It might be good eating." },
-  thornback: { label: "thornback", beh: "thornback", hp: 150, tpc: 8, chase: 7, hostile: 1, scare: 1, dmg: 40, hit: 0.6, cd: 45, aggro: 5, leash: 17, patrol: 6, retreat: 0.3, regen: 2, meat: 6, respawn: 25 * DAY, old: 150,
+  thornback: { label: "thornback", beh: "thornback", hp: 150, tpc: 8, chase: 7, hostile: 1, scare: 1, dmg: 40, hit: 0.6, cd: 45, aggro: 5, leash: 17, patrol: 6, retreat: 0.3, regen: 2, meat: 6, respawn: 25 * DUR_DAY, old: 150,
     curio: "A heavy bristled beast that lives in the cave and mauls whatever walks in. Villagers will not go near it; a guided one might stand against it." },
   // S14 (packs.js): the pack predator and the large grazer. huntable 2 = dangerous prey: the village hunts it on its own only with a spear in the stockpile, never a wolf.
   wolf: { label: "wolf", beh: "wolf", hp: 45, tpc: 5, chase: 4, hostile: 1, scare: 1, huntable: 2, dmg: 13, hit: 0.6, cd: 50, meat: 2, hide: 2, roam: 12, flee: { r: 8, tpc: 4, steps: 10, rest: 220 },
@@ -290,12 +290,12 @@ export function hopperDay(ages, cap, rnd, opt = {}) {
   if (opt.edge !== false && left + born < Math.ceil(cap * L.edge) && rnd() < L.arrive) arrive = left + born === 0 ? 2 : 1;
   return { die, born, arrive };
 }
-const ageD = (sim, e) => Math.floor((sim.tick - e.bd) / DAY);
+const ageD = (sim, e) => Math.floor((sim.tick - e.bd) / DUR_DAY);
 /** Creatures made before S10 have no birth tick: give them one, spread over the first part of life, by a hash of their id. */
 function ensureBirth(sim, e) {
   if (e.bd !== undefined) return;
   const span = (FAUNA[e.sp].old || HOPPER_LIFE.old) * 0.6;
-  e.bd = sim.tick - Math.floor((mix32(e.id, 31) / 4294967296) * span) * DAY;
+  e.bd = sim.tick - Math.floor((mix32(e.id, 31) / 4294967296) * span) * DUR_DAY;
   if (e.tame === undefined) { e.tame = 0; e.pen = 0; }
 }
 export const wildHoppers = (sim) => sim.ents.ofKind("fauna").filter(e => e.sp === "hopper" && !e.tame && Math.abs(e.x - sim.site.x) <= REGION_R && Math.abs(e.y - sim.site.y) <= REGION_R);       // S16: the herd the land round the camp carries (hoppers in the far land are not counted against it)
@@ -344,7 +344,7 @@ export function faunaDaily(sim) {
       log(sim, "MILESTONE", "The old thornback died in its cave.", [], { sp: "thornback", age: 1 }, 1);
     }
   }
-  if (w.tbd >= 0 && sim.tick - w.tbd >= FAUNA.thornback.respawn + r.range(0, 5 * DAY) && moveIn(sim)) {
+  if (w.tbd >= 0 && sim.tick - w.tbd >= FAUNA.thornback.respawn + r.range(0, 5 * DUR_DAY) && moveIn(sim)) {
     w.tbd = -1;
     log(sim, "MILESTONE", "A new thornback has moved into the cave.", [], {}, 1);
   }

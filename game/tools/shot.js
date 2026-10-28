@@ -23,7 +23,7 @@ const errors = [];
 page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errors.push(m.type() + ": " + m.text()); });
 page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
 
-await page.goto(pathToFileURL(join(root, "slime-civ.html")).href);
+await page.goto(pathToFileURL(join(root, "slime-civ.html")).href + "?seed=1");
 if (skip) await page.evaluate((n) => { for (let i = 0; i < n; i++) __game.sim.step(); }, skip);
 await page.keyboard.press(String(speed));
 await page.waitForTimeout(seconds * 1000);

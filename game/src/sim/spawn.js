@@ -18,7 +18,7 @@ import { baseDef, colInto, dirtAt, genChunk, localIdx, WATER_LEVEL, SOFT_THICK, 
 import { activateChunk } from "./flora.js";
 
 export const REACH_R = 64;         // validator: key inputs within this many cells of the landing site (§11.10 item 3)
-export const WATER_NEAR = 13, BERRY_NEAR_R = 15, BERRY_MIN = 3;     // S17: the camp the search prefers
+export const WATER_NEAR = 14, BERRY_NEAR_R = 15, BERRY_MIN = 3;     // S17: the camp the search prefers
 export const MAX_CANDIDATES = 40;  // spawn candidates tried before the best of them is kept
 const KEEP = 255;                  // a stamp entry whose material is KEEP only touches flags
 
@@ -35,8 +35,11 @@ export function buildDef(seed, opts, at) {
   const def = baseDef(seed, opts);
   def.spawn = { x: at.x, y: at.y, z: SITE_Z, r: SITE_R };
   const g = new Rng(mix32(seed ^ 0x1a4e, mix32(at.x, at.y))).stream("lake");
-  const lr = g.range(10, 13), llx = g.range(-4, 4), lly = g.range(8, 10);          // S17: the lake's near shore is 8-11 cells from the camp (it was 14-22: villagers walked far to drink)
-  def.lake = { r: lr, lx: at.x + llx, ly: at.y - (lr + lly) };
+  def.lake = { r: g.range(10, 13), lx: at.x + g.range(-18, 18), ly: at.y - g.range(24, 30) };
+  if (opts.pond) {                                // S17: a small pond 13-14 cells from the camp (east, south or west of it; the lake and its stream lie north), so there is drinkable water at the door; the lake itself is where it always was
+    const pg = new Rng(mix32(seed ^ 0x90d1, mix32(at.x, at.y))).stream("pond"), dir = pg.int(3), pd = pg.range(13, 14), jit = pg.range(-4, 4);
+    def.pond = { r: 5, x: at.x + (dir === 0 ? pd : dir === 2 ? -pd : jit), y: at.y + (dir === 1 ? pd : jit) };
+  }
   def.geo = { caves: [], malachite: [], ridge: [], tells: [] };
   def.stamps = buildStamps(def);
   return def;
@@ -284,7 +287,7 @@ const memo = new Map();
  */
 export function defOf(seed, opts = {}) {
   seed = seed >>> 0;
-  const key = seed + "|" + (opts.biomes !== false ? 1 : 0) + (opts.depth ? 1 : 0) + (opts.spawn ? "|" + opts.spawn.x + "," + opts.spawn.y : "") + (opts.prefer ? "|p" + opts.prefer.x + "," + opts.prefer.y : "");
+  const key = seed + "|" + (opts.biomes !== false ? 1 : 0) + (opts.depth ? 1 : 0) + (opts.pond ? "|pond" : "") + (opts.spawn ? "|" + opts.spawn.x + "," + opts.spawn.y : "") + (opts.prefer ? "|p" + opts.prefer.x + "," + opts.prefer.y : "");
   let def = memo.get(key);
   if (def) return def;
   if (opts.spawn) {                                          // a pinned spawn (a loaded save knows where its camp is; tests that hard-code positions pin it): no search
@@ -305,7 +308,7 @@ export function defOf(seed, opts = {}) {
     d.gen = { seed, attempts: tried, candidate: k, ok: rep.ok, fails: rep.fails, counts: rep.counts, spawn: { x: at.x, y: at.y }, water: rep.water, berries: rep.berries, pref: rep.pref };
     const score = rep.fails.length * 10 + rep.pref.length;                  // a fair start first, then the one with water and berries at the door
     if (!best || score < bestScore) { best = d; bestRep = rep; bestScore = score; }
-    if (rep.ok && !rep.pref.length) break;
+    if (rep.ok && (!rep.pref.length || k < 0)) break;                      // (a preferred spawn only has to be a fair start)
   }
   def = best;
   if (memo.size >= 48) memo.delete(memo.keys().next().value);

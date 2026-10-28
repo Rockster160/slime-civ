@@ -10,8 +10,8 @@ import { createPanel, esc } from "./dom.js";
 
 const ORDER_VERBS = VERBS.filter(v => v.verb !== "capture");
 
-export function createCrewsPanel(parent, game) {
-  const p = createPanel(parent, "crews", "Crews");
+export function createCrewsPanel(parent, game, opts = {}) {
+  const p = createPanel(parent, "crews", "Crews", { icon: "crew", flat: !!opts.flat });
   p.body.innerHTML = `<div class="cr-make"><input class="cr-name" type="text" maxlength="24" placeholder="Crew name"> <button data-c="make" title="Name the selected villagers as a crew">Make crew</button></div>`
     + `<div class="cr-tools btnrow"><button data-c="idle" title="Select every adult with nothing to do right now, to name them a crew or give them an order">Select all idle</button><button data-c="fold" title="Fold or unfold every crew card">Fold all</button></div><div class="cr-total dim"></div><div class="cr-list"></div>`;
   const nameIn = p.body.querySelector(".cr-name"), list = p.body.querySelector(".cr-list"), makeBtn = p.body.querySelector("[data-c=make]");
@@ -89,7 +89,7 @@ export function createCrewsPanel(parent, game) {
 
   p.update = () => {
     const { sim } = game, L = sim.crews.list, vs = sel();
-    p.show(game.unlocked("crews") && (L.length > 0 || vs.length > 0));
+    p.show(!!opts.flat || (game.unlocked("crews") && (L.length > 0 || vs.length > 0)));
     p.setHint(L.length ? String(L.length) : "");
     makeBtn.textContent = vs.length ? "Make crew of " + vs.length : "Make crew";
     let h = L.length ? "" : `<p class="dim">Select villagers and press Make crew to name them and give them a default task. Most play never needs this: select and right-click already works.</p>`;

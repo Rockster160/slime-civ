@@ -54,6 +54,7 @@ export class Entities {
   }
 
   move(e, x, y, z) {
+    if (this.byId.get(e.id) !== e) { e.x = x; e.y = y; e.z = z; return; }      // S18b: an entity that has been removed (killed earlier in the same tick, still referenced by a loop that holds it) must never be put back in the cell index: its stale id made at() hand out an id with no entity (the flora sprout / localCount crash 6.18 saw once)
     this._unindex(e);
     const cx = e.x >> 4, cy = e.y >> 4;
     e.x = x; e.y = y; e.z = z;

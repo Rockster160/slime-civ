@@ -9,7 +9,7 @@
 import assert from "node:assert/strict";
 import { loadFixture } from "./fixture.js";
 import { toJSON, restore } from "../src/sim/save.js";
-import { DAY } from "../src/sim/clock.js";
+import { DUR_DAY } from "../src/sim/clock.js";
 import { isAdult, updateNeeds, NEED_STEP } from "../src/sim/villager.js";
 import { World } from "../src/sim/world.js";
 import { instantHut, flatSpot, clearArea } from "./helpers.js";
@@ -133,7 +133,7 @@ const check = (ev, k) => ev.checks.find(c => c.k === k);
   for (let d = 0; d < 8; d++) {
     const before = (where) => s2.ents.ofKind("item").filter(i => i.item === "berry" && (s2.rooms.at(i.x, i.y, i.z) ? "room" : "yard") === where).reduce((t, i) => t + i.n, 0);
     const r0 = before("room"), y0 = before("yard");
-    s2.tick += DAY; spoilDaily(s2);
+    s2.tick += DUR_DAY; spoilDaily(s2);
     lost.room += r0 - before("room"); lost.yard += y0 - before("yard");
   }
   assert.ok(lost.yard > 0 && lost.room < lost.yard, "less spoils in the storage room over eight days: " + lost.room + " vs " + lost.yard);
@@ -171,7 +171,7 @@ const check = (ev, k) => ev.checks.find(c => c.k === k);
   // the job: villagers cook by themselves
   const stockMeat = haveTotal(s3, "hopper_meat");
   let done = -1;
-  for (let i = 0; i < 2 * DAY && done < 0; i++) { s3.step(); if (haveTotal(s3, "cooked_meat") > 0) done = i; }
+  for (let i = 0; i < 2 * DUR_DAY && done < 0; i++) { s3.step(); if (haveTotal(s3, "cooked_meat") > 0) done = i; }
   assert.ok(done >= 0, "within two days a villager cooks in the kitchen as a job (meat " + stockMeat + " raw in stock)");
   ok("kitchen: fire ring checked, cooked in " + done + " ticks, x" + eatPlain.toFixed(2) + " eating by the fire");
 }
@@ -225,7 +225,7 @@ function haulRun(sim, ticks, each) {
   // a keep-N on wagons: villagers build one at the bench (timber and wheels are in stock)
   sim.apply({ type: "keep", item: "wagon", n: 1 });
   let built = -1;
-  for (let i = 0; i < 3 * DAY && built < 0; i++) { sim.step(); if (sim.ents.ofKind("wagon").length) built = i; }
+  for (let i = 0; i < 3 * DUR_DAY && built < 0; i++) { sim.step(); if (sim.ents.ofKind("wagon").length) built = i; }
   assert.ok(built >= 0, "a wagon is built at the bench within three days");
   const wg = sim.ents.ofKind("wagon")[0];
   assert.equal(wg.t, "wagon");
@@ -263,6 +263,7 @@ function sim_fixup(sim) { sim.cache.iv++; }
   farHeaps(base);
   const cart = spawnWagon(base, "cart", base.stock.x1 + 2, base.stock.y0, base.stock.z);
   const v = adults(base)[0];
+  base.ents.move(v, cart.x - 1, cart.y, cart.z);          // (S18b: the fixture is taken at a different moment of the day: stand the villager beside the cart)
   pen.fod = 0; pen.hg = 0;
   assert.equal(wagonReady(base, cart), "NO_FODDER", "an unfed grazer cannot pull the cart");
   assert.equal(freeWagon(base, v, reservedByOther), null, "so it is not offered for a haul");
@@ -341,7 +342,7 @@ function sim_fixup(sim) { sim.cache.iv++; }
 // ---- 4. the chronicle export (pure) ------------------------------------------------------------------------------------------------
 
 {
-  const sim = loadFixture("year2"), vs = adults(sim);
+  const sim = loadFixture("year2"), vs = sim.ents.ofKind("villager").slice();
   const h0 = sim.hash();
   vs[0].ti = ["first in firecraft"]; vs[1].hl = { n: "the Grey Comb", h: [{ n: "Old Ba", t: 0 }, { n: vs[1].name, t: sim.tick }] };
   const doomed = vs[2]; doomed.ti = ["master digger"]; doomed.hl = { n: "the Worn Flute", h: [{ n: doomed.name, t: 0 }] };

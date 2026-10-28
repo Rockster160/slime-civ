@@ -12,6 +12,7 @@
 //   * malachite: seek it
 //   * smelting unknown with kiln + bellows + charcoal + malachite in hand: investigate malachite AT THE KILN
 //   * smelting known: keep copper, a workbench, keep copper picks
+import { DUR_DAY } from "../../src/sim/clock.js";
 import { can } from "../../src/sim/knowledge.js";
 import { haveTotal } from "../../src/sim/items.js";
 import { isAdult } from "../../src/sim/villager.js";
@@ -62,37 +63,37 @@ export function competentBot() {
     const fire = can(sim, "FIRE_TENDING"), pot = can(sim, "POTTERY") || can(sim, "KILN"), chr = can(sim, "CHARCOAL"), smelt = can(sim, "SMELTING");
     // supplies: wood for fuel and the charcoal mound, always
     keep(sim, "log", 12); keep(sim, "stick", 24);
-    if (fire && have(sim, "clay") < 8 && !mining(sim, "clay") && once("seekclay", sim, 3 * 1800)) sim.apply({ type: "mine", op: "seek", item: "clay" });
-    if (fire && !pot && have(sim, "clay") >= 1 && once("investclay", sim, 2 * 1800)) { const h = sim.ents.ofKind("furniture").find(f => f.f === "hearth"); asks(sim, { item: "clay", at: h ? h.id : 0 }); }
+    if (fire && have(sim, "clay") < 8 && !mining(sim, "clay") && once("seekclay", sim, 3 * DUR_DAY)) sim.apply({ type: "mine", op: "seek", item: "clay" });
+    if (fire && !pot && have(sim, "clay") >= 1 && once("investclay", sim, 2 * DUR_DAY)) { const h = sim.ents.ofKind("furniture").find(f => f.f === "hearth"); asks(sim, { item: "clay", at: h ? h.id : 0 }); }
     if (pot) {
       const k = stationsOf(sim, "kiln")[0];
-      if (!k && !ghosts(sim, "kiln").length && have(sim, "clay") >= 4 && once("kiln", sim, 1800)) {
+      if (!k && !ghosts(sim, "kiln").length && have(sim, "clay") >= 4 && once("kiln", sim, DUR_DAY)) {
         const p = pairSpot(sim);
         if (p) sim.apply({ type: "build", cells: [{ w: "kiln", x: p.x, y: p.y, z: p.z }] });
       }
       if (k && !stationsOf(sim, "bellows").length && !ghosts(sim, "bellows").length && have(sim, "fired_clay") >= 2) {
         const nb = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([ax, ay]) => [k.x + ax, k.y + ay, sim.world.standZ(k.x + ax, k.y + ay)]).find(([x, y, z]) => z === k.z && !checkPlace(sim, "bellows", "", x, y, z));
-        if (nb && once("bellows", sim, 1800)) sim.apply({ type: "build", cells: [{ w: "bellows", x: nb[0], y: nb[1], z: nb[2] }] });
+        if (nb && once("bellows", sim, DUR_DAY)) sim.apply({ type: "build", cells: [{ w: "bellows", x: nb[0], y: nb[1], z: nb[2] }] });
       }
       if (k && !stationsOf(sim, "bellows").length && have(sim, "fired_clay") < 2) keep(sim, "fired_clay", 4);
       if (k && stationsOf(sim, "bellows").length) { const kk = sim.board.keeps.find(q => q.item === "fired_clay"); if (kk && have(sim, "fired_clay") >= 4) sim.apply({ type: "unkeep", item: "fired_clay" }); }
     }
-    if (pot && !chr && have(sim, "log") >= 1 && once("investlog", sim, 2 * 1800)) { const h = sim.ents.ofKind("furniture").find(f => f.f === "hearth"); asks(sim, { item: "log", at: h ? h.id : 0 }); }
+    if (pot && !chr && have(sim, "log") >= 1 && once("investlog", sim, 2 * DUR_DAY)) { const h = sim.ents.ofKind("furniture").find(f => f.f === "hearth"); asks(sim, { item: "log", at: h ? h.id : 0 }); }
     if (chr) {
       if (!stationsOf(sim, "mound").length && !ghosts(sim, "mound").length) {
-        if (have(sim, "dirt") < 4 && !sim.mine.list.length && once("dirt", sim, 3 * 1800)) {
+        if (have(sim, "dirt") < 4 && !sim.mine.list.length && once("dirt", sim, 3 * DUR_DAY)) {
           const c = CAMP(sim.stock), x = c.x + 9, y = c.y + 9, z = sim.world.standZ(x, y) - 1;
           if (z > 0) sim.apply({ type: "mine", op: "region", x0: x, y0: y, x1: x + 2, y1: y + 2, z, layers: 1 });
         }
-        if (have(sim, "dirt") >= 4 && once("mound", sim, 1800)) { const p = oneSpot(sim, "mound"); if (p) sim.apply({ type: "build", cells: [{ w: "mound", ...p }] }); }
+        if (have(sim, "dirt") >= 4 && once("mound", sim, DUR_DAY)) { const p = oneSpot(sim, "mound"); if (p) sim.apply({ type: "build", cells: [{ w: "mound", ...p }] }); }
       } else if (stationsOf(sim, "mound").length && have(sim, "charcoal") < 6) keep(sim, "charcoal", 6);
     }
-    if (pot && have(sim, "malachite") < 4 && !mining(sim, "malachite") && once("seekmal", sim, 3 * 1800)) sim.apply({ type: "mine", op: "seek", item: "malachite" });
+    if (pot && have(sim, "malachite") < 4 && !mining(sim, "malachite") && once("seekmal", sim, 3 * DUR_DAY)) sim.apply({ type: "mine", op: "seek", item: "malachite" });
     const kiln = stationsOf(sim, "kiln").find(k => stationHeat(sim, k, "charcoal").level >= 4);
-    if (!smelt && kiln && have(sim, "charcoal") >= 2 && have(sim, "malachite") >= 2 && once("investmal", sim, 2 * 1800)) asks(sim, { item: "malachite", at: kiln.id });
+    if (!smelt && kiln && have(sim, "charcoal") >= 2 && have(sim, "malachite") >= 2 && once("investmal", sim, 2 * DUR_DAY)) asks(sim, { item: "malachite", at: kiln.id });
     if (smelt) {
       keep(sim, "copper", 2);
-      if (!stationsOf(sim, "workbench").length && !ghosts(sim, "workbench").length && have(sim, "log") >= 2 && once("bench", sim, 1800)) { const p = oneSpot(sim, "workbench"); if (p) sim.apply({ type: "build", cells: [{ w: "workbench", ...p }] }); }
+      if (!stationsOf(sim, "workbench").length && !ghosts(sim, "workbench").length && have(sim, "log") >= 2 && once("bench", sim, DUR_DAY)) { const p = oneSpot(sim, "workbench"); if (p) sim.apply({ type: "build", cells: [{ w: "workbench", ...p }] }); }
       if (stationsOf(sim, "workbench").length) keep(sim, "copper_pick", 1);
     }
   };

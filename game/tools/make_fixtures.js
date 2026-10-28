@@ -23,12 +23,12 @@ import { isAdult } from "../src/sim/villager.js";
 import { flatSpot, clearArea } from "../tests/helpers.js";
 import { initFauna, spawnFauna } from "../src/sim/fauna.js";
 import { CROP } from "../src/sim/farm.js";
-import { DAY as DAY_TICKS } from "../src/sim/clock.js";
+import { DAY as DAY_TICKS, DUR_DAY } from "../src/sim/clock.js";
 import { newDepth } from "../src/sim/depth.js";
 
 export const SEED = 7;
 export const DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "tests", "fixtures");
-const YEAR = 180000;
+const YEAR = 100 * DAY_TICKS;
 
 /**
  * A shaft dug straight into the soft rock east of camp (instantly, as if dug and walked): a stair of 6 levels, then a
@@ -86,6 +86,7 @@ export function prepFire(sim) {
   }
   h.fuel = 3000; h.lit = 1; h.fi = "log";
   storeInZone(sim, "log", 10); storeInZone(sim, "stick", 20);
+  storeInZone(sim, "dried", 30);                                   // S18b: a village at the end of autumn with a full winter larder, so it is not in a food crisis and its people are free to tinker
   sim.cache.iv++;
   fireTick(sim);                                          // heat level now
   return h;
@@ -277,7 +278,7 @@ export function prepFarm(sim) {
   for (const p of sim.ents.ofKind("plot")) {
     const row = p.y - sp[1];
     if (row <= 1) p.tl = 1;
-    if (row === 0) { p.cr = "berry"; p.gr = CROP.berry.days - 1; p.wt = sim.tick + 3 * DAY_TICKS; }
+    if (row === 0) { p.cr = "berry"; p.gr = CROP.berry.days - 1; p.wt = sim.tick + 3 * DUR_DAY; }
   }
   storeInZone(sim, "berry", 16); storeInZone(sim, "tuber", 10);
   sim.cache.iv++;
@@ -299,7 +300,7 @@ export function prepPen(sim) {
   const hoppers = [];
   for (let i = 0; i < 3; i++) {
     const h = spawnFauna(sim, "hopper", sp[0] + i, sp[1] + 1, sp[2]);
-    h.tame = 1; h.pen = pen.id; h.bd = sim.tick - 12 * DAY_TICKS; h.home = [h.x, h.y, h.z];
+    h.tame = 1; h.pen = pen.id; h.bd = sim.tick - 12 * DUR_DAY; h.home = [h.x, h.y, h.z];
     hoppers.push(h);
   }
   storeInZone(sim, "grass", 20); storeInZone(sim, "stick", 20);
@@ -317,7 +318,7 @@ export function prepSettle(sim) {
   grant(sim, adults[0], "FRAMING", 0.5); grant(sim, adults[1], "FRAMING", 0.2);
   const pen = sim.farm.pens[sim.farm.pens.length - 1];
   const g = spawnFauna(sim, "grazer", pen.x0 + 3, pen.y0, pen.z);
-  g.tame = 1; g.pen = pen.id; g.bd = sim.tick - 12 * DAY_TICKS; g.home = [g.x, g.y, g.z];
+  g.tame = 1; g.pen = pen.id; g.bd = sim.tick - 12 * DUR_DAY; g.home = [g.x, g.y, g.z];
   const sp = flatSpot(sim, 3, 3, 2); clearArea(sim, sp[0], sp[1], 3, 3, sp[2]);
   const bench = putStation(sim, "workbench", sp[0] + 1, sp[1] + 1, sp[2]);
   clearStock(sim, ["stick", "grass"]);
@@ -330,9 +331,9 @@ export function prepSettle(sim) {
 /** name -> {run: sim ticks until this returns true (checked every tick), bot?: scripted player}. All from SEED. */
 export const FIXTURES = {
   start: { until: () => true },
-  settled: { until: (s) => s.tick >= 20 * 1800 },
-  prewinter: { until: (s) => s.tick > 1800 * 50 && dayF(s.tick) >= WINTER_START - 1 },
-  midwinter: { until: (s) => s.tick > 1800 * 50 && dayF(s.tick) >= WINTER_START + 12 },
+  settled: { until: (s) => s.tick >= 20 * DUR_DAY },
+  prewinter: { until: (s) => s.tick > 50 * DAY_TICKS && dayF(s.tick) >= WINTER_START - 1 },
+  midwinter: { until: (s) => s.tick > 50 * DAY_TICKS && dayF(s.tick) >= WINTER_START + 12 },
   year2: { until: (s) => s.tick >= YEAR },
   // S6: derived from `settled` (no extra run): a shaft into the soft rock with an exposed malachite face; and ore in the stockpile for S7's crafting.
   mine: { from: "settled", prep: carveMine },
@@ -357,7 +358,7 @@ export const FIXTURES = {
   settle: { from: "pen", prep: prepSettle },                           // S15: a bench, a penned grazer, FRAMING, timber and wheels, raw meat
   crowd: { from: "settled", prep: prepCrowd },                         // S11: 60 villagers (spawned adults) for the scale checks
   // A roofed shelter with beds, a stockpile and its purpose set, built by the scripted shelter player (separate run).
-  hut: { bot: true, until: (s) => s.tick >= 14 * 1800 && s.rooms.all().some(r => r.enclosed) },
+  hut: { bot: true, until: (s) => s.tick >= 14 * DUR_DAY && s.rooms.all().some(r => r.enclosed) },
 };
 
 /**
@@ -370,6 +371,12 @@ export function tidy(sim) {
   for (const v of t.ents.ofKind("villager")) { delete v.fam.CULTIVATION; delete v.fam.HUSBANDRY; delete v.fam.HIDE_WORKING; }
   for (const e of t.ents.ofKind("item").filter(i => i.item === "hide").slice()) t.ents.remove(e.id);
   t.disc.curio = t.disc.curio.filter(c => c.wild && c.id !== "wild:hopper");
+  // S18b: with the flat clock the played-through village breeds on a 1800-tick rhythm and has 15-25 people by day 24 (it had 7-9); the tests are written for a small village, so a fixture keeps the eight longest-standing (lowest ids: the founders first) and the food stock is left as it is
+  const vs = t.ents.ofKind("villager").slice();
+  for (const v of vs.slice(8)) { if (v.bed) { const b = t.ents.get(v.bed); if (b) b.owner = 0; } t.ents.remove(v.id); }
+  for (const v of t.ents.ofKind("villager")) { v.mate = vs.slice(0, 8).some(o => o.id === v.mate) ? v.mate : 0; v.par = v.par.map(id => id); }
+  storeInZone(t, "dried", 24);                                                    // S18b: a fixture village is fed (no food demand pressing the standing orders): tests that are not about food do not wait on foraging
+  t.disc.miss = {}; t.disc.dead = []; t.disc.cd = {};                            // S18b: the long free time of a 12000-tick day let the village tinker its way into near-misses and dead ends; a fixture starts with a clean slate of those
   t.wild.k = 0;                                                                   // hoppers hunted so far (the HUSBANDRY count)
   for (const c of ["CULTIVATION", "HUSBANDRY", "HIDE_WORKING"]) { delete t.disc.lost[c]; delete t.disc.sole[c]; delete t.chron.f["first_" + c]; }
   t.bps.list = t.bps.list.filter(b => b.name !== "Hide teepee"); if (t.disc.bpp) { delete t.disc.bpp.teepee; delete t.disc.bpp.hide; } delete t.chron.f.design_teepee; delete t.chron.f.design_hide;                // and the design hide working put in the Blueprints panel

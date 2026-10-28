@@ -18,7 +18,7 @@ export const SCOUT_COMMANDS = {
   scout(sim, c) {
     sim.lastBlocker = "";
     if (!Number.isInteger(c.x) || !Number.isInteger(c.y)) return false;
-    if (Math.max(Math.abs(c.x - sim.site.x), Math.abs(c.y - sim.site.y)) > SCOUT_MAX) { sim.lastBlocker = "TOO_FAR"; return false; }
+    if (Math.max(Math.abs(c.x - sim.site.x), Math.abs(c.y - sim.site.y)) > SCOUT_MAX) { sim.lastBlocker = "SCOUT_FAR"; return false; }
     return ORDER_COMMANDS.order(sim, { type: "order", ids: c.ids, verb: "scout", x: c.x, y: c.y, z: 0 });
   },
 };

@@ -7,7 +7,7 @@ import { defOf } from "./spawn.js";
 import { activateChunk } from "./flora.js";
 
 /** World options a caller may flip before it makes worlds: tests of the older balance run on the meadow-only map (tests/legacy.js); the game never touches it. */
-export const WORLD = { biomes: true, depth: true, prefer: null };       // depth (S14): salt, peat and herb deposits, and (sim.js) illness, wolves and grazers, perturbed properties; tests/legacy.js turns it off
+export const WORLD = { biomes: true, depth: true, prefer: null, pond: true, dormant: true };       // depth (S14): salt, peat and herb deposits, and (sim.js) illness, wolves and grazers, perturbed properties; tests/legacy.js turns it off
 /** The nominal camp. The real one is `world.site` (the spawn search may move it); this is only the first candidate, kept for code that wants a default. */
 export const SITE = Object.freeze({ x: 0, y: 0, z: 13, r: 8 });
 export const BIOME_CLEAR = 36;
@@ -15,7 +15,7 @@ export const BIOME_CLEAR = 36;
 /** A world for a seed: {world, ents, gen} with nothing activated yet (the Sim activates the chunks round its people). gen = how the spawn search went. */
 export function generateWorld(seed, opts = {}) {
   const biomes = opts.biomes !== undefined ? opts.biomes : WORLD.biomes, depth = opts.depth !== undefined ? opts.depth : WORLD.depth;
-  const o = { biomes, depth };
+  const o = { biomes, depth, pond: opts.pond !== undefined ? opts.pond : WORLD.pond };
   if (opts.spawn) o.spawn = opts.spawn; else if (WORLD.prefer) o.prefer = WORLD.prefer;
   const def = defOf(seed >>> 0, o);
   const world = new World((cx, cy) => genChunk(def, cx, cy), def), ents = new Entities();

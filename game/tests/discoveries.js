@@ -24,7 +24,8 @@ import { almanac } from "../src/ui/almanac.js";
 import { stationInfo, describe, blockerText, cellInfo } from "../src/ui/text.js";
 import { generateWorld } from "../src/sim/worldgen.js";
 import { dirtAt, SOFT_THICK } from "../src/sim/terrain.js";
-import { DAY } from "../src/sim/clock.js";
+import { DAY, DUR_DAY, LANDING } from "../src/sim/clock.js";
+import { shelterBlueprints } from "../src/sim/shelter.js";
 
 const step = (sim, n) => { for (let i = 0; i < n; i++) sim.step(); };
 const adults = (sim) => sim.ents.ofKind("villager").filter(v => isAdult(sim, v));
@@ -118,7 +119,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   assert.ok(!can(sim, "DRESS_STONE"));
   let [x0, y0, z] = flatSpot(sim, 8, 3, 3); clearArea(sim, x0, y0, 8, 3, z);
   sim.apply({ type: "build", cells: [0, 1, 2, 3, 4, 5, 6, 7].map(i => ({ w: "wall", m: "stone", x: x0 + i, y: y0, z })) });
-  let t = until(sim, (s) => can(s, "DRESS_STONE"), 3 * DAY);
+  let t = until(sim, (s) => can(s, "DRESS_STONE"), 8 * DUR_DAY);
   assert.ok(t >= 0, "someone understood stone dressing from watching a dry-stone wall go up"); assert.ok(sim.disc.trace.some(e => e.k === "witness" && e.row === "DRESS_STONE"), "a witness roll is in the trace");
   assert.equal(sim.disc.nt, 0, "nobody tinkered: it was seen");
   ok("witness: a dry-stone wall teaches stone dressing (tick " + t + ")");
@@ -126,7 +127,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   sim = loadFixture("workshop");
   [x0, y0, z] = flatSpot(sim, 8, 3, 3); clearArea(sim, x0, y0, 8, 3, z);
   sim.apply({ type: "build", cells: [0, 1, 2, 3, 4, 5, 6, 7].map(i => ({ w: "wall", m: "wattle", x: x0 + i, y: y0, z })) });
-  t = until(sim, (s) => can(s, "CORDAGE"), 3 * DAY);
+  t = until(sim, (s) => can(s, "CORDAGE"), 8 * DUR_DAY);
   assert.ok(t >= 0, "wattle and thatch are bound with fibre: CORDAGE is seen"); assert.equal(sim.disc.nt, 0);
   ok("witness: binding wattle shows how fibre twists into cord (tick " + t + ")");
   // a log squared with an axe -> FRAMING
@@ -134,7 +135,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   storeInZone(sim, "stone_axe", 1); sim.cache.iv++;
   [x0, y0, z] = flatSpot(sim, 4, 3, 3); clearArea(sim, x0, y0, 4, 3, z);
   sim.apply({ type: "build", cells: [0, 1, 2, 3].map(i => ({ w: "wall", m: "log", x: x0 + i, y: y0, z })) });
-  t = until(sim, (s) => can(s, "FRAMING"), 3 * DAY);
+  t = until(sim, (s) => can(s, "FRAMING"), 8 * DUR_DAY);
   assert.ok(t >= 0, "log walls with an axe about teach framing");
   ok("witness: log walls raised with an axe in the village show framing (tick " + t + ")");
   // the skin off a hopper -> HIDE_WORKING (and a hide drops)
@@ -161,8 +162,8 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
     if (prep) prep(sim);
     assert.ok(!can(sim, craft), name + ": unknown at the start");
     asks(sim, extra(sim));
-    let t = until(sim, (s) => can(s, craft), 3 * DAY);
-    if (t < 0) { asks(sim, extra(sim)); t = until(sim, (s) => can(s, craft), 3 * DAY); }       // S13: one experiment per station per day makes a find a chance roll (3 tries in an ask); asked a second time if the first ask came up empty
+    let t = until(sim, (s) => can(s, craft), 8 * DUR_DAY);
+    if (t < 0) { asks(sim, extra(sim)); t = until(sim, (s) => can(s, craft), 8 * DUR_DAY); }       // S13: one experiment per station per day makes a find a chance roll (3 tries in an ask); asked a second time if the first ask came up empty
     assert.ok(t >= 0, name + ": found within two asks (6 game days) (dead ends " + sim.disc.dead.length + ", tries " + sim.disc.nt + ", miss " + JSON.stringify(sim.disc.miss) + ")");
     assert.ok(sim.disc.trace.some(e => e.k === "tinker" && e.ok && e.row === craftRow(craft)), name + ": the trace shows a tinker success");
     ok("tinker: " + name + " (" + t + " ticks, " + sim.disc.nt + " tries)");
@@ -186,7 +187,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   const kiln = furn(sim, "kiln")[0];
   grant(sim, adults(sim)[0], "KILN");
   asks(sim, { item: "iron_ore", at: kiln.id });
-  step(sim, 3 * DAY);
+  step(sim, 8 * DUR_DAY);
   assert.ok(!can(sim, "IRON_SMELTING"), "a kiln never gets there");
   assert.ok((sim.disc.miss.SMELT_IRON || 0) >= 1, "near-miss counted: " + JSON.stringify(sim.disc.miss));
   sim.disc.miss.SMELT_IRON = 3;
@@ -202,7 +203,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   for (const c of ["CORDAGE", "HIDE_WORKING", "DRESS_STONE", "SMOKING"]) grant(sim, a, c, 0.6);
   grant(sim, b, "KILN", 0.6); grant(sim, b, "POTTERY", 0.6);
   const kinds = new Set();
-  const phase = (want, max = 5 * DAY) => {
+  const phase = (want, max = 10 * DUR_DAY) => {
     for (const k of Object.keys(want)) sim.apply({ type: "keep", item: k, n: want[k] });
     let t = 0;
     for (; t < max; t++) {
@@ -218,15 +219,16 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   for (const e of sim.ents.ofKind("item").filter(q => q.item === "stick" || q.item === "log").slice()) sim.ents.remove(e.id);       // room in the stockpile (a full one idles every keep)
   storeInZone(sim, "grass", 12); storeInZone(sim, "stone", 16); storeInZone(sim, "flint", 4); storeInZone(sim, "stick", 10); storeInZone(sim, "log", 6); sim.cache.iv++;           // (S13: a regenerated fixture's stores are whatever the village had left; the recipes need these)
   phase({ cordage: 3, block: 2, stone_axe: 1, smoked_meat: 4 });           // (one bench: a bench job is one worker at a time, so the products are made in phases)
-  storeInZone(sim, "cordage", 4); storeInZone(sim, "hide", 6); sim.cache.iv++;
+  storeInZone(sim, "cordage", 4); storeInZone(sim, "hide", 6); storeInZone(sim, "stick", 6); sim.cache.iv++;
   phase({ leather: 2, basket: 1 });
   storeInZone(sim, "cordage", 2); sim.cache.iv++;
   phase({ backpack: 1 });
   assert.ok(kinds.has("make_tool") && kinds.has("smoke"), "the bench job and a new job kind, `smoke`, ran: " + [...kinds]);
   // framing wants an axe: with the stone axe made above, timber comes
   grant(sim, a, "FRAMING", 0.6);
+  storeInZone(sim, "log", 6); storeInZone(sim, "stick", 4); sim.cache.iv++;       // (the earlier phases used the logs)
   sim.apply({ type: "keep", item: "timber", n: 2 });
-  assert.ok(until(sim, (s) => haveTotal(s, "timber") >= 2, 3 * DAY) >= 0, "timber is framed once an axe exists");
+  assert.ok(until(sim, (s) => haveTotal(s, "timber") >= 2, 8 * DUR_DAY) >= 0, "timber is framed once an axe exists");
   assert.equal(RECIPES.timber.tool.includes("stone_axe"), true);
   ok("timber: framed with the stone axe (it is not used up: " + haveTotal(sim, "stone_axe") + " axe left)");
   assert.equal(haveTotal(sim, "stone_axe"), 1);
@@ -238,7 +240,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   const kiln = putStation(sim, "kiln", ...(([x, y, z]) => [x + 1, y + 1, z])(flatSpot(sim, 3, 3, 4))); clearArea(sim, kiln.x - 1, kiln.y - 1, 3, 3, kiln.z);
   storeInZone(sim, "clay", 8); storeInZone(sim, "stick", 10); sim.cache.iv++;
   sim.apply({ type: "keep", item: "brick", n: 4 });
-  const t = until(sim, (s) => haveTotal(s, "brick") >= 4, 3 * DAY);
+  const t = until(sim, (s) => haveTotal(s, "brick") >= 4, 8 * DUR_DAY);
   assert.ok(t >= 0, "bricks come out of the kiln (KILN_FIRING is live: a kiln run teaches it, brick is its product)");
   assert.ok(can(sim, "KILN"));
   ok("kiln firing: 4 bricks in " + t + " ticks");
@@ -249,10 +251,10 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   for (const [k, v] of [["mould", 2], ["sheet", 0]]) if (v) storeInZone(sim, k, v);
   sim.apply({ type: "keep", item: "mould", n: 2 }); sim.apply({ type: "keep", item: "sheet", n: 2 }); sim.apply({ type: "keep", item: "copper_axe", n: 1 });
   // (S16: on the new land a villager can start a third mould at the very moment two exist and leave the bench loaded for it; craft.js now lets another recipe clear a load that sat unlit for a day)
-  const t = until(sim, (s) => haveTotal(s, "mould") >= 2 && haveTotal(s, "sheet") >= 2 && haveTotal(s, "copper_axe") >= 1, 3 * DAY);
+  const t = until(sim, (s) => haveTotal(s, "mould") >= 2 && haveTotal(s, "sheet") >= 2 && haveTotal(s, "copper_axe") >= 1, 8 * DUR_DAY);
   assert.ok(t >= 0 && haveTotal(sim, "mould") >= 2 && haveTotal(sim, "copper_axe") >= 1, "moulds, sheet and a cast axe: " + ["mould", "sheet", "copper_axe", "charcoal", "copper"].map(k => k + "=" + haveTotal(sim, k)));
   sim.apply({ type: "keep", item: "fitting", n: 2 }); sim.apply({ type: "keep", item: "cast_pick", n: 1 });
-  const t2 = until(sim, (s) => haveTotal(s, "fitting") >= 2 && haveTotal(s, "cast_pick") >= 1, 3 * DAY);
+  const t2 = until(sim, (s) => haveTotal(s, "fitting") >= 2 && haveTotal(s, "cast_pick") >= 1, 8 * DUR_DAY);
   assert.ok(t2 >= 0, "fittings and a cast pick: " + ["fitting", "cast_pick", "mould", "copper", "sheet", "charcoal"].map(k => k + "=" + haveTotal(sim, k)));
   ok("copper age: moulds, sheet and a cast axe in " + t + " ticks; fittings and a cast pick in " + t2 + " more");
 }
@@ -260,11 +262,11 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   const sim = loadFixture("ironready"), [a, b] = adults(sim);
   grant(sim, a, "IRON_SMELTING", 0.6); grant(sim, a, "FORGING", 0.6);
   sim.apply({ type: "keep", item: "iron", n: 2 });
-  const t = until(sim, (s) => haveTotal(s, "iron") >= 2, 3 * DAY);
+  const t = until(sim, (s) => haveTotal(s, "iron") >= 2, 8 * DUR_DAY);       // (an event wait: until the forge has run, capped)
   assert.ok(t >= 0, "iron smelted at the forge");
   const iron = sim.ents.ofKind("item").find(s => s.item === "iron");
   sim.apply({ type: "keep", item: "iron_pick", n: 1 });
-  const t2 = until(sim, (s) => haveTotal(s, "iron_pick") >= 1, 3 * DAY);
+  const t2 = until(sim, (s) => haveTotal(s, "iron_pick") >= 1, 8 * DUR_DAY);
   assert.ok(t2 >= 0, "an iron pick forged: iron " + haveTotal(sim, "iron"));
   assert.ok(sim.chron.entries.some(e => /first iron/i.test(e.text)), "the first iron is a chronicle line");
   ok("iron: 2 iron in " + t + " ticks, then an iron pick in " + t2);
@@ -298,7 +300,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   assert.ok(!sim.ents.ofKind("villager").some(v => v.eq && v.eq.item === "iron_pick"));
   storeInZone(sim, "iron_pick", 1); sim.cache.iv++;
   assert.ok(toolAround(sim, "iron_pick"));
-  const t = until(sim, (s) => s.world.mat(...target) === M.AIR, 2 * DAY);
+  const t = until(sim, (s) => s.world.mat(...target) === M.AIR, 2 * DUR_DAY);
   assert.ok(t >= 0, "with an iron pick in the stockpile a digger takes it and digs the deep rock");
   ok("deep rock: marked, it waits (\"" + why.slice(0, 44) + "...\"), then an iron pick arrives and it is dug after " + t + " ticks");
 }
@@ -314,7 +316,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   assert.ok(sim.apply({ type: "mine", op: "seek", item: "coal" }), "and so is coal");
   assert.ok(sim.apply({ type: "mine", op: "cancel", id: sim.mine.list.find(d => d.item === "coal").id }), "(cancelled again: its search tunnels would compete for the diggers)");
   assert.ok(!sim.apply({ type: "mine", op: "seek", item: "gold" }) && sim.lastBlocker === "UNKNOWN_ITEM");
-  const t = until(sim, (s) => survey(s).stock.iron_ore >= 2, 3 * DAY);
+  const t = until(sim, (s) => survey(s).stock.iron_ore >= 2, 8 * DUR_DAY);
   assert.ok(t >= 0, "iron ore dug and hauled: " + survey(sim).stock.iron_ore + " in stock, " + survey(sim).loose.iron_ore + " loose");
   assert.ok(sim.disc.hd, "hard rock counted as dug (the tool_edge pressure's input)");
   ok("mining: 'seek iron ore' digs the seen face and the ore is hauled home after " + t + " ticks");
@@ -336,7 +338,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   // the winter larder counts at full value in the runway; raw meat and berries count less as winter nears
   const mk = (item, k) => { const s = loadFixture("workshop"); for (const q of s.ents.ofKind("item").slice()) if (["hopper_meat", "berry", "tuber", "dried"].includes(q.item)) s.ents.remove(q.id); storeInZone(s, item, k); s.cache.iv++; return s; };
   const raw = mk("hopper_meat", 8), smoked = mk("smoked_meat", 8);
-  for (const s of [raw, smoked]) { s.tick = 1800 * 60; s.cache.iv++; for (let i = 0; i < 40; i++) s.step(); }
+  for (const s of [raw, smoked]) { s.tick = DAY * 60 - LANDING; s.cache.iv++; for (let i = 0; i < 40; i++) s.step(); }
   assert.ok(smoked.board.runway > raw.board.runway, "in late autumn the same smoked meat is a bigger larder: " + smoked.board.runway + " vs " + raw.board.runway);
   // and a villager eats the perishable first
   ok("spoilage: 3 days -> raw meat " + sv.stock.hopper_meat + "/10, smoked " + sv.stock.smoked_meat + "/10, hides " + sv.stock.hide + "/10; larder runway " + smoked.board.runway + " vs " + raw.board.runway + " days of raw");
@@ -366,7 +368,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   assert.ok(!names().includes("Hide teepee"), "no teepee design before hide working");
   const a = adults(sim)[0];
   grant(sim, a, "HIDE_WORKING"); grant(sim, a, "FRAMING"); grant(sim, a, "DRESS_STONE"); grant(sim, a, "KILN");
-  step(sim, DAY + 5);
+  shelterBlueprints(sim);                                   // (S18b: the daily call itself, not a simulated day: in a 12000-tick day the village would fill the flat ground round the camp meanwhile)
   for (const s of SHELTERS) assert.ok(names().includes(s.name), "the village offers a " + s.name + ": " + names());
   // wall materials: insulation climbs with the rung, and the room score with it
   const ins = (m) => MAT[m].ins;
@@ -417,7 +419,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   storeInZone(sim, "hopper_meat", 4); sim.cache.iv++;
   sim.apply({ type: "keep", item: "iron", n: 2 });
   const forge = furn(sim, "forge")[0];
-  assert.ok(until(sim, () => forge.bn > 0, 2 * DAY) >= 0, "the forge is lit");
+  assert.ok(until(sim, () => forge.bn > 0, 8 * DUR_DAY) >= 0, "the forge is lit");
   step(sim, 300);
   const text = toJSON(sim), copy = restore(text);
   assert.equal(copy.hash(), sim.hash(), "restored hash matches");

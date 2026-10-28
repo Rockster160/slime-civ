@@ -10,6 +10,10 @@ import { survey } from "../sim/items.js";
 import { stampCells, oriented } from "../sim/blueprint.js";
 import { ghostCell } from "../render/ghosts.js";
 import { esc } from "./dom.js";
+import { svg } from "./icons.js";
+import { tipAttr } from "./kit.js";
+import { MAT } from "../sim/world.js";
+import { ITEMS } from "../sim/items.js";
 import { itemName, BLOCKER_TEXT } from "./text.js";
 import { SEEK_ALL as SEEK_ITEMS } from "../sim/mine.js";
 import { can } from "../sim/knowledge.js";
@@ -36,6 +40,7 @@ const TOOLS = [
   ["field", "Field", "Drag a rectangle of bare grass (up to 12 by 12) to mark a field. Villagers till it, sow seed from the stockpile, water and harvest it as chores. Crops grow in spring and summer; the first frost kills any that are not ripe. Needs someone who has seen a seed come up."],
   ["pen", "Pen", "Drag a rectangle (2 to 8 cells a side) for a hopper pen. Villagers stake out a fence of sticks with a gate on the south side; then the Capture order brings wild hoppers in, grass in the stockpile feeds them and they breed. Needs husbandry."],
   ["cellar", "Cold cellar", "Drag over a room you have dug at least 3 levels down (roofed, reachable): food is carried there and spoils at 40% of the open rate. Use the level buttons to view the room's level first."],
+ ["stockpile", "Stockpile", "Drag a rectangle (up to 12 by 12) of free ground to add a stockpile zone. Pick what it takes: everything, only food, or only materials. Villagers carry an item to a zone whose filter names it before the main yard, so a yard full of food stops blocking logs and stone. The main yard also grows a ring by itself when it fills, if the land is free."],
   ["erase", "Erase", "Drag a rectangle to remove planned pieces (delivered materials come back)."],
   ["deconstruct", "Deconstruct", "Drag a rectangle over BUILT walls, floors, roofs, doors, beds and racks to have villagers take them down (about 75% of the materials come back). Erase removes plans; this removes finished pieces."],
   ["dig", "Dig", "Mark ground for villagers to dig as a chore: a region (drag), a stair down (click), a vein to follow (click an ore cell) or an item to seek (flint, malachite, clay). Or order the selected villagers to dig a 5x5 patch."],
@@ -50,12 +55,14 @@ const SHAPES = {
 const MATS = { wall: ["wattle", "hide", "log", "timber", "stone", "dressed", "brick", "support"], roof: ["thatch", "hideroof", "logroof"], floor: ["dirt", "plank"] };      // S9: a material shows once someone can work it (BMAT.need)
 const REASON = { bounds: "outside the map", blocked: "something is in the way", ground: "nothing solid to stand it on", exists: "already planned", stockpile: "that is the stockpile", material: "wrong material", unknown: "nobody in the village knows how to make that yet" };
 
-const RECT_TOOLS = ["field", "pen", "cellar"];
-const RECT_COLOR = { field: ["rgba(150,110,60,.28)", "#c49a5a"], pen: ["rgba(200,160,100,.25)", "#e8c070"], cellar: ["rgba(150,200,255,.22)", "#8fc6ff"] };
+const RECT_TOOLS = ["field", "pen", "cellar", "stockpile"];
+const RECT_COLOR = { field: ["rgba(150,110,60,.28)", "#c49a5a"], pen: ["rgba(200,160,100,.25)", "#e8c070"], cellar: ["rgba(150,200,255,.22)", "#8fc6ff"], stockpile: ["rgba(240,220,150,.24)", "#f0dc96"] };
+const ZF = [["all", "Everything"], ["food", "Food only"], ["mat", "Materials only"]];
+export const ZF_LABEL = { all: "everything", food: "food only", mat: "materials only" };
 
 export function buildState() {
   return { tool: "wall", mat: { wall: "wattle", roof: "thatch", floor: "dirt" }, shape: { wall: "box", floor: "fill", roof: "fill", door: "point", bed: "point", rack: "point", hearth: "point", kiln: "point", mound: "point", bellows: "point", workbench: "point", waterjar: "point", smoker: "point", forge: "point", torch: "point", lamp: "point", vent: "point", shelf: "point" },
-    drag: null, bp: null, prevZ: 17, last: "",
+    drag: null, bp: null, prevZ: 17, last: "", zf: "all",
     dig: { intent: "region", layers: 3, levels: 6, item: "malachite" } };
 }
 
@@ -77,18 +84,30 @@ export function createBuildMode(game, root) {
   const B = ui.build = buildState();
   root.innerHTML = `<div class="bb-row bb-tools"></div><div class="bb-row bb-opts"></div><div class="bb-row bb-stamp" style="display:none"></div><div class="bb-status"></div>`;
   const rowTools = root.querySelector(".bb-tools"), rowOpts = root.querySelector(".bb-opts"), rowStamp = root.querySelector(".bb-stamp"), status = root.querySelector(".bb-status");
-  const btn = (parent, label, title, fn, cls = "") => { const b = document.createElement("button"); b.textContent = label; b.title = title; if (cls) b.className = cls; b.onclick = fn; parent.appendChild(b); return b; };
-
+  const btn = (parent, label, title, fn, cls = "", icon = "") => {
+    const b = document.createElement("button"); b.className = cls;
+    if (icon) { b.classList.add("btn", cls === "tool" ? "tl" : "ico"); b.innerHTML = svg(icon, 18) + `<span class="${cls === "tool" ? "tcap" : "sr"}">${esc(label)}</span>`; b.setAttribute("aria-label", label); } else b.textContent = label;
+    b.dataset.tip = (icon ? label + "\n" : "") + title; b.onclick = fn; parent.appendChild(b); return b;
+  };
+  const GROUPS = [["wall", "floor", "roof", "door"], ["bed", "rack", "shelf", "waterjar", "torch", "lamp", "vent"], ["hearth", "kiln", "mound", "bellows", "workbench", "smoker", "forge"], ["field", "pen", "cellar", "stockpile"], ["erase", "deconstruct", "dig", "capture"]];
   const toolBtns = {};
-  for (const [k, label, tip] of TOOLS) toolBtns[k] = btn(rowTools, label, tip, () => setTool(k), "tool-" + k);
-  const sp = document.createElement("span"); sp.className = "bb-lvl"; rowTools.appendChild(sp);
-  btn(rowTools, "−", "View and build one level lower ([)", () => renderer.setZ(renderer.z - 1));
-  btn(rowTools, "+", "View and build one level higher (])", () => renderer.setZ(renderer.z + 1));
-  btn(rowTools, "Done", "Leave build mode (Esc or B)", () => game.setMode("select"), "bb-done");
+  const TOOL_BY = Object.fromEntries(TOOLS.map(t => [t[0], t]));
+  GROUPS.forEach((g, gi) => {
+    const grp = document.createElement("span"); grp.className = "grp"; rowTools.appendChild(grp);
+    for (const k of g) { const [, label, tip] = TOOL_BY[k]; toolBtns[k] = btn(grp, label, tip, () => setTool(k), "tool", k); toolBtns[k].dataset.test = "tool-" + k; toolBtns[k].dataset.toolId = k; }
+    void gi;
+  });
+  const lv = document.createElement("span"); lv.className = "grp"; rowTools.appendChild(lv);
+  btn(lv, "Level down", "View and build one level lower", () => renderer.setZ(renderer.z - 1), "", "level-down").dataset.key = "[";
+  const sp = document.createElement("span"); sp.className = "bb-lvl"; lv.appendChild(sp);
+  btn(lv, "Level up", "View and build one level higher", () => renderer.setZ(renderer.z + 1), "", "level-up").dataset.key = "]";
+  const done = btn(rowTools, "Done", "Leave build mode", () => game.setMode("select"), "pri bb-done", "check"); done.dataset.test = "build-done"; done.dataset.key = "B";
+  const bpb = btn(rowTools, "Blueprints", "Saved building designs: stamp, revise, push", () => { ui.bpOpen = !ui.bpOpen; }, "", "plan"); bpb.dataset.test = "blueprints-btn";
 
   // options row: shape + material buttons for the current tool, the capture name
+  const zoneBox = document.createElement("span"); zoneBox.style.display = "none";
   const shapeBox = document.createElement("span"), matBox = document.createElement("span"), nameBox = document.createElement("span"), digBox = document.createElement("span");
-  rowOpts.append(shapeBox, matBox, nameBox, digBox);
+  rowOpts.append(shapeBox, matBox, nameBox, digBox, zoneBox);
   digBox.className = "bb-dig";
   digBox.addEventListener("keydown", (e) => e.stopPropagation());
   nameBox.innerHTML = `<label>Blueprint name <input class="bp-name" type="text" maxlength="30" value="House"></label>`;
@@ -116,6 +135,7 @@ export function createBuildMode(game, root) {
   game.startStamp = (id) => {
     const bp = game.sim.bps.list.find(b => b.id === id); if (!bp) return;
     if (ui.mode !== "build") game.setMode("build");
+    ui.bpOpen = false;
     B.tool = "stamp"; B.drag = null; B.bp = { id, rot: 0, count: 1, over: { wall: "", roof: "", floor: "" } };
     qs(".bs-n").value = 1; qs(".bs-wall").value = ""; qs(".bs-roof").value = "";
   };
@@ -125,10 +145,10 @@ export function createBuildMode(game, root) {
   // ---- geometry helpers ----
   const level = () => renderer.z;
   function cellAt(e) {
-    const [wx, wy] = cam.toWorld(e.clientX, e.clientY);
+    const [wx, wy] = cam.toWorld(e.clientX, e.clientY, level());              // the viewed level is the plane you build on (6.19b: the angled view)
     return { x: Math.floor(wx), y: Math.floor(wy) };
   }
-  function mouseCell() { return ui.mouse && ui.mouse.over ? (() => { const [wx, wy] = cam.toWorld(ui.mouse.x, ui.mouse.y); return { x: Math.floor(wx), y: Math.floor(wy) }; })() : null; }
+  function mouseCell() { return ui.mouse && ui.mouse.over ? (() => { const [wx, wy] = cam.toWorld(ui.mouse.x, ui.mouse.y, level()); return { x: Math.floor(wx), y: Math.floor(wy) }; })() : null; }
   const inMap = (c) => !!c;                          // S16: the land has no edge
 
   /** What the current drag/hover would place: [{w, m, x, y, z, bad}] */
@@ -157,16 +177,16 @@ export function createBuildMode(game, root) {
       if (c.bad) { bad++; reasons[c.why] = (reasons[c.why] || 0) + 1; continue; }
       ok++; const k = costOf(c.w, c.m); need[k.item] = (need[k.item] || 0) + k.n;
     }
-    const parts = Object.keys(need).map(i => `${need[i]} ${itemName(i)} <span class="${sv.stock[i] >= need[i] ? "dim" : "short"}">(stock ${sv.stock[i]})</span>`);
-    let h = ok ? `<b>${ok}</b> piece${ok === 1 ? "" : "s"}: needs ${parts.join(", ")}` : "";
-    if (bad) h += `${ok ? " · " : ""}<span class="short">${bad} cell${bad === 1 ? "" : "s"} can't be placed (${Object.keys(reasons).map(r => REASON[r] || r).join(", ")})</span>`;
+    const chips = Object.keys(need).map(i => { const have = sv.stock[i], enough = have >= need[i]; return `<span class="chip ccost ${enough ? "ok" : "no"}" data-test="cost-chip" data-item="${i}"${tipAttr(itemName(i) + "\n" + "Needs " + need[i] + ", stock " + have)}><i class="sw" style="background:${ITEMS[i].color}"></i><b class="${enough ? "" : "short"}">${need[i]}</b></span>`; });
+    let h = ok ? `<span class="chip" data-test="piece-count"${tipAttr(ok + " piece" + (ok === 1 ? "" : "s"))}>${svg("plan", 14)}<b>${ok}</b></span>${chips.join("")}<span class="sr">${ok} piece${ok === 1 ? "" : "s"}: needs ${Object.keys(need).map(i => `${need[i]} ${itemName(i)} (stock ${sv.stock[i]})`).join(", ")}</span>` : "";
+    if (bad) { const why = Object.keys(reasons).map(r => REASON[r] || r).join(", "); h += `<span class="chip ccost no"${tipAttr("Cannot be placed\n" + why)}>${svg("warn", 14)}<b>${bad}</b><span class="sr">${bad} cell${bad === 1 ? "" : "s"} can't be placed (${esc(why)})</span></span>`; }
     return h;
   }
 
   // ---- the mode ----
   game.modes.build = {
-    enter(g) { B.prevZ = renderer.z; renderer.setZ(g.sim.stock.z); B.drag = null; },
-    leave() { B.drag = null; B.bp = null; ui.reviseBp = 0; renderer.setZ(B.prevZ); },
+    enter(g) { B.prevZ = renderer.z; renderer.setZ(g.sim.stock.z); renderer.plane = true; B.drag = null; },
+    leave() { B.drag = null; B.bp = null; ui.reviseBp = 0; renderer.plane = false; renderer.setZ(B.prevZ); },
     down(g, e) {
       if (e.button !== 0) return false;
       const c = cellAt(e);
@@ -189,6 +209,9 @@ export function createBuildMode(game, root) {
         if (!good.length) { game.toast("Nothing to plan there: " + (REASON[cells[0] && cells[0].why] || "no valid cells") + "."); return true; }
         sim.apply({ type: "build", cells: good.map(({ w, m, x, y, z: zz }) => ({ w, m, x, y, z: zz })) });
         game.toast(`Planned ${good.length} ${t}${good.length === 1 ? "" : "s"}. Villagers fetch the materials and build them as ordinary chores.`);
+      } else if (t === "stockpile" && d) {
+        const ok = sim.apply({ type: "zone", op: "add", x0: d.a.x, y0: d.a.y, x1: c.x, y1: c.y, z, f: B.zf });
+        game.toast(ok ? "Stockpile zone marked (" + ZF_LABEL[B.zf] + "): villagers carry matching items there." : "Cannot mark that: " + (BLOCKER_TEXT[sim.lastBlocker] || "no free ground there") + ".");
       } else if (RECT_TOOLS.includes(t) && d) {
         const ok = sim.apply({ type: t, x0: d.a.x, y0: d.a.y, x1: c.x, y1: c.y, z });
         const WHAT = { field: "Field marked: villagers till, sow, water and harvest it as chores.", pen: "Pen marked: villagers stake out the fence with sticks, then you can capture hoppers into it.", cellar: "Cold cellar marked: food is carried there from now on." };
@@ -207,6 +230,7 @@ export function createBuildMode(game, root) {
           game.toast(ok ? "“" + rbp.name + "” is now revision " + rbp.rev + ". Push it from the Blueprints panel to rebuild the buildings that follow it." : "Nothing changed (or nothing built there): the design stays at revision " + rbp.rev + ".");
         } else {
           const ok = sim.apply({ type: "blueprint", op: "capture", name: game.bpName(), x0: d.a.x, y0: d.a.y, x1: c.x, y1: c.y, z });
+          if (ok) ui.bpOpen = true;
           game.toast(ok ? "Blueprint “" + game.bpName() + "” saved (see the Blueprints panel)." : "Nothing built in that rectangle to capture. Drag around a finished building.");
         }
       } else if (t === "dig") {
@@ -248,24 +272,29 @@ export function createBuildMode(game, root) {
     draw(g, ctx) {
       const t = B.tool, z = level();
       const cells = validate(pending());
-      for (const c of cells) ghostCell(ctx, cam, c.w, c.x, c.y, { alpha: 0.5, bad: c.bad });
+      for (const c of cells) ghostCell(ctx, cam, c.w, c.x, c.y, { alpha: 0.5, bad: c.bad, z: c.z });
+      if (t === "stockpile") for (const q of game.sim.zones.list) {                    // the zones already drawn, with what each takes
+        const [ax, ay, zw, zh] = cam.rect(q.x0, q.y0, q.x1 + 1, q.y1 + 1, q.z !== undefined ? q.z : z);
+        ctx.fillStyle = "rgba(240,220,150,.14)"; ctx.fillRect(ax, ay, zw, zh); ctx.strokeStyle = "rgba(240,220,150,.8)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(ax, ay, zw, zh); ctx.setLineDash([]);
+        ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "bottom"; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.85)"; const lb = "Zone " + q.id + ": " + ZF_LABEL[q.f || "all"]; ctx.strokeText(lb, ax + 3, ay - 2); ctx.fillStyle = "#f0dc96"; ctx.fillText(lb, ax + 3, ay - 2);
+      }
       if (RECT_TOOLS.includes(t)) {
         const a = B.drag ? B.drag.a : mouseCell(), b = B.drag ? B.drag.b : a;
         if (inMap(a)) {
-          const [ax, ay] = cam.toScreen(Math.min(a.x, b.x), Math.min(a.y, b.y)), [bx, by] = cam.toScreen(Math.max(a.x, b.x) + 1, Math.max(a.y, b.y) + 1);
-          ctx.fillStyle = RECT_COLOR[t][0]; ctx.strokeStyle = RECT_COLOR[t][1]; ctx.lineWidth = 2; ctx.fillRect(ax, ay, bx - ax, by - ay); ctx.strokeRect(ax, ay, bx - ax, by - ay);
+          const [ax, ay, rw, rh] = cam.rect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x) + 1, Math.max(a.y, b.y) + 1, z);
+          ctx.fillStyle = RECT_COLOR[t][0]; ctx.strokeStyle = RECT_COLOR[t][1]; ctx.lineWidth = 2; ctx.fillRect(ax, ay, rw, rh); ctx.strokeRect(ax, ay, rw, rh);
         }
       }
       if (B.drag && (t === "erase" || t === "capture" || t === "deconstruct" || t === "dig")) {
-        const { a, b } = B.drag, [ax, ay] = cam.toScreen(Math.min(a.x, b.x), Math.min(a.y, b.y)), [bx, by] = cam.toScreen(Math.max(a.x, b.x) + 1, Math.max(a.y, b.y) + 1);
+        const { a, b } = B.drag, [ax, ay, rw, rh] = cam.rect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x) + 1, Math.max(a.y, b.y) + 1, z);
         const red = t !== "capture" && t !== "dig"; ctx.fillStyle = t === "dig" ? "rgba(201,162,255,.28)" : red ? "rgba(230,70,60,.18)" : "rgba(124,196,255,.18)"; ctx.strokeStyle = t === "dig" ? "#c9a2ff" : red ? "#e6463c" : "#7cc4ff"; ctx.lineWidth = 2;
-        ctx.fillRect(ax, ay, bx - ax, by - ay); ctx.strokeRect(ax, ay, bx - ax, by - ay);
+        ctx.fillRect(ax, ay, rw, rh); ctx.strokeRect(ax, ay, rw, rh);
       } else if (!B.drag && (t === "erase" || t === "capture" || t === "dig" || t === "deconstruct")) {
         const c = mouseCell();
         if (inMap(c)) {
-          const [sx, sy] = cam.toScreen(c.x, c.y);
+          const tz = renderer.topAt(c.x, c.y) + 1, [sx, sy, cw, ch] = cam.rect(c.x, c.y, c.x + 1, c.y + 1, tz > 0 ? tz : z);
           ctx.strokeStyle = t === "erase" || t === "deconstruct" ? "#e6463c" : t === "dig" ? "#c9a2ff" : "#7cc4ff"; ctx.lineWidth = 2;
-          if (t === "dig" && B.dig.intent === "order") ctx.strokeRect(sx - 2 * cam.zoom, sy - 2 * cam.zoom, 5 * cam.zoom, 5 * cam.zoom); else ctx.strokeRect(sx, sy, cam.zoom, cam.zoom);
+          if (t === "dig" && B.dig.intent === "order") ctx.strokeRect(sx - 2 * cw, sy - 2 * ch, 5 * cw, 5 * ch); else ctx.strokeRect(sx, sy, cw, ch);
         }
       }
       status._cost = cells.length ? costText(cells) : "";
@@ -286,6 +315,10 @@ export function createBuildMode(game, root) {
   });
   let lastKey = "";
   root.addEventListener("click", (e) => {            // delegated: the shape / material buttons are rebuilt per tool
+    const zf = e.target.closest("[data-zf]"), zd = e.target.closest("[data-zdel]"), zc = e.target.closest("[data-zcycle]");
+    if (zf) { B.zf = zf.dataset.zf; zoneBox._k = ""; }
+    if (zd) { game.sim.apply({ type: "zone", op: "remove", id: Number(zd.dataset.zdel) }); zoneBox._k = ""; game.toast("Zone removed. What lay in it stays on the ground until it is carried to the other stores."); }
+    if (zc) { const q = game.sim.zones.list.find(z => z.id === Number(zc.dataset.zcycle)); if (q) { game.sim.apply({ type: "zone", op: "filter", id: q.id, f: ZF[(ZF.findIndex(f => f[0] === (q.f || "all")) + 1) % ZF.length][0] }); zoneBox._k = ""; } }
     const s = e.target.closest("[data-shape]"), m = e.target.closest("[data-mat]");
     if (s) { B.shape[B.tool] = s.dataset.shape; lastKey = ""; }
     if (m) { B.mat[B.tool] = m.dataset.mat; lastKey = ""; }
@@ -299,7 +332,7 @@ export function createBuildMode(game, root) {
       for (const k in toolBtns) toolBtns[k].classList.toggle("on", k === t);
       const fireOk = can(game.sim, "FIRE_TENDING");
       toolBtns.hearth.disabled = !fireOk; toolBtns.hearth.style.opacity = fireOk ? "" : "0.5";
-      toolBtns.hearth.title = fireOk ? TOOLS.find(q => q[0] === "hearth")[2] : "Nobody knows how to keep a fire yet. Fire is found, not researched: watch for lightning, or let villagers experiment.";
+      toolBtns.hearth.dataset.tip = "Fire ring\n" + (fireOk ? TOOLS.find(q => q[0] === "hearth")[2] : "Nobody knows how to keep a fire yet. Fire is found, not researched: watch for lightning, or let villagers experiment.");
       for (const k of ["kiln", "mound", "bellows", "waterjar", "smoker", "forge"]) {          // S7b: stations appear once someone knows the craft behind them (the palette never spoils what is still to find)
         const ok = PLACE_NEEDS[k].some(c => can(game.sim, c));
         toolBtns[k].style.display = ok ? "" : "none";
@@ -313,8 +346,17 @@ export function createBuildMode(game, root) {
       toolBtns.field.style.display = can(game.sim, "CULTIVATION") ? "" : "none";            // S10: farming and pens appear once the village knows them
       toolBtns.pen.style.display = can(game.sim, "HUSBANDRY") ? "" : "none";
       if ((t === "field" && !can(game.sim, "CULTIVATION")) || (t === "pen" && !can(game.sim, "HUSBANDRY"))) B.tool = "wall";
-      sp.textContent = "Level " + renderer.z;
-      rowOpts.style.display = SHAPES[t] || t === "capture" || t === "dig" ? "flex" : "none";
+      sp.textContent = String(renderer.z); sp.dataset.tip = "Level " + renderer.z;
+      rowOpts.style.display = SHAPES[t] || t === "capture" || t === "dig" || t === "stockpile" ? "flex" : "none";
+      zoneBox.style.display = t === "stockpile" ? "" : "none";
+      if (t === "stockpile") {
+        const zs = game.sim.zones.list, key = B.zf + "|" + zs.map(q => q.id + q.f + q.x0 + q.y0 + q.x1 + q.y1).join();
+        if (key !== zoneBox._k) {
+          zoneBox._k = key;
+          zoneBox.innerHTML = `<span class="dim">New zone takes</span> ` + ZF.map(([k, l]) => `<button data-zf="${k}" class="${B.zf === k ? "on" : ""}">${l}</button>`).join("")
+            + (zs.length ? ` <span class="dim">Zones</span> ` + zs.map(q => `<span class="zchip">#${q.id} ${q.x1 - q.x0 + 1}x${q.y1 - q.y0 + 1} <button data-zcycle="${q.id}" title="Change what this zone takes">${ZF_LABEL[q.f || "all"]}</button><button data-zdel="${q.id}" title="Remove this zone">x</button></span>`).join(" ") : ` <span class="dim">No extra zones yet.</span>`);
+        }
+      }
       digBox.style.display = t === "dig" ? "" : "none";
       if (t === "dig") {
         const D = B.dig, n = game.sim.mine.list.length;
@@ -340,15 +382,16 @@ export function createBuildMode(game, root) {
       const key = t + JSON.stringify(B.shape) + JSON.stringify(B.mat) + known.join();
       if (key !== lastKey) {
         lastKey = key;
-        shapeBox.innerHTML = SHAPES[t] ? `<span class="dim">Shape</span> ` + SHAPES[t].map(([k, l]) => `<button data-shape="${k}" class="${B.shape[t] === k ? "on" : ""}">${l}</button>`).join("") : "";
-        matBox.innerHTML = MATS[t] ? `<span class="dim">Material</span> ` + known.map(k => `<button data-mat="${k}" class="${B.mat[t] === k ? "on" : ""}" title="${esc(costOf(t, k).n + " " + itemName(costOf(t, k).item) + " each")}">${esc(BMAT[k].label)}</button>`).join("") : "";
+        shapeBox.innerHTML = SHAPES[t] ? `<span class="seg" data-test="shapes">` + SHAPES[t].map(([k, l]) => `<button class="btn ico ${B.shape[t] === k ? "on" : ""}" data-shape="${k}" data-test="shape-${k}"${tipAttr(l)} aria-label="${l}">${svg("shape-" + k, 16)}<span class="sr">${l}</span></button>`).join("") + `</span>` : "";
+        matBox.innerHTML = MATS[t] ? `<span class="seg" data-test="materials">` + known.map(k => { const c = MAT[BMAT[k].id].color; return `<button class="btn ico ${B.mat[t] === k ? "on" : ""}" data-mat="${k}" data-test="mat-${k}"${tipAttr(BMAT[k].label + "\n" + costOf(t, k).n + " " + itemName(costOf(t, k).item) + " each")} aria-label="${esc(BMAT[k].label)}"><i class="sw" style="background:rgb(${c[0]},${c[1]},${c[2]})"></i><span class="sr">${esc(BMAT[k].label)}</span></button>`; }).join("") + `</span>` : "";
       }
       toolBtns.capture.style.display = game.unlocked("blueprints") ? "" : "none";
+      bpb.style.display = game.unlocked("blueprints") ? "" : "none"; bpb.classList.toggle("on", !!ui.bpOpen);
       if (t === "capture" && !game.unlocked("blueprints")) B.tool = "wall";
       const DH = { region: "Drag a box over the ground to dig. [ ] changes the level you see.", depth: "Click where the stair should start.", vein: "Click an ore or clay cell you have uncovered.", seek: "Click where to start looking.", order: "Select villagers, then click rock or soil." };
-      const help = t === "dig" ? DH[B.dig.intent] : t === "field" ? "Drag a rectangle of bare grass for a field (up to 12 by 12)." : t === "pen" ? "Drag a rectangle, 2 to 8 cells a side, for a hopper pen." : t === "cellar" ? "Drag over a dug, roofed room at least 3 levels below the surface (view its level first)." : t === "capture" ? (ui.reviseBp ? "Drag around the edited building to capture it as the next revision of the design." : "Drag a rectangle around a finished building.") : t === "deconstruct" ? "Drag over finished pieces to take them down." : t === "erase" ? "Drag over planned pieces to remove them." : t === "stamp" ? "Click to place; R rotates; right-click stops." : SHAPES[t] ? "Drag on the map to plan. Right-click cancels." : "";
+      const help = t === "stockpile" ? "Drag a rectangle (up to 12 by 12) of free ground. Items go to a zone whose filter names them before the main yard." : t === "dig" ? DH[B.dig.intent] : t === "field" ? "Drag a rectangle of bare grass for a field (up to 12 by 12)." : t === "pen" ? "Drag a rectangle, 2 to 8 cells a side, for a hopper pen." : t === "cellar" ? "Drag over a dug, roofed room at least 3 levels below the surface (view its level first)." : t === "capture" ? (ui.reviseBp ? "Drag around the edited building to capture it as the next revision of the design." : "Drag a rectangle around a finished building.") : t === "deconstruct" ? "Drag over finished pieces to take them down." : t === "erase" ? "Drag over planned pieces to remove them." : t === "stamp" ? "Click to place; R rotates; right-click stops." : SHAPES[t] ? "Drag on the map to plan. Right-click cancels." : "";
       const cost = status._cost || "";
-      const h = `<span class="dim">${esc(help)}</span> ${cost}`;
+      const h = `<span class="bb-help"${tipAttr(help)}>${svg("help", 16)}<span class="sr">${esc(help)}</span></span> ${cost}`;
       if (h !== status._h) { status._h = h; status.innerHTML = h; }
     },
   };

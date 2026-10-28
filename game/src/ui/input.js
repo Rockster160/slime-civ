@@ -6,7 +6,7 @@ import { pickAt, villagersIn } from "./pick.js";
 import { issueOrder, rightClick, optionsAt, closeMenu } from "./orders.js";
 import { saveLocal, loadLocal } from "./saves.js";
 import { SPEEDS } from "./skip.js";
-import { keyId, PAN_IDS } from "./keys.js";
+import { keyId, PAN_IDS, HELD_IDS } from "./keys.js";
 
 export function setupInput(game, canvas) {
   const { ui, cam } = game;
@@ -30,14 +30,17 @@ export function setupInput(game, canvas) {
     if (act === "pause") { game.togglePause(); e.preventDefault(); return; }
     if (k >= "1" && k <= "9" && k.length === 1) { game.setSpeed(SPEEDS[Number(k) - 1]); return; }      // 1-5: 1x-5x, 6: 10x, 7: 25x, 8: 50x, 9: MAX
     if (guide) {                                    // guiding: walk keys step, the guide keys act (ui/possess.js); no follow toggle, no Tab
-      if (k === "Escape") { if (ui.help) ui.help = false; else { ui.digest = null; game.release(); } return; }     // letting go always works, even with the digest up
+      if (k === "Escape") { if (game.fpvEscape && game.fpvEscape()) return; if (ui.book) game.closeBook(); else if (ui.help) ui.help = false; else { ui.digest = null; game.release(); } return; }     // letting go always works, even with the digest up
+      if (e.shiftKey && (k === "ArrowUp" || k === "ArrowDown") && game.fpvNudge) { game.fpvNudge(k === "ArrowUp" ? 1 : -1); e.preventDefault(); return; }       // nudge the pitch
       if (act === "release") { game.release(); return; }
+      if (act === "turnLeft" || act === "turnRight") { if (!e.repeat && game.fpvTurn) game.fpvTurn(act === "turnLeft" ? -1 : 1); e.preventDefault(); return; }
       if (game.possessKey(act)) { e.preventDefault(); return; }
       if (PAN_IDS.includes(act)) { keys.add(act); if (k.startsWith("Arrow")) e.preventDefault(); return; }
     }
     if (act === "possess" && ui.focus) { game.possess(ui.focus); return; }
     if (k === "Escape") { escape(); return; }
     if (act === "help") { ui.help = !ui.help; return; }
+    if (act === "book") { if (ui.book) game.closeBook(); else game.openBook(); return; }
     if (act === "next" || act === "prev") { cycle(act === "prev" ? -1 : 1); e.preventDefault(); return; }
     if (act === "follow") { if (ui.focus) ui.follow = ui.follow === ui.focus ? 0 : ui.focus; return; }
     if (act === "build") { game.setMode(ui.mode === "build" ? "select" : "build"); return; }
@@ -48,20 +51,22 @@ export function setupInput(game, canvas) {
     if (act === "jobs") { ui.overlays.jobs = !ui.overlays.jobs; return; }
     if (act === "warmth") { ui.overlays.temp = !ui.overlays.temp; return; }
     if (act === "panels") { document.body.classList.toggle("nopanels"); return; }
-    if (act === "levelDown") { game.renderer.setZ(game.renderer.z - 1); e.preventDefault(); return; }
-    if (act === "levelUp") { game.renderer.setZ(game.renderer.z + 1); e.preventDefault(); return; }
+    if (act === "levelDown") { game.stepLevel(-1); e.preventDefault(); return; }
+    if (act === "levelUp") { game.stepLevel(1); e.preventDefault(); return; }
+    if (act === "home") { game.goHome(); e.preventDefault(); return; }
     if (act === "fit") { const bb = game.sim.seen.bbox; cam.fit(bb ? { x0: bb.x0, y0: bb.y0, x1: bb.x1, y1: bb.y1 } : null); ui.follow = 0; return; }       // S16: key 0 frames the explored area
     if (PAN_IDS.includes(act)) { keys.add(act); ui.follow = 0; if (k.startsWith("Arrow")) e.preventDefault(); }
   });
   window.addEventListener("mousedown", (e) => { if (game.skipper.active && !e.target.closest(".tb-skip")) game.skipper.cancel("Stopped: you clicked."); }, true);
-  window.addEventListener("keyup", (e) => { const kid = keyId(e); for (const id of PAN_IDS) if (km.keysOf(id).includes(kid)) keys.delete(id); if (e.key === "Shift") keys.delete("fast"); });
+  window.addEventListener("keyup", (e) => { const kid = keyId(e); for (const id of HELD_IDS) if (km.keysOf(id).includes(kid)) keys.delete(id); if (e.key === "Shift") keys.delete("fast"); });
   window.addEventListener("blur", () => { keys.clear(); game.shiftDown = false; });
   window.addEventListener("keydown", (e) => { if (e.key === "Shift") game.shiftDown = true; });
   window.addEventListener("keyup", (e) => { if (e.key === "Shift") game.shiftDown = false; });
 
   function escape() {
     closeMenu();
-    if (ui.help) ui.help = false;
+    if (ui.book) game.closeBook();
+    else if (ui.help) ui.help = false;
     else if (ui.digest) ui.digest = null;
     else if (ui.targeting) ui.targeting = null;
     else if (ui.mode === "build" && (ui.build.drag || ui.build.bp)) { ui.build.drag = null; ui.build.bp = null; if (ui.build.tool === "stamp") ui.build.tool = "wall"; }
@@ -81,15 +86,21 @@ export function setupInput(game, canvas) {
 
   const mode = () => game.modes[ui.mode];
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-  canvas.addEventListener("mousedown", (e) => {
+  document.addEventListener("contextmenu", (e) => { const t = e.target; if (!(t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement)) e.preventDefault(); });      // no browser menu anywhere on the game surface
+  /** Start a press (select / box / order / pan). Also called for a press that lands on a pass-through HUD layer, so panning never depends on what happens to be on screen. */
+  const PASS = new Set(["hud", "notables", "plate", "guide", "gauge", "pointers", "whisper", "dock", "fpvhud", "fadecv", "glview"]);
+  const press = (e) => {
     closeMenu();
     ui.press = { btn: e.button, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, shift: e.shiftKey, moved: false };
     if (e.button === 1) e.preventDefault();
     if (mode() && mode().down && mode().down(game, e)) ui.press = null;
-  });
+  };
+  canvas.addEventListener("mousedown", press);
+  window.addEventListener("mousedown", (e) => { if (e.target !== canvas && e.target instanceof Element && PASS.has(e.target.id) && !ui.press && !(game.fpv && game.fpv.on)) press(e); });
   window.addEventListener("mousemove", (e) => {
     ui.mouse = { x: e.clientX, y: e.clientY, over: e.target === canvas };
-    const p = ui.press;
+    let p = ui.press;
+    if (p && !(e.buttons & (p.btn === 0 ? 1 : p.btn === 2 ? 2 : 4))) { ui.press = null; ui.box = null; canvas.classList.remove("dragging"); p = null; }      // the button came up where we could not see it (outside the window): end the drag
     if (!p) { ui.hover = ui.mouse.over ? pickAt(game, e.clientX, e.clientY) : null; return; }
     const d = Math.hypot(e.clientX - p.x, e.clientY - p.y);
     if (p.btn === 0) {

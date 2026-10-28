@@ -2,6 +2,7 @@
 // supports-first ordering, cancel refunds, partial builds, dig -> stone -> stone walls, the 70% hand cap,
 // and the dry-run Why preview changing nothing.
 //   node game/tests/build.js
+import { DUR_DAY } from "../src/sim/clock.js";
 import "./legacy.js";
 import assert from "node:assert/strict";
 import { Sim } from "../src/sim/sim.js";
@@ -85,7 +86,7 @@ const solidAt = (sim, x, y, z) => sim.world.isSolid(x, y, z);
   const vs = sim.ents.ofKind("villager").filter(v => isAdult(sim, v)).slice(0, 3);
   const xp0 = vs.map(v => JSON.stringify(v.sk));
   assert.ok(sim.apply({ type: "order", ids: vs.map(v => v.id), verb: "dig", x: 57, y: 57, z }));
-  for (let i = 0; i < 12000 && vs.some(v => v.order); i++) { if (i % 20 === 0) settle(sim); sim.step(); }
+  for (let i = 0; i < 7 * DUR_DAY && vs.some(v => v.order); i++) { if (i % 20 === 0) settle(sim); sim.step(); }
   let rock = 0; for (let y = 56; y <= 58; y++) for (let x = 56; x <= 58; x++) if (sim.world.mat(x, y, z) === M.STONE) rock++;
   assert.equal(rock, 0, "the whole outcrop was dug out");
   assert.ok(vs.every(v => !v.order), "the order finishes when nothing is left");

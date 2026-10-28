@@ -7,7 +7,7 @@ import { M, F } from "../src/sim/world.js";
  */
 export function flatSpot(sim, w, h, skip = 0) {
   const spots = [], S = sim.site;
-  for (let y = S.y - 24; y < S.y + 26 - h; y++) for (let x = S.x - 24; x < S.x + 26 - w; x++) spots.push([x, y]);
+  for (let y = S.y - 36; y < S.y + 38 - h; y++) for (let x = S.x - 36; x < S.x + 38 - w; x++) spots.push([x, y]);
   const d2 = (s) => (s[0] + w / 2 - S.x) ** 2 + (s[1] + h / 2 - S.y) ** 2;
   spots.sort((a, b) => d2(a) - d2(b) || a[1] - b[1] || a[0] - b[0]);
   let found = 0;

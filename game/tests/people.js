@@ -16,7 +16,7 @@ import { chemistry, relOf, noteLesson, MENTOR_AT } from "../src/sim/bonds.js";
 import { hobbyOf, hobbyLevel, HOBBIES } from "../src/sim/hobby.js";
 import { plan } from "../src/sim/jobs.js";
 import { explain } from "../src/ui/text.js";
-import { DAY } from "../src/sim/clock.js";
+import { DUR_DAY } from "../src/sim/clock.js";
 
 let n = 0;
 const ok = (m) => console.log("ok " + ++n + " " + m);
@@ -29,16 +29,16 @@ const fake = (id, par = [0, 0], gp = [], t = {}) => ({ id, par, gp, t: Object.fr
   v.sk.dig.xp = 60; v.sk.dig.rs = 0; v.sk.dig.lu = sim.tick; v.sk.build.lu = sim.tick; v.sk.craft.lu = sim.tick;
   v.fam.FIRE_TENDING = 0.5;
   const peak = peakLevel(v, "dig");
-  for (let d = 0; d < RUST_GRACE; d++) { sim.tick += DAY; rustDay(sim, v); }
+  for (let d = 0; d < RUST_GRACE; d++) { sim.tick += DUR_DAY; rustDay(sim, v); }
   assert.equal(rustOf(v, "dig"), 0, "no rust inside the grace period");
   const lv = [];
-  for (let d = 0; d < 400; d++) { sim.tick += DAY; rustDay(sim, v); if (d === 29 || d === 84) lv.push(rustOf(v, "dig")); }
+  for (let d = 0; d < 400; d++) { sim.tick += DUR_DAY; rustDay(sim, v); if (d === 29 || d === 84) lv.push(rustOf(v, "dig")); }
   assert.ok(lv[0] > 0 && lv[0] < lv[1] && lv[1] < RUST_MAX, "rust grows slowly: " + lv);
   assert.ok(Math.abs(rustOf(v, "dig") - RUST_MAX) < 0.01, "and floors at 30%: " + rustOf(v, "dig"));
   assert.ok(Math.abs(level(v, "dig") - 0.7 * peak) < 0.01, "level floors at 70% of its peak: " + level(v, "dig") + " vs " + peak);
   assert.equal(v.sk.dig.xp, 60, "the xp itself is untouched"); assert.equal(famOf(v, "FIRE_TENDING"), 0.5, "familiarity does not rust");
   v.sk.dig.lu = sim.tick;                                                   // back at work
-  for (let d = 0; d < 6; d++) { sim.tick += DAY / 2; v.sk.dig.lu = sim.tick; rustDay(sim, v); }
+  for (let d = 0; d < 6; d++) { sim.tick += DUR_DAY / 2; v.sk.dig.lu = sim.tick; rustDay(sim, v); }
   assert.ok(rustOf(v, "dig") < 0.05, "working again wins it back within days: " + rustOf(v, "dig"));
   ok("rust: grace " + RUST_GRACE + " days, rust at day 30 " + lv[0] + ", day 85 " + lv[1] + ", floor 30%; xp and familiarity untouched; recovers in days");
 }
@@ -181,7 +181,7 @@ let friendSim;
   const kinds = new Set(sim.ents.ofKind("villager").map(hobbyOf)); assert.ok(kinds.size >= 2, "different villagers, different pastimes: " + [...kinds]);
   v.hb = { xp: 0, n: 0 }; v.action = { type: "Wander" }; v.mood = 0.1;
   const m0 = v.mood; for (let i = 0; i < 100; i++) updateNeeds(sim, v);
-  assert.ok(v.hb.xp > 0.5 && hobbyLevel(v) > 0, "free time earns hobby xp: " + v.hb.xp);
+  assert.ok(v.hb.xp > 0.5 * 0.15 && hobbyLevel(v) > 0, "free time earns hobby xp: " + v.hb.xp);
   v.hb.xp = 100; const nc = sim.chron.entries.length; v.sk.dig.xp = 400; v.sk.dig.rs = 0;
   titleCheck(sim, v);
   assert.ok(v.ti.some(t => /^renowned /.test(t)) && v.ti.includes("master digger"), "titles earned: " + v.ti);
@@ -194,7 +194,7 @@ let friendSim;
   const sim = loadFixture("settled");
   sim.apply({ type: "force", ev: "lightning" });
   let found = false;
-  for (let i = 0; i < 2 * DAY && !found; i++) { sim.step(); found = sim.ents.ofKind("villager").some(v => (v.ti || []).includes("first to keep a fire")); }
+  for (let i = 0; i < 2 * DUR_DAY && !found; i++) { sim.step(); found = sim.ents.ofKind("villager").some(v => (v.ti || []).includes("first to keep a fire")); }
   assert.ok(found, "the first witness is known as the first to keep a fire");
   ok("title: first to keep a fire");
 }
@@ -216,7 +216,7 @@ let friendSim;
 
 // 9. Determinism and the save round trip with a death, grave, grief and bonds in the mix (1 game day each)
 {
-  const run = () => { const s = loadFixture("settled"); for (let i = 0; i < 300; i++) s.step(); kill(s, adults(s)[0], "cold"); for (let i = 0; i < DAY; i++) s.step(); return s; };
+  const run = () => { const s = loadFixture("settled"); for (let i = 0; i < 300; i++) s.step(); kill(s, adults(s)[0], "cold"); for (let i = 0; i < DUR_DAY; i++) s.step(); return s; };
   const a = run(), b = run();
   assert.equal(a.hash(), b.hash(), "same fixture, same events -> same hash");
   assert.ok(a.ents.ofKind("grave").length === 1);

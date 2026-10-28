@@ -4,7 +4,7 @@
 import assert from "node:assert/strict";
 import { loadFixture } from "./fixture.js";
 import { isAdult } from "../src/sim/villager.js";
-import { DAY } from "../src/sim/clock.js";
+import { DUR_DAY } from "../src/sim/clock.js";
 import { toJSON, restore } from "../src/sim/save.js";
 import { alerts } from "../src/ui/text.js";
 import { concerns } from "../src/ui/concerns.js";
@@ -50,13 +50,13 @@ sim.apply({ type: "keep", item: "log", n: 60 });
 sim.apply({ type: "crew", op: "task", id: 3, task: { t: "keep", item: "log" } });
 let worst = 0;
 const t0 = performance.now();
-for (let i = 0; i < DAY; i++) {
+for (let i = 0; i < DUR_DAY; i++) {
   const a = performance.now();
   sim.step();
   const d = performance.now() - a;
   if (d > worst) worst = d;
 }
-const ms = performance.now() - t0, mean = ms / DAY;
+const ms = performance.now() - t0, mean = ms / DUR_DAY;
 console.log("crowd: " + vs.length + " villagers, all systems on, one day: " + mean.toFixed(3) + " ms/tick mean, " + worst.toFixed(1) + " ms worst tick, " + ms.toFixed(0) + " ms total");
 assert.ok(mean < 2, "mean ms/tick under 2 at " + vs.length + " villagers: " + mean.toFixed(3));
 // the panels' pure parts at this size

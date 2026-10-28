@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { restore, toJSON, SAVE_VERSION, migrate, OLD_WORLD } from "../src/sim/save.js";
+import { restore, toJSON, SAVE_VERSION, migrate, OLD_WORLD, OLD_CLOCK } from "../src/sim/save.js";
 import { loadFixture } from "./fixture.js";
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), "oldsaves");
@@ -19,10 +19,11 @@ for (const f of files) {
   const text = readFileSync(join(dir, f), "utf8"), v0 = JSON.parse(text).v;
   versions.add(v0);
   assert.ok(v0 < SAVE_VERSION, f + " is an older format");
-  assert.throws(() => restore(text), (e) => e.message === OLD_WORLD && /old fixed-size world/.test(e.message) && /Start a new game/.test(e.message), f + ": refused with the plain message");
-  console.log("ok " + f + ": v" + v0 + " is refused (" + OLD_WORLD.slice(0, 40) + "...)");
+  const msg = v0 >= 9 ? OLD_CLOCK : OLD_WORLD, re = v0 >= 9 ? /90 seconds.*10 minutes/ : /old fixed-size world/;
+  assert.throws(() => restore(text), (e) => e.message === msg && re.test(e.message) && /Start a new game/.test(e.message), f + ": refused with the plain message");
+  console.log("ok " + f + ": v" + v0 + " is refused (" + msg.slice(0, 40) + "...)");
 }
-assert.deepEqual([...versions].sort(), [3, 4, 5, 6], "a save of every older version is kept");
+assert.deepEqual([...versions].sort(), [3, 4, 5, 6, 9], "a save of every older version is kept (v9 = the endless world on the 1800-tick day, refused by the clock rebase, S18b)");
 // a v8 save (the last fixed-size format) too: take a current one and relabel it
 {
   const a = loadFixture("start"), j = JSON.parse(toJSON(a));
@@ -43,6 +44,12 @@ assert.deepEqual([...versions].sort(), [3, 4, 5, 6], "a save of every older vers
   assert.equal(b.hash(), a.hash(), "the loaded sim hashes the same");
   assert.deepEqual(b.site, a.site, "the same camp");
   assert.equal(migrate(JSON.parse(JSON.stringify(j))).v, SAVE_VERSION);
+}
+// v10 (S17) saves are on the old clock too
+{
+  const a = loadFixture("start"), j = JSON.parse(toJSON(a));
+  j.v = 10;
+  assert.throws(() => restore(JSON.stringify(j)), (e) => e.message === OLD_CLOCK);
 }
 assert.throws(() => restore(JSON.stringify({ v: 1 })), /Unsupported save version 1/);
 assert.throws(() => restore(JSON.stringify({ v: SAVE_VERSION + 1 })), /Unsupported save version/);

@@ -64,7 +64,7 @@ Design rationale and decision history: notes/phase2/RESOLUTION.md · notes/DECIS
 ### Starting-point facts
 
 - **Prior art.** The author's *slime-village* (vanilla JS, canvas 2D, about 28k lines of simulation) already supplies autonomous slimes, a demand-vector job board, soft-capped mixture genetics with colour inheritance, seasons, a chronicle, a headless sweep harness, and exact-replay saves. It has **no** skills or XP, no player commands, no possession, immutable terrain from seed, and prefab buildings. Those are designed fresh here. Where a mechanic is reused it is marked "carried over from slime-village".
-- **Clock and pacing anchor (R1 DEFAULT, K2 canonical).** At 1x the simulation runs **20 ticks per real second**. **1 game day = 1800 ticks = 90 real seconds.** A game year is 100 days = 180,000 ticks, about 2.5 real hours; a season is 25 days (about 37 minutes). A villager lives about 4 game years, about **10 real hours** (tunable 8-12). Speeds are 1x-5x plus pause. Every skill, transmission and genetics rate is derived from this anchor. **Short constants are written in ticks with real seconds at 1x in brackets** (for example "200 ticks [10 s]"); long constants in game days or years. "Game minutes" and "game hours" are not used for short constants. The full table is the Units & clock box at the top of §23.
+- **Clock and pacing anchor (R1 DEFAULT, K2 canonical).** At 1x the simulation runs **20 ticks per real second**. **1 game day = 12000 ticks = 10 real minutes (S18b/D35, superseding K2's 90 s day).** A game year is 100 days = 1,200,000 ticks, about 16.7 real hours; a season is 25 days (about 4.2 hours). A villager lives **5 game years**, about 83 real hours. Speeds are 1x-5x plus pause. Every skill, transmission and genetics rate is derived from this anchor. **Short constants are written in ticks with real seconds at 1x in brackets** (for example "200 ticks [10 s]"); long constants in game days or years. "Game minutes" and "game hours" are not used for short constants. The full table is the Units & clock box at the top of §23.
 - **Scale (R4, DECIDED).** 6-60 named villagers per settlement; simulation ceiling about 100. Larger operations are handled by crews and standing orders, not by more individuals.
 - **World (R3, DEFAULT).** A 3D integer cell grid with z-levels (chunked 16x16x16, about 2 bytes per cell, destructible), rendered as slices rather than voxels. MVP map about 128x128x24.
 - **Engine (R24, DECIDED).** Not chosen. §23 lists criteria and candidates only.
@@ -2646,10 +2646,13 @@ UI cannot be exploited directly, but over-surfacing information can hand out sol
 > | Quantity | Value | Note |
 > |---|---|---|
 > | Tick | 20 per real second at 1x | fixed step; speed multiplies ticks per frame (23.7) |
-> | Game day | 1800 ticks = 90 real seconds at 1x | 75 ticks = one "game hour" (3.75 s); use it only in UI wording |
-> | Season | 25 game days = 45 000 ticks (about 37 real minutes) | four seasons |
-> | Game year | 100 game days = 180 000 ticks (about 2.5 real hours) | |
-> | Life | about 4 game years (about 10 real hours) | OD-04 |
+> | Game (calendar) day | **12 000 ticks = 600 real seconds (10 min) at 1x** (S18b, D35; supersedes K2's 1800 ticks = 90 s). About 70% daylight (7 min), 30% night (3 min) | the length is one constant, `DAY` in `clock.js` |
+> | Duration day (`DUR_DAY`) | 1800 ticks = 90 s: the unit every flat duration is written in | not the calendar day; "a 4-day regrowth" = 7200 ticks [6 min] |
+> | Season | 25 game days = 300 000 ticks (about 4.2 real hours) | four seasons |
+> | Game year | 100 game days = 1 200 000 ticks (about 16.7 real hours) | |
+> | Life | **5 game years** = 500 days (about 83 real hours) | OD-04, S18b (was 4 years) |
+>
+> **S18b rule:** the calendar (day and night, season, year, the date) and **age** are the only things counted in calendar days. Every other duration and rate (crop growth, spoilage, fuel burn, illness, cooldowns, rust, grief, regrowth, healing, expedition time) is a flat tick count with the real-time feel it had on the old 1800-tick day. Hunger, thirst and energy are flat tick rates tuned to a 12 000-tick day (a ration about every 14 minutes at 1x). Game speed is a developer tool.
 >
 > **Rule:** short constants are written in **ticks with real seconds at 1x in brackets** (for example `commit for 600 ticks [30 s]`); long constants in game days or game years. "Game minutes" and "game seconds" are not used. Speed 5x makes every bracketed second one fifth as long on the wall clock.
 
@@ -2907,7 +2910,7 @@ The full list (question, options, default, what evidence would change it, owner,
 | OD-01 | Collective belief (Ork-style): ship, cut, or keep as a hook | Experimental, deferred; rules kept | Author | none (post-MVP) |
 | OD-02 | Offline progression (R22) | No offline catch-up in MVP; chronicle digest | Director | MVP polish (digest copy) |
 | OD-03 | Camera: second view (first-person, billboard) | One 3/4 camera; second renderer post-MVP | Author | C2 |
-| OD-04 | Lifespan anchor and clock (R1, K2) | 20 ticks/s; 1800 ticks/day; ~10 real hours per life | Director | C1 |
+| OD-04 | Lifespan anchor and clock (R1, K2, S18b) | 20 ticks/s; 12000 ticks/day (10 min); 5 game years per life | Director | C1 |
 | OD-05 | World representation (R3) | 3D z-level grid; desk spike + throwaway test only (K1) | Director | C2 |
 | OD-06 | Engine | Not chosen; criteria E1-E12; due before C2 art | Director | C2 art |
 | OD-07 | Multiplayer model | Snapshot visiting first | Author | post-MVP |

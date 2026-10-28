@@ -122,4 +122,18 @@ A previous session ran multi-year bots on many seeds in parallel, and the machin
     - chronicle export
 - **Phase 5** (requested 2026-10-28) = an endless world (the user: "it's supposed to be a large planet, not a small square area"):
   - **S16 Endless world (model and generation):** unbounded signed x / y, z 0..D-1; terrain a pure, order-independent function of (seed, coordinates) in 16 x 16 columns chunks; rivers, lakes, caves, ores, strata, ridges, biomes and the S14 deposits as coordinate rules; a deterministic spawn search with placed slice-critical content; chunks activated inside `sim.step` from anchors (never the camera), untouched far chunks unloaded and regrown, changed ones kept; a bounded render-side cache drawing unexplored land dim; every fixed-size assumption replaced; saves of seed, camp, chunks, deltas and entities (SAVE_VERSION 9); fixtures regenerated.
-  - **S17 Endless world (scale):** dormant-chunk simulation LOD, save compaction (plants of untouched chunks regrown, not saved), a minimap and exploration UX (frontier, markers, fit to explored area), a region graph for far pathing. Not started; S16 leaves the seams (see the README, "Endless world (S16)").
+  - **S17 Endless world (scale):** dormant-chunk simulation LOD, save compaction (plants of untouched chunks regrown, not saved), a minimap and exploration UX (frontier, markers, fit to explored area), a region graph for far pathing. Built in S17 except the region graph (see the README, "Endless world: dormancy, saves, minimap, exploration (S17)").
+- **Phase 6** (requested 2026-10-28): first-person camera and a cohesive UI.
+  - **S18 First-person view:** a second renderer on the same sim (R2: experimental, a second renderer only). Used while possessing; Delver-style billboard sprites; no sim changes beyond input. Built in S18 (see the README, "First-person view (S18)", and D37).
+  - **S19 UI overhaul:** "show, don't tell", one cohesive design system. Work from notes/impl/UI_SPEC.md, which is written first by a read-only audit. Run as S19a (design system + HUD + panels; plus the UI_SPEC §12.1–12.4 feedback: labels, action feedback, grid FPV, show-me lands visibly) and S19b (**3/4 oblique WebGL main camera with cutaway levels** per R2 / UI_SPEC §12.5, map visual language, readable levels, onboarding), sequentially.
+- **Clock rebase** (requested 2026-10-28; build after S18, before S19). Stage **S18b**:
+  - 1 game day = **10 real minutes at 1×** (12000 ticks at 20 ticks/s; was 1800). A life is **5 game years** (was 4).
+  - Consequences at 1×: a season ≈ 4.2 h, a year ≈ 16.7 h, a life ≈ 83 h.
+  - **Superseded in part (user, 2026-10-28):** all durations except age and the calendar are flat tick constants that keep their old real-time feel. They are not scaled by the day. Only energy and food balance are re-tuned. Tests must survive a different DAY.
+  - Anchors for the rebalance (original):
+    - Walking and work-action durations keep their real-time feel (ticks unchanged).
+    - Biology stays per day: about the same meals per day; one sleep per night; night stays about 30% of the day.
+    - The K3 labour share (≈40–60% of early labour on food) still holds. Yields, needs and the per-day economy are re-derived so a slime's longer day doesn't turn into a food glut.
+    - Skill pacing (D13) and genetics/breeding cadence are re-derived in game time.
+  - Game speed is a **developer tool** (not a player feature), so its UI is low priority.
+- **Phase 7** (planned 2026-10-28; **not approved to build**): magic cores, dungeons and caves. See notes/impl/PHASE7_CORES.md: S20 core field and cave networks, S21 dungeons, S22 monsters and spawning, S23 delving and the core.

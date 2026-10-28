@@ -13,7 +13,7 @@
 //            loose food rots by the elapsed days at the open rate (winter days at the winter rate);
 //            herds    re-rolled to their equilibrium from a chunk-keyed stream (chunks.js spawnWild, salted by the day).
 //          Deterministic: same seed and commands -> same hashes. Nothing here has to equal what a never-dormant chunk would have become.
-import { DAY } from "./clock.js";
+import { DUR_DAY } from "./clock.js";
 import { F } from "./world.js";
 import { chunkKey } from "./cellkey.js";
 import { seasonIdx, berrySeason, dayF, WINTER_START } from "./season.js";
@@ -43,6 +43,12 @@ export function plantProps(cx, cy, a) {
 }
 export const isPackable = packable;
 
+// loose item stacks: [item, chunk-local column, z, n, sp, rt, q]
+const IKNOWN = new Set(["id", "kind", "item", "n", "sp", "rv", "rt", "x", "y", "z", "q"]);
+export const itemPackable = (e) => !e.rv && Object.keys(e).every(k => IKNOWN.has(k));
+export function packItem(e) { const a = [e.item, (e.x & 15) | ((e.y & 15) << 4), e.z, e.n, e.sp, e.rt]; if (e.q !== undefined) a.push(e.q); return a; }
+export function itemProps(cx, cy, a) { const o = { item: a[0], n: a[3], sp: a[4], rv: 0, rt: a[5], x: (cx << 4) + (a[1] & 15), y: (cy << 4) + (a[1] >> 4), z: a[2] }; if (a.length > 6) o.q = a[6]; return o; }
+
 /** Chunk keys that must stay awake: the ones holding the village's zones. */
 export function pinnedChunks(sim) {
   const out = new Set(), add = (z) => {
@@ -60,11 +66,17 @@ export function sleepChunks(sim, cs) {
   const pin = pinnedChunks(sim), by = new Map(), ok = new Map();
   for (const c of cs) { const k = chunkKey(c.cx, c.cy); if (!pin.has(k)) { by.set(k, []); ok.set(k, true); } }
   if (!by.size) return 0;
-  const plants = sim.ents.ofKind("plant");
+  const plants = sim.ents.ofKind("plant"), itemsBy = new Map();
+  for (const k of by.keys()) itemsBy.set(k, []);
   for (let i = 0; i < plants.length; i++) {
     const p = plants[i], k = chunkKey(p.x >> 4, p.y >> 4), l = by.get(k);
     if (!l) continue;
     if (!packable(p)) ok.set(k, false); else l.push(p);
+  }
+  for (const e of sim.ents.ofKind("item")) {
+    const k = chunkKey(e.x >> 4, e.y >> 4), l = itemsBy.get(k);
+    if (!l) continue;
+    if (!itemPackable(e)) ok.set(k, false); else l.push(e);
   }
   const wild = new Map();
   for (const e of sim.ents.ofKind("fauna")) {
@@ -78,7 +90,9 @@ export function sleepChunks(sim, cs) {
     const k = chunkKey(c.cx, c.cy);
     if (!ok.get(k)) continue;
     c.pk = by.get(k).map(packPlant);
+    c.pi = itemsBy.get(k).map(packItem);
     for (const p of by.get(k)) sim.ents.remove(p.id);
+    for (const e of itemsBy.get(k)) sim.ents.remove(e.id);
     for (const id of wild.get(k) || []) sim.ents.remove(id);
     c.dz = sim.tick;
     n++;
@@ -91,12 +105,12 @@ export function sleepChunks(sim, cs) {
 /** Growth, berry time and the first frost over [t0, t1), day by day: one small loop per chunk, shared by its plants. */
 function span(t0, t1) {
   const r = { g: 0, frost: false, bd: 0, winterDays: 0, days: 0 };
-  for (let t = t0; t < t1; t += DAY) {
+  for (let t = t0; t < t1; t += DUR_DAY) {
     r.days++;
     r.g += GROW_BY_SEASON[seasonIdx(t)];
     if (seasonIdx(t) === 3) r.winterDays++;
     if (Math.floor(dayF(t)) === WINTER_START) { r.frost = true; r.bd = 0; }
-    if (berrySeason(t)) r.bd += DAY;
+    if (berrySeason(t)) r.bd += DUR_DAY;
   }
   return r;
 }
@@ -116,7 +130,7 @@ function unpack(sim, c, a, sp, wake) {
     p.gr = (p.gr || 0) + sp.g;
     if (t >= p.nx) {
       if (sim.ents.at(p.x, p.y, p.z).length === 1) { p.species = "tree"; p.yield = 4; w.setFlags(p.x, p.y, p.z, w.flags(p.x, p.y, p.z) | F.OBSTACLE); }
-      else p.nx = t + DAY;
+      else p.nx = t + DUR_DAY;
     }
     return p;
   }
@@ -147,27 +161,24 @@ export function wakeChunks(sim, cs, spawnWild) {
   // loose food and hides rot by the elapsed days
   const sps = new Map();
   for (const c of cs) sps.set(chunkKey(c.cx, c.cy), span(c.dz, t));
-  const dead = [], sp = sim.farm.sp;
-  for (const s of sim.ents.ofKind("item")) {
-    if (!inC(s)) continue;
-    const d = ITEMS[s.item];
-    if (!d || d.spoil === 0 || inStore(sim, s.x, s.y, s.z)) continue;
-    const r = sps.get(chunkKey(s.x >> 4, s.y >> 4));
-    const lose = Math.floor(s.sp + s.n * (d.spoil * (r.days - r.winterDays) + d.spoilW * r.winterDays));
-    if (lose <= 0) { s.sp += s.n * (d.spoil * (r.days - r.winterDays) + d.spoilW * r.winterDays); continue; }
-    s.sp = 0;
-    const n = Math.min(lose, s.n);
-    s.n -= n; sp.t[s.item] = (sp.t[s.item] || 0) + n;
-    if (s.n <= 0) dead.push(s.id);
-  }
-  for (const id of dead) sim.ents.remove(id);
-  // plants, then herds
+  // plants, loose stacks (food and hides rot by the elapsed days at the open rate: winter days at the winter rate), then herds
+  const sp = sim.farm.sp;
   for (const c of cs) {
     const r = sps.get(chunkKey(c.cx, c.cy));
     for (const a of c.pk || []) unpack(sim, c, a, r, true);
-    c.pk = null; c.dz = 0; c.last = t;
+    for (const a of c.pi || []) {
+      const e = sim.ents.add("item", itemProps(c.cx, c.cy, a)), d = ITEMS[e.item];
+      if (!d || d.spoil === 0 || inStore(sim, e.x, e.y, e.z)) continue;
+      const loss = e.n * (d.spoil * (r.days - r.winterDays) + d.spoilW * r.winterDays), lose = Math.floor(e.sp + loss);
+      if (lose <= 0) { e.sp += loss; continue; }
+      e.sp = e.sp + loss - lose;
+      const n = Math.min(lose, e.n);
+      e.n -= n; sp.t[e.item] = (sp.t[e.item] || 0) + n;
+      if (e.n <= 0) sim.ents.remove(e.id);
+    }
+    c.pk = null; c.pi = null; c.dz = 0; c.last = t;
   }
-  for (const c of cs) spawnWild(sim, c, 1 + Math.floor(t / DAY));
+  for (const c of cs) spawnWild(sim, c, 1 + Math.floor(t / DUR_DAY));
   sim.quiet = false;
   sim.cache.iv++;
 }

@@ -7,9 +7,11 @@
 // has passed, the digest summarises up to 10 entries since then.
 import { DAY, SEASON_NAMES } from "../sim/clock.js";
 import { esc, createPanel } from "./dom.js";
+import { svg, EVENT_ICON } from "./icons.js";
+import { tipAttr } from "./kit.js";
 import { chronicleMarkdown, chronicleFileName } from "./chronicletext.js";
 
-const AWAY_TICKS = DAY;          // one game day
+const AWAY_TICKS = 1800;        // 90 s at 1x of the sim running while you were not looking (S18b: it was "one game day", which is 10 minutes now)
 const DIGEST_MAX = 10;
 
 const when = (e) => `Y${e.y} D${e.d} ${SEASON_NAMES[Math.floor((e.d - 1) / 25)].slice(0, 3)}`;
@@ -21,8 +23,8 @@ export function digestEntries(chron, afterId, n = DIGEST_MAX) {
   return { total: fresh.length, entries: picked.sort((a, b) => a.id - b.id) };
 }
 
-export function createChroniclePanel(parent, game) {
-  const p = createPanel(parent, "chron", "Chronicle");
+export function createChroniclePanel(parent, game, opts = {}) {
+  const p = createPanel(parent, "chron", "Chronicle", { icon: "book", flat: !!opts.flat });
   p.body.classList.add("chronbody");
   p.body.addEventListener("click", (e) => {
     if (e.target.closest("[data-dl]")) { game.downloadText(chronicleFileName(game.sim), chronicleMarkdown(game.sim), "text/markdown"); game.toast("Chronicle saved as a Markdown file."); return; }
@@ -33,13 +35,13 @@ export function createChroniclePanel(parent, game) {
   });
   p.update = () => {
     const { sim, ui } = game, es = sim.chron.entries;
-    const dl = `<div class="btnrow"><button data-dl="1" title="Save the whole history (eras, firsts, births and deaths, notable people, graves, heirlooms) as a readable Markdown file">Download chronicle</button></div>`;
+    const dl = `<div class="btnrow"><button class="btn ico" data-dl="1" data-test="chron-dl"${tipAttr("Download chronicle\nSave the whole history (eras, firsts, births and deaths, notable people, graves, heirlooms) as a readable Markdown file")} aria-label="Download chronicle">${svg("save", 16)}</button></div>`;
     if (!es.length) { p.html(dl + `<p class="dim">Nothing has happened yet. Events - births, deaths, first beds, crises - will be written here.</p>`); return; }
     p.setHint(es.length + (es.length === 1 ? " entry" : " entries"));
     let h = dl;
     for (let i = es.length - 1; i >= 0 && i >= es.length - 80; i--) {
       const e = es[i];
-      h += `<div class="ce s${e.sev}" ${e.a.length ? `data-a="${e.a[0]}"` : ""}><span class="when">${when(e)}</span> ${esc(e.text)}</div>`;
+      h += `<div class="ce s${e.sev}" ${e.a.length ? `data-a="${e.a[0]}"` : ""}>${svg(EVENT_ICON[e.kind] || "star", 14)}<span class="when">${when(e)}</span> <span>${esc(e.text)}</span></div>`;
     }
     p.html(h);
   };
@@ -55,9 +57,9 @@ export function createDigest(root, game) {
       root.style.display = d ? "block" : "none";
       let h = "";
       if (d) {
-        h = `<button class="dg-close" title="Dismiss">Close</button><b>While you were away</b> <span class="dim">${d.days} game days passed</span>`;
-        h += `<div class="dgl">` + d.entries.map(e => `<div class="ce s${e.sev}"><span class="when">${when(e)}</span> ${esc(e.text)}</div>`).join("") + `</div>`;
-        if (d.total > d.entries.length) h += `<div class="dim">...and ${d.total - d.entries.length} smaller events. See the Chronicle panel.</div>`;
+        h = `<button class="btn ico dg-close" data-test="digest-close"${tipAttr("Dismiss")} aria-label="Dismiss">${svg("close", 14)}</button><b class="sr">While you were away</b><span class="sr"> ${d.days >= 1 ? d.days + (d.days === 1 ? " game day" : " game days") : "a few minutes of game time"} passed</span>`;
+        h += `<div class="dgl" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:0">` + d.entries.map(e => `<span class="chip ${e.sev >= 2 ? "cchip l3" : ""}"${tipAttr(when(e) + "\n" + e.text)}>${svg(EVENT_ICON[e.kind] || "star", 16)}<span class="sr">${esc(when(e))} ${esc(e.text)}</span></span>`).join("") + `</div>`;
+        if (d.total > d.entries.length) h += `<span class="sr">...and ${d.total - d.entries.length} smaller events. See the Book.</span><span class="more-l">+${d.total - d.entries.length}</span>`;
       }
       if (h !== last) { last = h; root.innerHTML = h; }
     },

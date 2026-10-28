@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { Entities } from "../src/sim/entities.js";
 import { World, M, F } from "../src/sim/world.js";
 import { Rng } from "../src/sim/rng.js";
-import { DAY } from "../src/sim/clock.js";
+import { DAY, DUR_DAY } from "../src/sim/clock.js";
 import { newPlant, floraDaily, growPlants, floraCounts, floraCaps, fellTree, stageOf, lifeOf, LIFE, STUMP_REGROW, STUMP_ROT, SPROUT_PCT } from "../src/sim/plants.js";
 import { seasonIdx } from "../src/sim/season.js";
 
@@ -24,7 +24,7 @@ function stub(seed, plantsPer) {
   }
   return sim;
 }
-const day = (sim, camp) => { sim.tick += DAY; growPlants(sim); floraDaily(sim, camp); };
+const day = (sim, camp) => { sim.tick += DUR_DAY; growPlants(sim); floraDaily(sim, camp); };
 const camp = { x: 64, y: 64 };
 
 // 1. A steady map over 15 years (1500 days): each species stays inside its band the whole time, never above the cap's band, never emptied.
@@ -107,7 +107,7 @@ const camp = { x: 64, y: 64 };
   growPlants(sim);
   const left = ids.filter(id => sim.ents.get(id) && sim.ents.get(id).species === "stump").length;
   assert.equal(left, 0, "the rest rot away (" + stumps + " were waiting)");
-  console.log("ok 5 stumps: " + sap + " of 100 sprouted, " + stumps + " waited, all rotted by day " + Math.round((STUMP_ROT + STUMP_REGROW) / DAY));
+  console.log("ok 5 stumps: " + sap + " of 100 sprouted, " + stumps + " waited, all rotted by day " + Math.round((STUMP_ROT + STUMP_REGROW) / DUR_DAY));
 }
 
 // 6. Determinism: the same seed gives the same map after 400 days.

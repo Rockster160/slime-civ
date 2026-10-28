@@ -78,6 +78,12 @@ export function colInto(def, x, y, o) {
     const dl = Math.sqrt((x - lk.lx) * (x - lk.lx) + (y - lk.ly) * (y - lk.ly)) - lk.r;
     if (dl < 0) h = WATER_LEVEL - 1 - Math.floor((-dl * 4) / lk.r);
     else if (dl < 6) h = Math.min(h, WATER_LEVEL + 1 + Math.floor(dl));
+    const pn = def.pond;
+    if (pn) {                                                             // S17: the pond by the camp
+      const dp = Math.sqrt((x - pn.x) * (x - pn.x) + (y - pn.y) * (y - pn.y)) - pn.r;
+      if (dp < 0) h = WATER_LEVEL - 1 - Math.floor((-dp * 2) / pn.r);
+      else if (dp < 4) h = Math.min(h, WATER_LEVEL + 1 + Math.floor(dp));
+    }
     if (y < lk.ly && y > lk.ly - 72) {
       const wob = Math.floor((((vnoise(seed, 4, y, 0, 24) - 128) * 14) / 128) * Math.min(1, (lk.ly - y) / 50));
       const dx = Math.abs(x - (lk.lx + wob));

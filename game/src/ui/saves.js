@@ -2,7 +2,7 @@
 // to a fresh Sim. Browser storage is wrapped in try/catch (private windows, quota).
 import { Sim } from "../sim/sim.js";
 import { toJSON, restore } from "../sim/save.js";
-import { dateOf, SEASON_NAMES } from "../sim/clock.js";
+import { dateOf, SEASON_NAMES, DAY } from "../sim/clock.js";
 import { browserStorage, autosave, listAutos, autosaveDue, loadRefusal, saveRefusal, IRON_KEY } from "./slots.js";
 
 const KEY = "slimeciv.save.1";
@@ -23,7 +23,8 @@ export function saveLocal(game) {
     game.toast("Saved (" + Math.round(json.length / 1024) + " KB) to this browser.");
     return true;
   } catch (e) {
-    game.toast("The browser would not store the save (" + Math.round(json.length / 1024) + " KB). Use Download save instead.", 7000);
+    game.toast("The browser would not store the save (" + Math.round(json.length / 1024) + " KB), so it was downloaded as a file instead.", 7000);
+    downloadSave(game, true);
     return false;
   }
 }
@@ -47,14 +48,14 @@ export function loadJSON(game, text, okMsg) {
   }
 }
 
-export function downloadSave(game) {
+export function downloadSave(game, quiet = false) {
   const no = saveRefusal(game.sim); if (no) { game.toast(no, 5000); return; }
   const { sim } = game, blob = new Blob([toJSON(sim)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `slime-civ-seed${sim.seed}-tick${sim.tick}.json`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  game.toast("Save downloaded.");
+  if (!quiet) game.toast("Save downloaded.");
 }
 
 export function loadFile(game, file) {
@@ -64,6 +65,8 @@ export function loadFile(game, file) {
   r.readAsText(file);
 }
 
+/** A fresh world seed (the only place chance enters: the UI picks it, the sim is a pure function of it). */
+export function randomSeed() { const a = new Uint32Array(1); (window.crypto || globalThis.crypto).getRandomValues(a); return (a[0] % 999999999) + 1; }
 export function newGame(game, seed, { ironman = false } = {}) {
   seed = Math.floor(Number(seed));
   if (!(seed >= 0)) { game.toast("Seed must be a number."); return; }
@@ -76,11 +79,15 @@ const store = browserStorage();
 /** Called every frame: write the autosave when a game day has passed (at most one every few real seconds, so MAX speed does not thrash the browser). */
 export function autosaveTick(game, nowMs) {
   const sim = game.sim;
-  if (game.lastAutoDay === undefined || game.lastAutoDay < 0) game.lastAutoDay = Math.floor(sim.tick / 1800);
+  if (game.lastAutoDay === undefined || game.lastAutoDay < 0) game.lastAutoDay = Math.floor(sim.tick / DAY);
   if (!autosaveDue(sim, game.lastAutoDay) || nowMs - (game.lastAutoMs || 0) < 4000) return false;
-  game.lastAutoDay = Math.floor(sim.tick / 1800); game.lastAutoMs = nowMs;
-  const key = autosave(store, sim, toJSON(sim));
+  game.lastAutoDay = Math.floor(sim.tick / DAY); game.lastAutoMs = nowMs;
+  const json = toJSON(sim), key = autosave(store, sim, json);
   game.lastAutoKey = key;
+  if (!key) {                                                  // S17: the browser cannot hold even one slot (a long exploration makes a big save): say so, and hand the player the file
+    game.toast("The browser has no room for the autosave (" + Math.round(json.length / 1024) + " KB). " + (sim.ironman ? "Ironman keeps one slot only: free some browser storage." : "A copy was downloaded as a file instead."), 9000);
+    if (!sim.ironman && (game.lastAutoDl === undefined || sim.tick - game.lastAutoDl > 3 * DAY)) { game.lastAutoDl = sim.tick; downloadSave(game, true); }
+  }
   return !!key;
 }
 export const autoList = () => listAutos(store);

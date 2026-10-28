@@ -9,7 +9,7 @@
 //
 // Crops follow the seasons (plants.js GROW_BY_SEASON): they grow in spring and summer, slowly in autumn, never in winter; unripe crops are killed by
 // the first frost (a winter fallow). A watered plot grows at full speed, a dry one at a quarter.
-import { DAY, DAYS_PER_YEAR } from "./clock.js";
+import { DUR_DAY, DAYS_PER_YEAR } from "./clock.js";
 import { M, World } from "./world.js";
 import { inZone } from "./items.js";
 import { can } from "./knowledge.js";
@@ -21,7 +21,7 @@ import { sight } from "./discovery.js";
 
 export const CROP = { berry: { days: 7, yield: 8, label: "berry crop" }, tuber: { days: 9, yield: 6, label: "tuber crop" } };
 export const DRY_GROWTH = 0.25;             // a plot nobody watered grows at a quarter speed
-export const WATERED_FOR = 3 * DAY;         // one watering lasts this long
+export const WATERED_FOR = 3 * DUR_DAY;         // one watering lasts this long
 export const OVERRIPE = 6;                  // days a ripe crop stands before it is lost to the birds and the weather
 export const SEED_KEEP = 2;                 // the village never sows its last two seeds (they are food)
 export const MAX_FIELD = 12, MIN_PEN = 2, MAX_PEN = 8, MAX_CELLAR = 10;
@@ -190,7 +190,7 @@ export function sproutDaily(sim) {
         const cx = x + r.range(-3, 3), cy = y + r.range(-3, 3), cz = w.standZ(cx, cy);
         if (cz < 0 || w.mat(cx, cy, cz - 1) !== M.GRASS || sim.ents.at(cx, cy, cz).length || (sim.stock.z === cz && inZone(sim.stock, cx, cy))) continue;
         const sp = item === "berry" ? "berry" : "tuber";
-        sim.ents.add("plant", { species: sp, x: cx, y: cy, z: cz, yield: 0, nx: sim.tick + (sp === "berry" ? 0 : 6 * DAY), rv: 0, rt: 0, bt: sim.tick, gr: 0 });
+        sim.ents.add("plant", { species: sp, x: cx, y: cy, z: cz, yield: 0, nx: sim.tick + (sp === "berry" ? 0 : 6 * DUR_DAY), rv: 0, rt: 0, bt: sim.tick, gr: 0 });
         sight(sim, "CULTIVATION", "sprout", cx, cy, cz, null);
         break;
       }

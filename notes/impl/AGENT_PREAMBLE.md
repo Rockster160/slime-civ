@@ -17,11 +17,14 @@ You are implementing one stage of the playable prototype in /Users/zoro/code/sli
 
 ## Testing rules (summary; the plan file is authoritative)
 A previous session crashed the user's machine by running many sims in parallel.
-- **Feature tests:** load a fixture (`tests/fixture.js` `loadFixture`), run ≤ 3 game days, and assert the feature works. Add new fixtures to the fixture tool when a stage needs a new starting point.
+- **Every sim run ≤ 5 min wall clock** (user rule, 2026-10-28): each test, each fixture build, each probe. Fast-forward is fine; anything longer needs a real reason, stated in the report.
+- **Pre-situated saves.** Build fixtures that sit right before the moment under test (needs already low, crop one stage from ripe, kiln loaded, dusk, monster in range) by editing state in the fixture tool, not by simulating up to it. A test loads the fixture, applies the command, runs until the event happens (with a cap), and stops.
+- **Feature tests:** load a pre-situated fixture (`tests/fixture.js` `loadFixture`), run only until the event (capped; a game day is now 12000 ticks, so "N days" windows are a smell), and assert the feature works. Add new fixtures to the fixture tool when a stage needs a new starting point.
 - **What to run:** only `node tests/all.js` (quick) and `node tools/build.js && node tools/ui_smoke.js`.
   - Run them sequentially, one sim or browser at a time, with explicit timeouts.
   - **Never** run `--full` or background a sim.
   - Long bots go in FULL only, for the user's balance pass.
+- **Day length will change again.** Durations (except age and the calendar) are flat tick constants. Tests never hard-code a day length; wait for events with caps derived from duration constants.
 - **Balance** is a best guess. The user tunes later; features must work and be visible.
 
 ## Finish every stage with

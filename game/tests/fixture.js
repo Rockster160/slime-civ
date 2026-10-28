@@ -3,15 +3,16 @@
 import "./legacy.js";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { restore, SAVE_VERSION } from "../src/sim/save.js";
+import { restore } from "../src/sim/save.js";
 import { DIR, makeFixtures, makeDerived, FIXTURES } from "../tools/make_fixtures.js";
 
+const MIN_FIXTURE_VERSION = 11;    // S18b: the clock rebase. A v9/v10 fixture counts time in 1800-tick days and is regenerated (a fixture is not a save a player loads: it is rewritten, not migrated)
 function fresh(name) {
   const f = join(DIR, name + ".json");
   if (!existsSync(f)) return null;
   const text = readFileSync(f, "utf8");
   const m = text.slice(0, 60).match(/"v":(\d+)/);       // snapshot() writes v first
-  return m && Number(m[1]) === SAVE_VERSION ? text : null;
+  return m && Number(m[1]) >= MIN_FIXTURE_VERSION ? text : null;       // (S17: v9 fixtures load as they are: the v10 loaders read both shapes, and the world they were made in is unchanged)
 }
 export function loadFixture(name) {
   let text = fresh(name);

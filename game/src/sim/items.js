@@ -10,7 +10,7 @@
 //
 // Every change goes through the helpers here so `sim.cache.iv` (a version for
 // derived data, never saved) moves with it.
-import { DAY } from "./clock.js";
+import { DUR_DAY } from "./clock.js";
 import { seasonIdx } from "./season.js";
 import { pt } from "./depth.js";
 import { World } from "./world.js";
@@ -279,7 +279,7 @@ export function survey(sim) {
 export function haveTotal(sim, item) { const s = survey(sim); return s.stock[item] + s.loose[item] + s.carried[item]; }
 
 /**
- * Daily (tick % DAY === 0): food and hides spoil at the item's rate (slower in winter, §11.17), and the storage changes the number (§14.6):
+ * Daily (tick % DUR_DAY === 0): food and hides spoil at the item's rate (slower in winter, §11.17), and the storage changes the number (§14.6):
  * food in the cold cellar spoils at CELLAR_X of the rate, and every clay jar in the stores covers JAR_HOLD units of food at JAR_X (both stack).
  * The losses are tallied in sim.farm.sp (the Village panel shows them); what the modifiers saved is tallied beside them.
  */

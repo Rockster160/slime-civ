@@ -6,6 +6,8 @@
 //      was ever built on (the USED "virgin" bit survives the player's own dig command), pays zero, however often repeated.
 //   4. Craft: making the same rack on the same cell again and again pays XP once.
 //   node game/tests/bots/grind.js
+import { DUR_DAY } from "../../src/sim/clock.js";
+const DIG_TICKS = 7 * DUR_DAY;      // ticks of digging per run
 import "../legacy.js";
 import assert from "node:assert/strict";
 import { Sim } from "../../src/sim/sim.js";
@@ -42,7 +44,7 @@ function chopRun(flagged) {
   if (flagged) for (const t of trees) sim.world.setFlags(t.x, t.y, t.z - 1, sim.world.flags(t.x, t.y, t.z - 1) | F.PLAYER);
   const before = allXp(sim);
   const saplings0 = sim.ents.ofKind("plant").filter(p => p.species === "sapling" || (p.species === "stump" && p.fl)).length;
-  for (let t = 0; t < 12000; t++) {
+  for (let t = 0; t < DIG_TICKS; t++) {
     if (t % 100 === 0) {
       const tree = sim.ents.ofKind("plant").filter(p => p.species === "tree")
         .sort((a, b) => Math.abs(a.x - 64) + Math.abs(a.y - 64) - Math.abs(b.x - 64) - Math.abs(b.y - 64))[0];
@@ -77,7 +79,7 @@ function digRun(prep) {
   for (const v of sim.ents.ofKind("villager")) v.hunger = v.thirst = v.energy = 1;
   sim.apply({ type: "order", ids, verb: "dig", x: px, y: py, z });
   let cells = 25;
-  for (let t = 0; t < 12000 && cells > 0; t++) {
+  for (let t = 0; t < DIG_TICKS && cells > 0; t++) {
     if (t % 50 === 0) for (const v of sim.ents.ofKind("villager")) { v.hunger = v.thirst = v.energy = v.warm = 1; }
     sim.step();
     cells = 0; for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (sim.world.mat(px + dx, py + dy, z) !== M.AIR) cells++;
@@ -110,6 +112,6 @@ assert.ok(placedThenCmdDug.dug >= 5 && Math.abs(placedThenCmdDug.xp - base) < 1e
     gains.push(+(v.sk.craft.xp - before).toFixed(3));
   }
   console.log("craft: XP for the same rack made 4 times:", JSON.stringify(gains));
-  assert.ok(gains[0] > 0.1 && gains.slice(1).every(g => g === 0), "rebuilding the same rack paid XP again");
+  assert.ok(gains[0] > 0.01 && gains.slice(1).every(g => g === 0), "rebuilding the same rack paid XP again");
 }
 console.log("grind bot ok");

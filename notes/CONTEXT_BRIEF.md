@@ -20,6 +20,7 @@ A persistent procedural civilization sandbox. The player is a god/commander over
 - Factorio *blueprints* are wanted; Factorio *scale automation* is not.
 - Life cycles apply to the whole world: plants and animals are born, grow, age and die.
 - Slime Village currently is a hands-off sim; the plan is to "dumb them down so the player is responsible for telling them what to do and what to build and where." → tension with autonomy pillar; must be resolved deliberately (see brief pillar 6/7: village must not be helpless when player is away).
+- **Magic cores (author lore, 2026-10-28):** magic cores create dungeons and labyrinths. Nearer a core means richer ore and valuables, more traps and treasure, and more monsters spawning in nearby caves (and on the surface when close). Caves are long, winding and multi-layer, with varying safety. Plan: notes/impl/PHASE7_CORES.md.
 
 ## Hard constraints from the brief
 - First planet must be a complete game. Space = later expansion, never a prerequisite.

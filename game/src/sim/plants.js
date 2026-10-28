@@ -14,23 +14,23 @@
 //   as long as the neighbourhood and the whole map are under their density caps; a little wind-blown seed rain keeps a stripped map from staying
 //   bare. The caps are the map's own initial counts (+/- a band), so it neither fills nor empties. floraDaily() is the whole of it and
 //   needs only {tick, ents, rng, world.standZ/mat/flags/setFlags, stock, farm.pens} - tests/flora.js drives it over a long window with a stub sim.
-import { DAY } from "./clock.js";
+import { DAY, DUR_DAY } from "./clock.js";
 import { F, M } from "./world.js";
 import { berrySeason, seasonIdx } from "./season.js";
 import { mix32 } from "./rng.js";
 
 export const BERRY_MAX = 4;
-export const BERRY_REGROW = Math.floor(DAY * 1.5);   // ticks per berry regrown
-export const TUFT_REGROW = DAY * 8;
-export const ROOT_REGROW = DAY * 4;                  // a dug-over patch recovers faster than a cut tuft: roots are the winter larder
-export const TUBER_REGROW = DAY * 6;                 // a dug-over tuber patch refills (any season: they live under the frost)
+export const BERRY_REGROW = Math.floor(DUR_DAY * 1.5);   // ticks per berry regrown
+export const TUFT_REGROW = DUR_DAY * 8;
+export const ROOT_REGROW = DUR_DAY * 4;                  // a dug-over patch recovers faster than a cut tuft: roots are the winter larder
+export const TUBER_REGROW = DUR_DAY * 6;                 // a dug-over tuber patch refills (any season: they live under the frost)
 export const TUBER_YIELD = 3;
-export const STUMP_REGROW = DAY * 12;                // a burnt or felled stump sprouts again
-export const STUMP_ROT = DAY * 30;                   // a felled stump that did not sprout rots away after this
+export const STUMP_REGROW = DUR_DAY * 12;                // a burnt or felled stump sprouts again
+export const STUMP_ROT = DUR_DAY * 30;                   // a felled stump that did not sprout rots away after this
 export const SPROUT_PCT = 60;                        // % of felled stumps that coppice into a sapling (the rest rot)
-export const TREE_REGROW = DAY * 25;                 // "slowly": a quarter of a year
+export const TREE_REGROW = DUR_DAY * 25;                 // "slowly": a quarter of a year
 
-/** Lifespan in days by species, and the stage thresholds in growth days (best guesses; the user tunes). */
+/** Lifespan in CALENDAR days by species (S18b: lifespans are ages, like a villager's), and the stage thresholds in growth days (best guesses; the user tunes). */
 export const LIFE = { berry: 70, tuft: 50, tuber: 110, tree: 350 };
 export const SEEDLING_DAYS = 4, YOUNG_DAYS = 9;      // berry: no fruit before 4 growth days, 2 berries until 9, then the full crop; old bushes (past 80% of life) give 2 again
 export const GROW_BY_SEASON = [1, 1, 0.5, 0];        // growth days per calendar day: spring, summer, autumn, winter
@@ -51,7 +51,7 @@ export function newPlant(ents, species, x, y, z) {
 const speciesOf = (p) => (p.species === "sapling" ? "tree" : p.species);
 /** The plant's lifespan in days: the species' base, +/- 50% by a hash of its id (wide, so a cohort does not die together) (a stable per-plant draw). */
 export const lifeOf = (p) => { const sp = speciesOf(p); return LIFE[sp] ? Math.floor(LIFE[sp] * (0.5 + 1.0 * (mix32(p.id, 91) / 4294967296))) : 0; };
-export const ageOf = (sim, p) => Math.max(0, Math.floor((sim.tick - (p.bt || 0)) / DAY));
+export const ageOf = (sim, p) => Math.max(0, Math.floor((sim.tick - (p.bt || 0)) / DAY));      // calendar days (S18b): a plant's lifespan is an AGE, and must outlast a calendar winter (25 days of 12000 ticks)
 
 /** Give an old-save plant its birth tick and growth, spread so that ages are mixed. */
 export function initLife(sim, p) {
@@ -104,7 +104,7 @@ export function growPlants(sim) {
         if (free) {
           p.species = "tree"; p.yield = 4;
           sim.world.setFlags(p.x, p.y, p.z, sim.world.flags(p.x, p.y, p.z) | F.OBSTACLE);
-        } else p.nx = t + DAY;
+        } else p.nx = t + DUR_DAY;
       }
     }
   }

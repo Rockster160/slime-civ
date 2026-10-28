@@ -14,7 +14,7 @@
 //   g      S13 hidden genotype {trait: [allele, allele]}: the visible trait is their blend (R16); gp grandparent ids, inb the kinship of the parents, wk 1 = weak (close-kin outcome)
 //   aff mn rel  S13 bonds (bonds.js); gr grief {u, s, f}; hb hobby {xp, n}; ti titles earned; hl heirloom {n, h}
 //   carry  {item,n} | null; action; job; why; order; sk; ep (board epoch seen); bad [[targetId,untilTick]]
-import { DAY } from "./clock.js";
+import { DAY, DUR_DAY, DAY_X } from "./clock.js";
 import { bedroomQ, partnerBeside, BEDROOM_REST, BEDROOM_MOOD, PARTNER_MOOD } from "./purposes.js";
 import { clamp, expNeg, settle, r3 } from "./util.js";
 import { tempAt } from "./season.js";
@@ -26,7 +26,10 @@ import { hobbyStep } from "./hobby.js";
 import { mix32 } from "./rng.js";
 import { fnv1aStr } from "./hash.js";
 
-export const LIFE_DAYS = 400;               // a life is ~4 game years of 100 days (GDD §23 box, R1)
+export const LIFE_DAYS = 500;               // a life is ~5 game years of 100 days (S18b/D35; it was 400 = 4 years, GDD §23 box, R1)
+const LIFE_X = LIFE_DAYS / 400;             // the ageing constants below were tuned on the 400-day life and keep their shape on a longer one
+/** The tick count the need rates are written against: hunger 0.25 per NEED_DAY, thirst 0.35, energy 0.7 awake, and so on (a ration about every 14 min at 1x, a drink every 10, a night's sleep that fills the energy). Flat: changing the calendar day (clock.js DAY) does not change them. */
+export const NEED_DAY = 12000;
 export const NEED_STEP = 10;                // needs update every 10 ticks per villager (staggered by id)
 // The nine traits carried over from slime-village (GDD §08). hardiness is its maxHealth (85-115 -> 0.85-1.15), also the cold trait.
 export const TRAITS = ["strength", "speed", "stamina", "intelligence", "drive", "leisure", "fertility", "longevity", "hardiness"];
@@ -49,7 +52,8 @@ export const AGE_DMG = 1.6;                 // slime-village AGE_DMG shape: heal
 export const WOUND_AT = 0.85, WOUND_HEAL = 6, REST_HEAL = 12;     // S8: health/day gained by a wounded villager (on top of the 2/day), and extra at rest
 export const GRIEF_OUT = 0.05;             // S13 (D8): grief costs at most 5% of work output while it lasts
 export const GRIEF_MOOD = 0.5;            // and drains mood by up to this much a day, on top of the usual sag
-export const ELDER_DECAY = 1 / 130;         // fitness e-folding past prime (days^-1)
+export const ELDER_DECAY = 1 / (130 * LIFE_X);         // fitness e-folding past prime (days^-1)
+export const FRAIL_DAYS = 100;          // calendar days past prime at which frailty reads 1.0. Tuned (tests/lifespan.js) so the old-age death window centres on 5 years (500 days)
 
 // ---- life stages ----------------------------------------------------------
 
@@ -70,6 +74,11 @@ export function fitness(v, age) {
   return expNeg((age - v.prime) * ELDER_DECAY / Math.max(0.4, pace(v)));
 }
 export function maxHp(v, fit) { return 100 * v.t.hardiness * (0.45 + 0.55 * fit); }
+/** Health lost per game day to old age (slime-village AGE_DMG shape): zero until prime, then frailty squared; lifelong hardship (`hard`) adds up to 50%. */
+export function agingHarm(v, age) {
+  const frail = Math.max(0, age - v.prime) / FRAIL_DAYS;
+  return AGE_DMG * frail * frail * (1 + Math.min(0.5, (v.hard || 0) / 300));
+}
 /** Rations of food this villager needs per game day (§11.17: juvenile 0.5, elder 0.8; appetite scales). */
 export function dailyNeed(sim, v) {
   const a = ageDays(sim, v);
@@ -105,16 +114,17 @@ export const SOFT = { hunger: [0.5, 0.15], thirst: [0.5, 0.2], energy: [0.4, 0.1
  * HUDDLE_MAX) - "near others". Below COMFORT warmth drains with the deficit; above it, it recovers.
  */
 export function updateNeeds(sim, v) {
-  const dt = NEED_STEP / DAY;
+  // S18b: hunger, thirst and energy are the "needs" and run on NEED_DAY (a ration every ~14 min at 1x, a night's sleep that fills the energy). Everything else (cold, mood, harm, healing, ageing damage) is a flat rate per DUR_DAY = 1800 ticks, as it always was.
+  const dt = NEED_STEP / DUR_DAY, dtN = NEED_STEP / NEED_DAY;
   const age = ageDays(sim, v), fit = fitness(v, age);
   const asleep = v.slp === 1, resting = v.rest > 0;
   const child = age < maturity(v), elder = age > v.prime;
 
-  v.hunger = Math.max(0, v.hunger - 0.25 * foodUpkeep(v) * (child ? 0.5 : elder ? 0.8 : 1) * (asleep ? 0.6 : 1) * dt);
-  v.thirst = Math.max(0, v.thirst - THIRST_RATE * (asleep ? 0.6 : 1) * dt);
+  v.hunger = Math.max(0, v.hunger - 0.25 * foodUpkeep(v) * (child ? 0.5 : elder ? 0.8 : 1) * (asleep ? 0.6 : 1) * dtN);
+  v.thirst = Math.max(0, v.thirst - THIRST_RATE * (asleep ? 0.6 : 1) * dtN);
   const bq = asleep && v.rest === 2 ? bedroomQ(sim, v) : -1;                         // S15: a bed in a closed Bedroom rests better and lifts the mood (purposes.js)
-  if (asleep) v.energy = Math.min(1, v.energy + (v.rest === 2 ? 2.0 * (bq >= 0 ? 1 + BEDROOM_REST * bq : 1) : 1.3) * dt);   // bed rests better than ground (§08)
-  else v.energy = Math.max(0, v.energy - (resting ? 0.35 : 0.7) * energyUpkeep(v) * dt);
+  if (asleep) v.energy = Math.min(1, v.energy + (v.rest === 2 ? 2.0 * (bq >= 0 ? 1 + BEDROOM_REST * bq : 1) : 1.3) * dtN);   // bed rests better than ground (§08)
+  else v.energy = Math.max(0, v.energy - (resting ? 0.35 : 0.7) * energyUpkeep(v) * dtN);
   const leisure = v.action && (v.action.type === "Wander" || (v.job && v.job.k === "tinker"));     // tinkering is free time too
   const hob = v.action && v.action.type === "Wander" ? hobbyStep(v) : 1;            // S13: a hobby is followed in free time, and lifts the mood it brings back a little
   if (v.gr && sim.tick >= v.gr.u) v.gr = null;                                      // S13: grief runs out
@@ -138,22 +148,21 @@ export function updateNeeds(sim, v) {
   bonus += BIOMES[biomeAt(sim.world, v.x, v.y)].warm;       // S12: the highland is colder, the marsh a little kinder
   const comfort = COMFORT - 0.5 * (v.t.hardiness - 1) + (child || elder ? 0.05 : 0);
   const deficit = comfort - (tempAt(sim.tick) + bonus);
-  if (deficit > 0) v.warm = Math.max(0, v.warm - deficit * COLD_DRAIN * dt);
+  if (deficit > 0) v.warm = Math.max(0, v.warm - deficit * COLD_DRAIN * dtN);        // cold follows the seasons (calendar): a winter is 25 calendar days long
   else v.warm = Math.min(1, v.warm + 2.0 * dt);
 
   // harm per game day
   const hS = v.hunger < 0.08 ? 12 * (1 - v.hunger / 0.08) : 0;
   const hT = v.thirst < 0.08 ? 30 * (1 - v.thirst / 0.08) : 0;
   const hC = v.warm < 0.25 ? 8 * (0.25 - v.warm) / 0.25 : 0;
-  const frail = Math.max(0, age - v.prime) / 150;
-  const hA = AGE_DMG * frail * frail * (1 + Math.min(0.5, v.hard / 300));
+  const hA = agingHarm(v, age);
   const hB = airHarm(sim, v);                    // S12: bad air (underground.js) costs health and tires
   if (hB) v.energy = Math.max(0, v.energy - AIR_TIRE * dt);
   const hI = v.ill ? v.ill.d : 0;                // S14: sickness drains health (disease.js) and stops the usual healing while it lasts
-  const hurt = (hS + hT + hC + hB + hI) * dt;
+  const hurt = (hS + hT + hB + hI) * dt + hC * dtN;
   v.hard = r3(v.hard + hurt);
   const mh = maxHp(v, fit);
-  v.hp -= (hS + hT + hC + hB + hI + hA) * dt;
+  v.hp -= (hS + hT + hB + hI + hA) * dt + hC * dtN;
   // Healing offsets age damage until frailty outruns it (hA > 2/day), so old age is a slope, not a cliff.
   if (hS + hT + hC + hB + hI === 0) {
     const well = v.hunger > 0.25 && v.thirst > 0.25 && v.warm > 0.4;

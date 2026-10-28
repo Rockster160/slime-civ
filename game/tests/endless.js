@@ -3,6 +3,7 @@
 // Not pinned to the old camp: these run on the real game's spawn (the origin for most seeds). Pure generation (order independence, the 20-seed spawn search,
 // borders) is tests/geology.js.
 //   node tests/endless.js
+import { DUR_DAY } from "../src/sim/clock.js";
 import assert from "node:assert/strict";
 import { Sim } from "../src/sim/sim.js";
 import { toJSON, restore } from "../src/sim/save.js";
@@ -162,8 +163,8 @@ const plantsIn = (sim, cx, cy) => sim.ents.ofKind("plant").filter(p => (p.x >> 4
   const sim = Sim.create(7);
   for (let i = 0; i < 600; i++) sim.step();                             // settle
   const t0 = process.hrtime.bigint();
-  for (let i = 0; i < 1800; i++) sim.step();
-  const ms = Number(process.hrtime.bigint() - t0) / 1e6 / 1800;
+  for (let i = 0; i < DUR_DAY; i++) sim.step();
+  const ms = Number(process.hrtime.bigint() - t0) / 1e6 / DUR_DAY;
   assert.ok(ms < 5, "a tick at the camp costs " + ms.toFixed(3) + " ms");
   const nAct = sim.world.chunks.size, w = sim.world, b0 = bufMB();
   for (let i = 0; i < 300; i++) w.resident(1000 + i, 1000);            // 300 more resident chunks, far away

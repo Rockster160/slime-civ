@@ -1,6 +1,7 @@
 // S7b: the clay -> charcoal -> copper chain (GDD §15.5, §15.7 rows 5, 6, 7, 9; §11.9; §14.3, §14.4; §12.4-12.5), fixture-based, every window <= 3 game days.
 //   node tests/chain.js
 import assert from "node:assert/strict";
+import { waterEdges } from "../src/sim/board.js";
 import { loadFixture } from "./fixture.js";
 import { flatSpot, clearArea, instantHut } from "./helpers.js";
 import { putStation, kilnSpot } from "../tools/make_fixtures.js";
@@ -21,7 +22,7 @@ import { rate } from "../src/sim/tasks.js";
 import { M, F } from "../src/sim/world.js";
 import { stationInfo, describe, explain } from "../src/ui/text.js";
 import { almanac } from "../src/ui/almanac.js";
-import { DAY } from "../src/sim/clock.js";
+import { DUR_DAY } from "../src/sim/clock.js";
 
 const step = (sim, n) => { for (let i = 0; i < n; i++) sim.step(); };
 const adults = (sim) => sim.ents.ofKind("villager").filter(v => isAdult(sim, v));
@@ -95,7 +96,7 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
   const h = hearths(sim)[0];
   assert.equal(h.lit, 1); assert.ok(!can(sim, "POTTERY"));
   dropLoose(sim, "clay", 3, h.x + 1, h.y, h.z);
-  const at = until(sim, (s) => can(s, "POTTERY"), 2 * DAY);
+  const at = until(sim, (s) => can(s, "POTTERY"), 2 * DUR_DAY);
   assert.ok(at >= 0, "clay lying by a lit fire for a while is understood by someone within 2 days");
   assert.ok(haveTotal(sim, "fired_clay") >= 1, "and one lump actually baked");
   assert.equal(eraOf(sim), "Clay"); assert.match(sim.chron.entries.map(e => e.text).join("\n"), /was first to fire clay|The Clay age begins/);
@@ -103,7 +104,7 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
   // vessels: baked clay lying at the water's edge when someone drinks
   const edge = sim.world.standZ(57, 43) >= 0 ? [57, 43, sim.world.standZ(57, 43)] : null;
   const v = adults(sim)[0];
-  const water = sim.cache.edges ? sim.cache.edges[0] : null;
+  const water = waterEdges(sim)[0] || null;
   const spot = water || edge;
   dropLoose(sim, "fired_clay", 1, spot[0], spot[1], spot[2]);
   sim.ents.move(v, spot[0], spot[1], spot[2]);
@@ -121,7 +122,7 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
   assert.ok(!can(sim, "CHARCOAL"));
   const vs = adults(sim).slice(0, 3);
   vs.forEach((v, i) => { const z = sim.world.standZ(fl.x + 2 + i, fl.y); sim.ents.move(v, fl.x + 2 + i, fl.y, z); v.slp = 0; });
-  const at = until(sim, (s) => can(s, "CHARCOAL"), DAY);
+  const at = until(sim, (s) => can(s, "CHARCOAL"), DUR_DAY);
   assert.ok(at >= 0, "people standing by a smouldering stump understand charcoal");
   assert.ok(!sim.disc.curio.some(c => c.craft === "CHARCOAL"), "and the Curiosity resolves");
   assert.match(sim.chron.entries.map(e => e.text).join("\n"), /burn wood to black coal/);
@@ -186,9 +187,9 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
   const list = tinkerCandidates(sim);
   assert.ok(list.every(c => c.site.id === kiln.id && (c.item === "malachite")), "the request narrows the experiments: " + list.map(c => c.key));
   assert.ok(discoveryOdds(sim, "SMELT_COPPER") >= 0.2, "informed: a quarter of the tries are the right one: " + discoveryOdds(sim, "SMELT_COPPER").toFixed(2));
-  const at = until(sim, (s) => can(s, "SMELTING"), 3 * DAY);
+  const at = until(sim, (s) => can(s, "SMELTING"), 3 * DUR_DAY);
   assert.ok(at >= 0, "found within 3 days");
-  ok("investigate malachite at the kiln: smelting after " + (at / DAY).toFixed(1) + " days, informed odds per try " + discoveryOdds(sim, "SMELT_COPPER").toFixed(2));
+  ok("investigate malachite at the kiln: smelting after " + (at / DUR_DAY).toFixed(1) + " days, informed odds per try " + discoveryOdds(sim, "SMELT_COPPER").toFixed(2));
 }
 
 // 6. Stations build and produce: kiln -> fired clay, mound -> charcoal, bench -> copper pick, bellows (from fired clay), jar.
@@ -203,7 +204,7 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
   sim.apply({ type: "keep", item: "fired_clay", n: 6 }); sim.apply({ type: "keep", item: "charcoal", n: 3 }); sim.apply({ type: "keep", item: "copper_pick", n: 1 });
   const seen = new Set(), xp0 = adults(sim).reduce((a, v) => a + v.sk.craft.xp, 0);
   let t = 0;
-  for (; t < 3 * DAY; t++) {
+  for (; t < 3 * DUR_DAY; t++) {
     sim.step();
     if (t % 50 === 0) for (const v of sim.ents.ofKind("villager")) if (v.job) seen.add(v.job.k);
     if (haveTotal(sim, "charcoal") >= 3 && haveTotal(sim, "copper_pick") >= 1 && haveTotal(sim, "fired_clay") >= 6) break;
@@ -217,7 +218,7 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
   // craft XP came from the output
   const xp1 = adults(sim).reduce((a, v) => a + v.sk.craft.xp, 0);
   assert.ok(xp1 > xp0 + 0.3, "craft XP came from the output: " + xp0.toFixed(2) + " -> " + xp1.toFixed(2));
-  ok("stations built by villagers and produce: " + haveTotal(sim, "fired_clay") + " fired clay, " + haveTotal(sim, "charcoal") + " charcoal, " + haveTotal(sim, "copper_pick") + " copper pick in " + (t / DAY).toFixed(1) + " days; jobs " + [...seen].filter(k => /kiln|charcoal|tool|smelt/.test(k)).join(","));
+  ok("stations built by villagers and produce: " + haveTotal(sim, "fired_clay") + " fired clay, " + haveTotal(sim, "charcoal") + " charcoal, " + haveTotal(sim, "copper_pick") + " copper pick in " + (t / DUR_DAY).toFixed(1) + " days; jobs " + [...seen].filter(k => /kiln|charcoal|tool|smelt/.test(k)).join(","));
 }
 
 // 7. Both heat-4 routes smelt copper through the job board (keep copper): kiln + bellows, and a kiln on the ridge. Without draft the smelt is blocked, and says why.
@@ -234,7 +235,7 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
   // no draft: blocked
   {
     const { sim } = run(() => null);
-    const cs = jobs(sim, adults(sim)[1]).find(c => c.kind === "smelt");
+    const cs = adults(sim).map(v => jobs(sim, v).find(c => c.kind === "smelt")).find(Boolean);       // (any adult: whoever is not asleep or hauling has the candidate)
     assert.ok(cs && cs.blocker === "TOO_COLD", "no draft: smelt is blocked by TOO_COLD: " + (cs && cs.blocker));
     const text = explain(sim, adults(sim)[1]);
     step(sim, 600);
@@ -248,10 +249,10 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
     return k;
   }]]) {
     const { sim } = run(setup, label);
-    const at = until(sim, (s) => haveTotal(s, "copper") >= 2, 3 * DAY);
+    const at = until(sim, (s) => haveTotal(s, "copper") >= 2, 3 * DUR_DAY);
     assert.ok(at >= 0, label + " route: two ingots within 3 days");
     assert.ok(famOf(adults(sim)[0], "SMELTING") > 0.5 || can(sim, "SMELTING"));
-    ok("heat-4 route '" + label + "' smelts copper through the board: 2 ingots after " + (at / DAY).toFixed(1) + " days (malachite " + haveTotal(sim, "malachite") + " left)");
+    ok("heat-4 route '" + label + "' smelts copper through the board: 2 ingots after " + (at / DUR_DAY).toFixed(1) + " days (malachite " + haveTotal(sim, "malachite") + " left)");
   }
 }
 
@@ -271,18 +272,18 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
   // the pool is redrawn each day: average the odds of one weighted pick over 24 days (only the clock moves; nothing else steps)
   let p0 = 0, pe = 0;
   for (let d = 0; d < 24; d++) {
-    base.tick += DAY; sim.tick += DAY;
+    base.tick += DUR_DAY; sim.tick += DUR_DAY;
     p0 += discoveryOdds(base, "BAKE_CLAY") + discoveryOdds(base, "KILN_FIRING"); pe += discoveryOdds(sim, "BAKE_CLAY") + discoveryOdds(sim, "KILN_FIRING");
   }
-  p0 /= 24; pe /= 24; base.tick -= 24 * DAY; sim.tick -= 24 * DAY; sim.cache.tkSig = null;
+  p0 /= 24; pe /= 24; base.tick -= 24 * DUR_DAY; sim.tick -= 24 * DUR_DAY; sim.cache.tkSig = null;
   assert.ok(p0 > 0 && pe > p0, "both can find it, evidence makes it likelier: " + p0.toFixed(2) + " vs " + pe.toFixed(2));
   assert.ok(p0 / pe <= 0.4, "rediscovery costs <= 0.4x of the first find (D8 gate): " + (p0 / pe).toFixed(2));
   const as = adults(sim).slice(0, 3);
   sim.apply({ type: "investigate", ids: as.map(v => v.id), item: "clay", at: kiln.id });
-  const at = until(sim, (s) => can(s, "POTTERY"), 3 * DAY);
+  const at = until(sim, (s) => can(s, "POTTERY"), 3 * DUR_DAY);
   assert.ok(at >= 0, "and in play: investigating at the old kiln rediscovers it within 3 days");
   assert.match(sim.chron.entries.map(e => e.text).join("\n"), /rediscovered pottery/);
-  ok("loss: LOSS + era regress; evidence weight " + pe.toFixed(2) + " vs " + p0.toFixed(2) + " from scratch; rediscovered after " + (at / DAY).toFixed(1) + " days");
+  ok("loss: LOSS + era regress; evidence weight " + pe.toFixed(2) + " vs " + p0.toFixed(2) + " from scratch; rediscovered after " + (at / DUR_DAY).toFixed(1) + " days");
 }
 
 // 9. An ingot leads to a new job kind (6d), and the pick is a capability: it is made at a bench, dug with, and wears out. No flat bonus anywhere.
@@ -299,7 +300,7 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
   const free = adults(sim).find(a => !a.carry);                // someone with empty hands
   const after = jobs(sim, free).find(c => c.kind === "make_tool");
   assert.ok(after && !after.blocker, "after the discovery and an ingot, `make_tool` is runnable: " + (after && after.blocker));
-  const at = until(sim, (s) => haveTotal(s, "copper_pick") >= 1, 3 * DAY);
+  const at = until(sim, (s) => haveTotal(s, "copper_pick") >= 1, 3 * DUR_DAY);
   assert.ok(at >= 0, "a copper pick is made");
   const pick = sim.ents.ofKind("item").find(i => i.item === "copper_pick");
   assert.ok(pick.q >= 0.5 && pick.q <= 1, "its quality comes from the maker's skill: " + pick.q);
@@ -311,17 +312,17 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
   d.eq = null;
   // an equipped digger takes a pick from the stockpile, and it wears out
   sim.apply({ type: "unkeep", item: "copper_pick" });
-  assert.ok(until(sim, (s) => survey(s).stock.copper_pick > 0, DAY) >= 0, "the pick is hauled into the stockpile");
+  assert.ok(until(sim, (s) => survey(s).stock.copper_pick > 0, DUR_DAY) >= 0, "the pick is hauled into the stockpile");
   const [x, y] = [sim.stock.x1 + 6, sim.stock.y0 + 2], z = sim.world.standZ(x, y);
   assert.ok(z >= 0);
   for (const w of sim.ents.ofKind("villager")) if (w.carry) { cancelAction(sim, w); w.job = null; dropLoose(sim, w.carry.item, w.carry.n, w.x, w.y, w.z); w.carry = null; } sim.cache.iv++;       // empty hands (S8: whoever is carrying something digs without taking the pick, and a 4-cell region is done in a few hundred ticks)
   sim.apply({ type: "mine", op: "region", x0: x, y0: y, x1: x + 3, y1: y + 3, z: z - 1, layers: 2 });      // (S9: 32 cells, so a digger with empty hands comes by before it is done)
   // (S16: the villagers on the new land are nearly always carrying a stick or a clod when they are sent to dig, and the equip step needs empty hands: the digger who "comes by" empty-handed is made so here, as the line above does at the start)
-  const hold = until(sim, (s) => { if (s.tick % 100 === 0) for (const w of s.ents.ofKind("villager")) if (w.carry && w.job && w.job.k === "mine" && !(w.action && w.action.steps && w.action.steps.some(st => st.v === "dig"))) { cancelAction(s, w); w.job = null; dropLoose(s, w.carry.item, w.carry.n, w.x, w.y, w.z); w.carry = null; } return s.ents.ofKind("villager").some(w => w.eq); }, 2 * DAY);
+  const hold = until(sim, (s) => { if (s.tick % 100 === 0) for (const w of s.ents.ofKind("villager")) if (w.carry && w.job && w.job.k === "mine" && !(w.action && w.action.steps && w.action.steps.some(st => st.v === "dig"))) { cancelAction(s, w); w.job = null; dropLoose(s, w.carry.item, w.carry.n, w.x, w.y, w.z); w.carry = null; } return s.ents.ofKind("villager").some(w => w.eq); }, 2 * DUR_DAY);
   assert.ok(hold >= 0, "a digger picked up the copper pick from the stockpile");
   const w = sim.ents.ofKind("villager").find(q => q.eq); w.eq.u = 1;
   const digs0 = sim.disc.worn || 0;
-  const wore = until(sim, (s) => !w.eq, DAY);
+  const wore = until(sim, (s) => !w.eq, DUR_DAY);
   assert.ok(wore >= 0 && (sim.disc.worn || 0) === digs0 + 1, "it wore out: " + wore);
   assert.equal(pickUses(0), 40); assert.equal(pickUses(1), 120);
   ok("ingot -> `make_tool` appears (UNKNOWN_CRAFT before), pick quality " + pick.q + ", x" + PICK_X + " digging with it, wears out; no flat bonus");
@@ -359,10 +360,10 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
   const jx = sim.stock.x1 + 3, jy = sim.stock.y0 + 1, jz = sim.world.standZ(jx, jy);
   clearArea(sim, jx - 1, jy - 1, 3, 3, jz);
   assert.equal(sim.apply({ type: "build", cells: [{ w: "waterjar", x: jx, y: jy, z: jz }] }), true);
-  const got = until(sim, (s) => furn(s, "waterjar").length === 1, DAY);
+  const got = until(sim, (s) => furn(s, "waterjar").length === 1, DUR_DAY);
   assert.ok(got >= 0, "villagers set the jar down");
   const jar = furn(sim, "waterjar")[0];
-  const filled = until(sim, (s) => jar.fill >= 20, 2 * DAY);
+  const filled = until(sim, (s) => jar.fill >= 20, 2 * DUR_DAY);
   assert.ok(filled >= 0, "the fetch_water chore filled it: " + jar.fill);
   const v = adults(sim)[0];
   sim.ents.move(v, jx + 1, jy, jz); v.thirst = 0.1; v.action = null; v.job = null;
@@ -417,6 +418,7 @@ function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(
     const kiln = furn(sim, "kiln")[0]; putStation(sim, "bellows", kiln.x + 1, kiln.y, kiln.z);
     sim.apply({ type: "keep", item: "copper", n: 2 });
     step(sim, 1500);
+    for (let i = 0; i < 3 * DUR_DAY && !(kiln.bn > 0 || haveTotal(sim, "copper") > 0); i++) sim.step();       // (until a smelt is under way, capped)
     return sim;
   };
   const a = make(), kiln = furn(a, "kiln")[0];

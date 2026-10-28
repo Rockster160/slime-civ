@@ -8,7 +8,7 @@
 //
 // valueOfOutput is in work-units: 1 = what one full working day (1200 ticks) of
 // fair-challenge work yields at level 0. K = 100 xp ~ a game year of full-time
-// work. Per villager: v.sk[skill] = {xp, wk} where wk = ticks worked in that
+// work (S18b: a working day is now WORKDAY ticks, and each unit of VALUE pays 1/DAY_X xp, so a full day still pays about 1). Per villager: v.sk[skill] = {xp, wk} where wk = ticks worked in that
 // skill today (reset daily) for the rested curve; v.ws / v.wt = the skill I last
 // worked and when (so a learner can be watched or taught).
 //
@@ -22,11 +22,11 @@
 import { expNeg, settle, clamp } from "./util.js";
 import { F } from "./world.js";
 import { INSPIRE } from "./inspire.js";
-import { DAY } from "./clock.js";
+import { DUR_DAY, DAY } from "./clock.js";
 import { isMentorOf, noteLesson, MENTOR_X } from "./bonds.js";
 
 export const SKILLS = ["dig", "build", "craft"];
-export const K = 40;           // GDD §10 says ~100 (a game year of full-time work); 40 is what makes Property 3 true with the challenge-matched decay (D21, tune later)
+export const K = 181 * DAY / 12000;   // S18b/D13: derived so steady work in one craft (a full working day each 1800 ticks) reaches skill 0.7 after 30% of adult life (120 of the 400 adult calendar days = 800 work days at DAY 12000; tests/skill_pacing.js), and so it keeps doing so if the calendar day is changed: K follows DAY. Was 40 when a life was 320 work days
 // Difficulty = the level at which a task stops teaching (§10): soft-rock dig 0.6, build 0.6, simple craft 0.5.
 export const DIFFICULTY = { dig: 0.6, build: 0.6, craft: 0.5 };
 // Output value in work-units per unit produced: ~1/(units per worker-day), §10 units.
@@ -41,7 +41,9 @@ export const VALUE = { stone: 0.167, dirt: 0.167, clay: 0.15, flint: 0.2, malach
   wheel: 0.15, wagon: 0.4, cart: 0.45 };
 // Aptitude (§08): a read of two traits, not a gene of its own.
 const APTITUDE = { dig: ["strength", "stamina"], build: ["strength", "intelligence"], craft: ["intelligence", "drive"] };
-const WORKDAY_FULL = 720, WORKDAY = 1200;      // rested curve knees, §10 (60% and 100% of a 1200-tick working day)
+// Rested curve knees, §10: 60% and 100% of a 1200-tick working day. S18b: the "day" of work is the flat duration day (DUR_DAY = 1800 ticks, a working 1200 of it): wk resets every DUR_DAY, not every calendar day.
+export const WORKDAY = 1200, WORKDAY_FULL = 720;
+export const XP_PER_VALUE = 1;
 export const WATCH_R = 4, WATCH_BONUS = 0.15;  // watching a better worker at the same craft (§10 "watching"): small and slow
 export const TEACH_R = 3, TEACH_X = 3, TEACH_OUT = 0.8, TEACH_DAYS = 3;   // Teach (R10, D8): learner x3, teacher output x0.8
 export const RUST_GRACE = 15, RUST_MAX = 0.3, RUST_TAU = 40, RUST_RECOVER = 0.6;   // days; share of level; days; per working day the rust keeps
@@ -103,12 +105,15 @@ export function lessons(sim, v, s) {
 }
 
 /** Award XP for output. Returns the XP gained. */
+export function xpFor(v, s, value, difficulty, worked, mult = 1) {
+  return value * XP_PER_VALUE * Math.max(0, 1 - level(v, s) / difficulty) * rested(worked) * learnRate(v) * mult;
+}
 export function gain(sim, v, s, value, isNovel, difficulty = DIFFICULTY[s]) {
   if (!isNovel) return 0;
   const sk = v.sk[s], tc = teacherOf(sim, v, s);
-  const g = value * Math.max(0, 1 - level(v, s) / difficulty) * rested(sk.wk) * learnRate(v) * (tc ? TEACH_X * (isMentorOf(tc, v) ? MENTOR_X : 1) : lessons(sim, v, s)) * (v.poss ? 1 + INSPIRE.xp : 1);
+  const g = xpFor(v, s, value, difficulty, sk.wk, (tc ? TEACH_X * (isMentorOf(tc, v) ? MENTOR_X : 1) : lessons(sim, v, s)) * (v.poss ? 1 + INSPIRE.xp : 1));
   if (tc && g > 0) noteLesson(tc, v);                         // S13: lessons that pay out make a mentor
-  sk.xp = Math.round((sk.xp + g) * 1000) / 1000;
+  sk.xp = Math.round((sk.xp + g) * 10000) / 10000;
   return g;
 }
 export function noteWork(sim, v, s) { v.sk[s].wk++; v.ws = s; v.wt = sim.tick; v.sk[s].lu = sim.tick; }
@@ -117,7 +122,7 @@ export function rustDay(sim, v) {
   for (const s of SKILLS) {
     const sk = v.sk[s];
     if (sk.lu === undefined) sk.lu = sim.tick;
-    const idle = (sim.tick - sk.lu) / DAY, rs = sk.rs || 0;
+    const idle = (sim.tick - sk.lu) / DUR_DAY, rs = sk.rs || 0;
     if (idle > RUST_GRACE && sk.xp > 0) { const nr = rs + (RUST_MAX - rs) * (1 - expNeg(1 / RUST_TAU)); sk.rs = RUST_MAX - nr < 0.002 ? RUST_MAX : Math.round(nr * 10000) / 10000; }
     else if (idle < 1 && rs > 0) sk.rs = rs < 0.005 ? 0 : Math.round(rs * RUST_RECOVER * 1000) / 1000;
   }
@@ -133,4 +138,4 @@ export function preferred(v) {
 export const PROFESSION = { dig: "digger", build: "builder", craft: "crafter" };
 export function profession(v) { const p = preferred(v); return p ? PROFESSION[p] : "forager"; }
 /** Start a lesson: teacher `t` coaches `p` for a few days (cleared by p = 0). Both need to be working the same craft beside each other. */
-export function setTeach(sim, t, p) { t.tch = p ? { p, u: sim.tick + TEACH_DAYS * DAY } : null; }
+export function setTeach(sim, t, p) { t.tch = p ? { p, u: sim.tick + TEACH_DAYS * DUR_DAY } : null; }

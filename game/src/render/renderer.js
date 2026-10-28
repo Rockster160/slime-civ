@@ -2,6 +2,8 @@
 // topmost non-air cell at or below the viewed z, darker the deeper it is below
 // that level. Plants and villagers are glyphs on top. Reads the sim, never
 // writes it. Only tiles inside the camera view are touched.
+import { DAY, DUR_DAY } from "../sim/clock.js";
+import { LIFE_DAYS } from "../sim/villager.js";
 import { D, M, MAT, World, CellReader } from "../sim/world.js";
 import { chunkKey } from "../sim/cellkey.js";
 import { seenAt, exploredAt } from "../sim/seen.js";
@@ -35,7 +37,7 @@ const dimFill = MAT.map(m => {
   }
   return row;
 });
-class RenderView extends CellReader {
+export class RenderView extends CellReader {
   constructor(world) { super(); this.world = world; this.lru = new Map(); this._cx = 1e9; this._cy = 1e9; this._c = null; this.made = 0; }
   reset() { this._cx = 1e9; this._c = null; }
   _get(cx, cy) {
@@ -67,7 +69,9 @@ export class Renderer {
     this.access = { calm: false, cb: false, contrast: false };      // S12 accessibility (ui/access.js sets it): reduced flashing, colour-blind marks (letters and patterns beside colour), high contrast
   }
 
-  setZ(z) { this.z = Math.max(0, Math.min(D - 1, z)); }
+  setZ(z) { this.z = Math.max(0, Math.min(D - 1, z)); if (this.peek && this.peek.z !== this.z) this.peek = null; }
+  /** UI_SPEC §12.4: a cell range drawn as seen for VIEWING only (a jump to something underground); the sim's fog is untouched. */
+  peek = null;
 
   resize() {
     const dpr = window.devicePixelRatio || 1;
@@ -130,7 +134,7 @@ export class Renderer {
         const k = chunkKey(x >> 4, y >> 4);
         if (k !== lk) { lk = k; sa = seen.b.get(k); ce = seen.cs.get(k); }
         const col = ((y & 15) << 4) | (x & 15);
-        if (!(sa && sa[(top << 8) | col])) {
+        if (!(sa && sa[(top << 8) | col]) && !(this.peek && this.peek.z === z && Math.abs(x - this.peek.x) <= this.peek.r && Math.abs(y - this.peek.y) <= this.peek.r)) {
           if (z === D - 1 && !(ce && ce[col])) {              // S16: land nobody has been near: dim, but there to see (the world's shape); no creatures, no marks
             ctx.fillStyle = dimFill[m][Math.min(SHADES - 1, depth)]; ctx.fillRect(px, py, sz, sz);
             const bi = world.biomeAt(x, y);
@@ -177,6 +181,11 @@ export class Renderer {
       ctx.strokeStyle = "rgba(240,220,150,.65)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]);
       ctx.strokeRect(ax, ay, bx - ax, by - ay); ctx.setLineDash([]);
     }
+    if (sim.zones && opts.zones) for (const q of sim.zones.list) {            // S17: the zones the player drew; the colour says what each takes
+      const [ax, ay] = cam.toScreen(q.x0, q.y0), [bx, by] = cam.toScreen(q.x1 + 1, q.y1 + 1), f = q.f || "all";
+      ctx.fillStyle = f === "food" ? "rgba(220,120,120,.17)" : f === "mat" ? "rgba(140,170,230,.17)" : "rgba(240,220,150,.16)"; ctx.fillRect(ax, ay, bx - ax, by - ay);
+      ctx.strokeStyle = f === "food" ? "rgba(230,130,130,.75)" : f === "mat" ? "rgba(150,180,240,.75)" : "rgba(240,220,150,.65)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(ax, ay, bx - ax, by - ay); ctx.setLineDash([]);
+    }
 
     // Entities: shown only when standing on the visible top of their column. Ground things first, villagers last.
     const shown = (e) => this.isShown(e);
@@ -220,7 +229,7 @@ export class Renderer {
       if (ts >= 6) { ctx.fillStyle = "#6b4a2a"; ctx.fillRect(sx - ts * 0.08, sy - ts * 0.08, ts * 0.16, ts * 0.16); }
     } else if (e.species === "berry") {
       const young = e.gr !== undefined && e.gr < 4 ? 0.16 : e.gr !== undefined && e.gr < 9 ? 0.24 : 0.32;       // S10: a seedling is a small bush, a young one a little larger
-      ctx.fillStyle = e.gr !== undefined && e.bt !== undefined && this.sim && (this.sim.tick - e.bt) / 1800 > 48 ? "#6f7d3a" : "#3f7d3a"; ctx.arc(sx, sy, ts * young, 0, 6.2832); ctx.fill();       // an old bush yellows
+      ctx.fillStyle = e.gr !== undefined && e.bt !== undefined && this.sim && (this.sim.tick - e.bt) / DAY > 48 ? "#6f7d3a" : "#3f7d3a"; ctx.arc(sx, sy, ts * young, 0, 6.2832); ctx.fill();       // an old bush yellows
       if (ts >= 5 && e.yield > 0) {
         ctx.fillStyle = "#d1405f";
         for (const [dx, dy] of [[-0.12, -0.08], [0.14, 0], [-0.02, 0.15], [0.05, -0.18]].slice(0, e.yield)) {
@@ -535,7 +544,7 @@ export class Renderer {
    */
   villager(e, sx, sy, ts, sim) {
     const ctx = this.ctx;
-    const child = (sim.tick - e.born) / 1800 < 80;
+    const child = (sim.tick - e.born) / DAY < 0.2 * LIFE_DAYS;
     const r = Math.max(2, ts * (child ? 0.26 : 0.38));
     const asleep = e.slp === 1;
     ctx.beginPath(); ctx.ellipse(sx, sy + r * 0.15, r, r * (asleep ? 0.6 : 0.85), 0, 0, 6.2832);

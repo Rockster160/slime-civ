@@ -33,9 +33,9 @@ const store = () => { const m = memoryStorage(); return { m, get: (k) => m.get("
   assert.match(km2.set("follow", "Escape"), /fixed/); assert.match(km2.set("follow", "3"), /fixed/);
   assert.equal(km2.set("torch", "z"), "", "a guide key may share a map key (they are never live together)");
   assert.match(km2.set("eat", "t"), /already does "Take the spear or pick"/, "but not with another guide key");
-  assert.equal(km2.set("pause", "k"), ""); assert.equal(km2.actionOf("k", "guide"), "pause", "global keys work while guiding too");
+  assert.equal(km2.set("pause", "y"), ""); assert.equal(km2.actionOf("y", "guide"), "pause", "global keys work while guiding too");
   // Space is a global key, so no map action can take it
-  assert.match(km2.set("fit", "k"), /already does "Pause"/);
+  assert.match(km2.set("fit", "y"), /already does "Pause"/);
   km2.reset("build"); assert.equal(km2.label("build"), "B");
   km2.clear("zones"); assert.equal(km2.label("zones"), "(no key)"); km2.reset();
   assert.equal(JSON.stringify(km2.custom), "{}");

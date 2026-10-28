@@ -18,14 +18,7 @@ export function loadAccess(read = () => remember("access")) {
 
 export function createAccess(game) {
   const a = game.access = loadAccess();
-  /** The top bar is one row: it takes the interface scale only as far as the whole row still fits the window. */
-  const fitTopbar = () => {
-    const tb = document.getElementById("topbar"); if (!tb) return;
-    tb.style.zoom = "1";
-    const need = tb.scrollWidth + 4;
-    tb.style.zoom = String(Math.round(Math.max(0.72, Math.min(a.scale, window.innerWidth / need)) * 100) / 100);       // never above the chosen scale, shrinking a little when the row would run off the window
-  };
-  game.fitTopbar = fitTopbar;
+  game.fitTopbar = () => {};                                       // (the top bar no longer needs fitting: it holds a handful of controls)
   const apply = () => {
     const root = document.documentElement;
     root.style.setProperty("--ui", String(a.scale));
@@ -33,9 +26,7 @@ export function createAccess(game) {
     document.body.classList.toggle("calm", a.calm);
     game.renderer.access = { calm: a.calm, cb: a.cb, contrast: a.contrast };
     game.accessVersion = (game.accessVersion || 0) + 1;
-    fitTopbar();
   };
-  window.addEventListener("resize", fitTopbar);
   game.setAccess = (patch) => {
     Object.assign(a, patch);
     try { remember("access", JSON.stringify(a)); } catch (e) { /* the setting lasts this session */ }

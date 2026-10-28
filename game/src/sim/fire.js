@@ -7,18 +7,18 @@
 // A lit hearth warms the cells around it (fireBonus: up to FIRE_WARM by its heat level, fading over FIRE_R cells) and, in an enclosed
 // room, the whole room (ROOM_FIRE). Warmth is read by villager.updateNeeds beside the room insulation bonus, so a fire visibly
 // lowers the cold drain without any new need. Everything is integer ticks and + - * /.
-import { DAY } from "./clock.js";
+import { DUR_DAY } from "./clock.js";
 import { heat, stationHeat } from "./heat.js";
 import { tempAt, coldAhead, winterAhead } from "./season.js";
 import { burnDown } from "./plants.js";
 import { log } from "./chronicle.js";
 import { kitchenAt, evalPurpose, KITCHEN_EAT } from "./purposes.js";
 
-export const BURN_TREE = 2 * DAY;            // a lightning-struck tree burns for two days ...
-export const BURN_SMOULDER = 2 * DAY;        // ... then smoulders as a stump for two more
-export const FUEL_TICKS = { grass: 300, stick: 900, log: 2400, dried_peat: 1700 };       // S14: dried peat burns like wood, a little shorter than a log   // burn time one unit gives a hearth (a log lasts most of a day and a night)
-export const HEARTH_CAP = 3600;              // a hearth holds two days of fire
-export const FUEL_LOW = 1200;                // villagers top it up when it falls below this and a fire is wanted
+export const BURN_TREE = 2 * DUR_DAY;            // a lightning-struck tree burns for two days ...
+export const BURN_SMOULDER = 2 * DUR_DAY;        // ... then smoulders as a stump for two more
+export const FUEL_TICKS = { grass: 300, stick: 900, log: 2400, dried_peat: 1700 };       // flat ticks (S18b): a log burns 2400 ticks [2 min at 1x]       // S14: dried peat burns like wood, a little shorter than a log   // burn time one unit gives a hearth (a log lasts most of a day and a night)
+export const HEARTH_CAP = 3600;              // 3600 ticks [3 min at 1x] of fire             // a hearth holds two days of fire
+export const FUEL_LOW = 1200;                // 1200 ticks [1 min]               // villagers top it up when it falls below this and a fire is wanted
 export const FIRE_R = 5;                     // cells over which a hearth warms the open air
 export const FIRE_WARM = [0, 0.18, 0.30, 0.38, 0.40, 0.40];   // warmth bonus at the fire by heat level (level 2 open hearth = +0.30 against a comfort threshold of 0.30)
 export const ROOM_FIRE = [0, 0.20, 0.26, 0.30, 0.30, 0.30];   // bonus for everyone in the same enclosed room (on top of the room's insulation)

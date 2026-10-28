@@ -13,7 +13,7 @@
 // A SICK villager rests (job convalesce, jobs.js), works at SICK_WORK of their pace and walks slower. Health drains by `d` a day and the usual healing stops while sick, so
 // the weak (elders, children, the wounded) can die of it. Recovery (progress per day) is helped by: a bed, a warm fire, a cooked meal, being nursed (job tend_sick), and above all
 // a herbal remedy (HERBAL, made from marsh herb at the bench). Everything here is gated by sim.dp.on and costs nothing in a world made before S14.
-import { DAY } from "./clock.js";
+import { DUR_DAY } from "./clock.js";
 import { log, once } from "./chronicle.js";
 import { clamp, r3 } from "./util.js";
 import { occupants } from "./rooms.js";
@@ -74,7 +74,7 @@ export function fallIll(sim, v, why) {
   v.mv = stepTicks(v, fitness(v, ageDays(sim, v)));            // a sick villager walks slower from now
   const d = sim.dp;
   d.cases++; d.lt = sim.tick;
-  if (d.ot < 0 || sim.tick - d.ot > OUTBREAK_DAYS * DAY) { d.ot = sim.tick; d.oc = 0; }
+  if (d.ot < 0 || sim.tick - d.ot > OUTBREAK_DAYS * DUR_DAY) { d.ot = sim.tick; d.oc = 0; }
   d.oc++;
   once(sim, "firstIllness", "DISASTER", v.name + " fell ill (" + why + "). Sickness can spread: keep the sick resting, warm and fed.", [v.id], { why }, 2);
   log(sim, "DISASTER", v.name + " fell ill (" + why + ").", [v.id], { why, ill: 1 }, 1);
@@ -176,12 +176,12 @@ function recover(sim, v) {
   const i = v.ill, t = sim.tick, n = Math.max(1, i.n);
   const bedF = i.bd / n, fireF = i.fn / n;
   const rate = BASE_RATE + HELP.bed * bedF + HELP.fire * fireF
-    + (t - i.ck < DAY ? HELP.cook : 0) + (t - i.tc < DAY ? HELP.care : 0) + (i.rm && t - i.rm < REMEDY_DAYS * DAY ? HELP.remedy : 0);
+    + (t - i.ck < DUR_DAY ? HELP.cook : 0) + (t - i.tc < DUR_DAY ? HELP.care : 0) + (i.rm && t - i.rm < REMEDY_DAYS * DUR_DAY ? HELP.remedy : 0);
   i.rt = r3(rate); i.p = r3(i.p + rate); i.bd = 0; i.fn = 0; i.n = 0;
   i.d = drainOf(i);
   if (i.p >= 1) {
-    v.ill = null; v.imm = t + IMMUNE_DAYS * DAY; v.mv = stepTicks(v, fitness(v, ageDays(sim, v)));
-    log(sim, "MILESTONE", v.name + " recovered from the sickness after " + Math.round((t - i.t0) / DAY) + " days" + (i.rm ? ", helped by a remedy" : i.tc ? ", nursed" : "") + ".", [v.id], { recovered: 1 }, 1);
+    v.ill = null; v.imm = t + IMMUNE_DAYS * DUR_DAY; v.mv = stepTicks(v, fitness(v, ageDays(sim, v)));
+    log(sim, "MILESTONE", v.name + " recovered from the sickness after " + Math.round((t - i.t0) / DUR_DAY) + " days" + (i.rm ? ", helped by a remedy" : i.tc ? ", nursed" : "") + ".", [v.id], { recovered: 1 }, 1);
     sim.cache.iv++;
   }
 }
@@ -190,11 +190,11 @@ function recover(sim, v) {
 export function illLines(sim, v) {
   const i = v.ill, t = sim.tick, out = [];
   if (!i) return out;
-  out.push("Sick for " + Math.max(1, Math.round((t - i.t0) / DAY)) + " day(s), from " + i.c + ". Recovering " + Math.round(100 * i.p) + "%, health draining " + i.d.toFixed(1) + " a day.");
+  out.push("Sick for " + Math.max(1, Math.round((t - i.t0) / DUR_DAY)) + " day(s), from " + i.c + ". Recovering " + Math.round(100 * i.p) + "%, health draining " + i.d.toFixed(1) + " a day.");
   const help = [];
-  if (i.rm && t - i.rm < REMEDY_DAYS * DAY) help.push("a herbal remedy");
-  if (t - i.tc < DAY) help.push("being nursed");
-  if (t - i.ck < DAY) help.push("a cooked meal");
+  if (i.rm && t - i.rm < REMEDY_DAYS * DUR_DAY) help.push("a herbal remedy");
+  if (t - i.tc < DUR_DAY) help.push("being nursed");
+  if (t - i.ck < DUR_DAY) help.push("a cooked meal");
   out.push(help.length ? "Helping: " + help.join(", ") + "." : "Nothing is helping yet: a warm bed, cooked food, someone to sit with them, or a herbal remedy all speed recovery.");
   out.push("They work at " + Math.round(SICK_WORK * 100) + "% pace and stay clear of others; the sickness spreads to anyone close, most in a crowded room.");
   return out;

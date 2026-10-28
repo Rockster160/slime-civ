@@ -1,5 +1,6 @@
 // The shelter bot's build plan (shared with tests): a scripted player who closes in ONE roofed room with beds
 // before winter, using only player-facing commands (keep-N targets, one build command).
+import { DUR_DAY } from "../../src/sim/clock.js";
 import { anySpot, clearArea } from "../helpers.js";
 
 /** Cells of a hut: outer w x h, wattle walls, door on the south side, thatch roof over the interior, beds in rows. */
@@ -29,7 +30,7 @@ export function shelterBot({ day = 6, w = 8, h = 6, beds = 6 } = {}) {
         zoned = true;
       }
     }
-    if (done || sim.tick < day * 1800) return;
+    if (done || sim.tick < day * DUR_DAY) return;
     done = true;
     const spot = anySpot(sim, w, h);
     const [x0, y0, z, hw, hh] = spot;

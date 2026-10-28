@@ -3,7 +3,7 @@
 // driven by two hooks: peopleTick (every 100 ticks / daily from sim.js) and onDeath (from population.kill).
 //
 //   grave = {kind:"grave", x,y,z, vid, name, hue, born, died, cause, ins (inscription), hl (heirloom buried with them, or "")}
-import { DAY, dateOf } from "./clock.js";
+import { DUR_DAY, dateOf } from "./clock.js";
 import { clamp } from "./util.js";
 import { mix32 } from "./rng.js";
 import { log } from "./chronicle.js";
@@ -195,7 +195,7 @@ export function onDeath(sim, v, cause) {
   for (const o of others) {
     const s = griefOf(v, o);
     if (s <= 0) continue;
-    if (!o.gr || o.gr.s < s) o.gr = { u: sim.tick + Math.round((GRIEF_BASE_DAYS + GRIEF_PER_STRENGTH * s) * DAY), s, f: v.id };
+    if (!o.gr || o.gr.s < s) o.gr = { u: sim.tick + Math.round((GRIEF_BASE_DAYS + GRIEF_PER_STRENGTH * s) * DUR_DAY), s, f: v.id };
     mourners.push([o, s]);
   }
   mourners.sort((a, b) => b[1] - a[1] || a[0].id - b[0].id);

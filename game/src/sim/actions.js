@@ -25,6 +25,8 @@ export function Move(tx, ty, tz, path = null, ticksPerCell = TICKS_PER_CELL) {
 /** Stand still for `ticks`. */
 export function Idle(ticks) { return { type: "Idle", wait: ticks, blocker: null }; }
 /** Pick a random reachable spot nearby, walk there, rest a moment. */
+/** How far (cells, each way) from the camp a villager at leisure wanders. */
+export const WANDER_LEASH = 30;
 export function Wander() { return { type: "Wander", phase: 0, move: null, wait: 0, blocker: null }; }
 
 export const ACTIONS = {
@@ -56,7 +58,11 @@ export const ACTIONS = {
       if (a.phase === 0) {                         // pick a target
         const r = sim.rng.stream("wander:" + ent.id);
         for (let tries = 0; tries < 3; tries++) {
-          const tx = ent.x + r.range(-20, 20), ty = ent.y + r.range(-20, 20);
+          let tx = ent.x + r.range(-20, 20), ty = ent.y + r.range(-20, 20);
+          if (!ent.poss && sim.site) {                // S18b: idle wandering is tethered to the camp. On the 12000-tick day leisure fills hours, and an unbounded random walk carried villagers 300 cells away, out of reach of water (they died of thirst)
+            tx = Math.max(sim.site.x - WANDER_LEASH, Math.min(sim.site.x + WANDER_LEASH, tx));
+            ty = Math.max(sim.site.y - WANDER_LEASH, Math.min(sim.site.y + WANDER_LEASH, ty));
+          }
           const tz = sim.world.standZ(tx, ty);
           if (tz < 0 || (tx === ent.x && ty === ent.y) || (!ent.poss && restricted(sim, tx, ty, tz))) continue;      // S8: idle wandering keeps out of the thornback's ground too
           const p = sim.path.find(World.idx(ent.x, ent.y, ent.z), World.idx(tx, ty, tz));

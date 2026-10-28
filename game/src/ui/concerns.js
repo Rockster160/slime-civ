@@ -1,14 +1,14 @@
 // The Concerns list (GDD §22): the village's current problems, ranked, in plain words, one line per threat class, each with a place to look.
 // Pure functions of sim state - no DOM - so tests can check the ranking headlessly. The panel (ui/concernpanel.js) only draws and locates.
 //
-//   concerns(sim) -> [{k, level 1..3, text, loc}]   most urgent first; loc = {x,y,z} or {x,y,z,id} (a villager to select) or null
+//   concerns(sim) -> [{k, level 1..3, text, loc, adv, icon, sev}]   most urgent first; loc = {x,y,z} or {x,y,z,id} (a villager to select) or null
 import { CRIT_BASE, CRIT_WINTER, CAMP } from "../sim/board.js";
 import { winterAhead, isNight, seasonIdx, dayF, WINTER_START } from "../sim/season.js";
 import { holders } from "../sim/knowledge.js";
 import { CRAFTS } from "../sim/phenomena.js";
 import { huntingPressure } from "../sim/fauna.js";
 import { isAdult, isElder } from "../sim/villager.js";
-import { DAY } from "../sim/clock.js";
+import { DUR_DAY } from "../sim/clock.js";
 import { rottingSoon, runwayText } from "./text.js";
 import { crewSummary } from "./crewtext.js";
 import { World } from "../sim/world.js";
@@ -107,7 +107,7 @@ const RULES = {
     return r.units >= 4 ? { level: 1, text: r.units + " units of fresh food (" + r.what + ") will spoil before they are eaten. Dry, smoke or jar it.", loc: campCell(sim) } : null;
   },
   hunting(sim) {
-    if (sim.tick <= 3 * DAY) return null;
+    if (sim.tick <= 3 * DUR_DAY) return null;
     const hp = huntingPressure(sim);
     if (hp.gone) return { level: 2, text: "No wild hoppers are left (the meadow carries about " + hp.cap + "). Stop hunting or keep a pen.", loc: campCell(sim) };
     if (hp.low) return { level: 1, text: "Hoppers are scarce: " + hp.n + " left of about " + hp.cap + ". Hunting less lets the herd regrow.", loc: campCell(sim) };
@@ -127,10 +127,15 @@ export function concerns(sim) {
   const out = [];
   for (const k of CONCERN_ORDER) {
     const r = RULES[k](sim);
-    if (r) out.push({ k, level: r.level, text: r.text, adv: r.adv || r.text, loc: r.loc });
+    if (r) out.push({ k, level: r.level, text: r.text, adv: r.adv || r.text, loc: r.loc, icon: CONCERN_GLYPH[k], sev: r.level });
   }
   return out.sort((a, b) => b.level - a.level || CONCERN_ORDER.indexOf(a.k) - CONCERN_ORDER.indexOf(b.k));
 }
+
+/** UI_SPEC §8.1 a9: the icon registry name for each class (ui/icons.js) and the severity (1..3) the HUD draws as a pip SHAPE. Additive: `icon` and `sev` ride beside `level`. */
+export const CONCERN_GLYPH = { food: "food", cold: "cold", illness: "illness", danger: "danger", underground: "underground", crew: "crew", knowledge: "knowledge", spoilage: "spoilage", hunting: "hunting", idle: "idle" };
+/** What to do about a class, as build-tool names (the "do this" chips: icons, not a sentence). */
+export const CONCERN_DO = { cold: ["bed", "hearth"], food: ["field", "rack"], spoilage: ["rack", "cellar"], idle: ["field"] };
 
 /** A class icon for the panel and the advisory cards (S15). */
 export const CONCERN_ICON = { food: "\u{1F356}", cold: "\u2744", illness: "\u2695", danger: "\u26A0", underground: "\u26CF", crew: "\u2691", knowledge: "\u{1F4D6}", spoilage: "\u231B", hunting: "\u{1F3F9}", idle: "\u{1F4A4}" };

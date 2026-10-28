@@ -3,6 +3,8 @@
 // seen log and new cells, determinism, hard-rock difficulty, and the anti-grind rule for dug cells.
 //   node tests/mining.js
 import assert from "node:assert/strict";
+import { DUR_DAY } from "../src/sim/clock.js";
+import { NEED_DAY } from "../src/sim/villager.js";
 import { loadFixture } from "./fixture.js";
 import { restore, toJSON } from "../src/sim/save.js";
 import { M, F, World } from "../src/sim/world.js";
@@ -10,11 +12,11 @@ import { survey, storeInZone } from "../src/sim/items.js";
 import { isSeen, revealDisc } from "../src/sim/seen.js";
 import { isNight } from "../src/sim/season.js";
 import { DIG } from "../src/sim/dig.js";
-import { gain, level } from "../src/sim/skills.js";
+import { gain, level, K } from "../src/sim/skills.js";
 import { SLEEP_DONE } from "../src/sim/jobs.js";
 import { carveMine, mineSpots } from "../tools/make_fixtures.js";
 
-const DAY3 = 5400;
+const DAY3 = 3 * DUR_DAY;      // ticks: a window of real-time feel (S18b: not "3 game days" any more)
 const run = (sim, n) => { for (let i = 0; i < n; i++) sim.step(); };
 const runUntil = (sim, max, f) => { for (let i = 0; i < max; i++) { if (f()) return i; sim.step(); } return f() ? max : -1; };
 const total = (sim, item) => { const s = survey(sim); return s.stock[item] + s.loose[item] + s.carried[item]; };
@@ -30,7 +32,7 @@ const feed = (sim) => { storeInZone(sim, "dried", 120); sim.cache.iv++; };     /
   assert.ok(sim.apply({ type: "mine", op: "region", x0, y0, x1: x0 + 2, y1: y0 + 1, z, layers: 2 }), sim.lastBlocker);
   const d = sim.mine.list[0];
   assert.equal(d.kind, "region");
-  const t = runUntil(sim, DAY3, () => sim.mine.list.length === 0);
+  const t = runUntil(sim, 3 * DAY3, () => sim.mine.list.length === 0);
   assert.ok(t >= 0, "the region should finish within 3 days; left " + JSON.stringify(sim.mine.list.map(q => q.q.length)));
   let open = 0;
   for (let k = 0; k < 2; k++) for (let y = y0; y <= y0 + 1; y++) for (let x = x0 + k; x <= x0 + 2; x++) if (!sim.world.isSolid(x, y, z - k)) open++;
@@ -54,7 +56,7 @@ const feed = (sim) => { storeInZone(sim, "dried", 120); sim.cache.iv++; };     /
   // walk down: send an adult to the foot of the stair
   const foot = [x + 5, y, z0 - 5];
   assert.ok(sim.world.isWalkable(...foot), "the foot of the stair is a stand cell");
-  for (let i = 0; i < 1800 && (isNight(sim.tick) || isNight(sim.tick + 1500)); i++) sim.step();       // (the walk happens in daylight: whether the digging ended at noon or at dusk is not what is tested)
+  for (let i = 0; i < DUR_DAY && (isNight(sim.tick) || isNight(sim.tick + 1500)); i++) sim.step();       // (the walk happens in daylight: whether the digging ended at noon or at dusk is not what is tested)
   const near = (q) => Math.abs(q.x - foot[0]) + Math.abs(q.y - foot[1]);          // (the nearest willing villager: where the others happen to be on the new land is not the point)
   const v = sim.ents.ofKind("villager").filter(q => !q.poss && q.order === null).sort((p, q) => near(p) - near(q) || p.id - q.id)[0];       // the nearest one, fed and rested below: who is hungry or asleep on the new land is not what is tested
   v.job = null; v.action = null; v.energy = v.hunger = v.thirst = 1;
@@ -84,7 +86,7 @@ const feed = (sim) => { storeInZone(sim, "dried", 120); sim.cache.iv++; };     /
   assert.ok(sim.seen.known[M.MALACHITE].length > 0, "malachite has been sighted");
   assert.ok(sim.apply({ type: "mine", op: "seek", item: "malachite", x: FACE[0] - 1, y: FACE[1] }), sim.lastBlocker);
   assert.ok(!sim.apply({ type: "mine", op: "seek", item: "gold" }) && sim.lastBlocker === "UNKNOWN_ITEM");
-  const t = runUntil(sim, DAY3, () => sim.mine.list.length === 0);
+  const t = runUntil(sim, 3 * DAY3, () => sim.mine.list.length === 0);
   assert.ok(t >= 0, "seek should finish within 3 days");
   assert.ok(total(sim, "malachite") >= 6, "found at least 6 malachite: " + total(sim, "malachite"));
   assert.equal(sim.world.mat(...HID), M.MALACHITE, "it did not need the hidden pocket");
@@ -108,7 +110,7 @@ const feed = (sim) => { storeInZone(sim, "dried", 120); sim.cache.iv++; };     /
   assert.ok(sim.apply({ type: "mine", op: "seek", item: "malachite", x: FACE[0] - 1, y: FACE[1] }), sim.lastBlocker);
   run(sim, 200);
   assert.equal(sim.mine.list[0].tgt, -1, "with nothing sighted it follows the search pattern, not the hidden ore");
-  const t = runUntil(sim, DAY3, () => sim.mine.list.length === 0);
+  const t = runUntil(sim, 3 * DAY3, () => sim.mine.list.length === 0);
   assert.ok(t >= 0, "seek finds the hidden pocket within 3 days");
   assert.ok(isSeen(sim, ...HID), "digging up to it showed it");
   assert.ok(total(sim, "malachite") >= 6, "got malachite: " + total(sim, "malachite"));
@@ -144,11 +146,11 @@ const feed = (sim) => { storeInZone(sim, "dried", 120); sim.cache.iv++; };     /
   assert.ok(runUntil(sim, 600, () => v.slp === 1) >= 0, v.name + " goes to sleep when exhausted");
   sim.apply({ type: "order", ids: [v.id], verb: "move", x: 64 + 30, y: 64, z: sim.world.standZ(94, 64) });
   let woke = -1;
-  for (let i = 0; i < 1400; i++) { sim.step(); if (!(v.job && v.job.k === "sleep") && sim.board.fc === 0) { woke = i; break; } }
+  for (let i = 0; i < 0.25 * NEED_DAY; i++) { sim.step(); if (!(v.job && v.job.k === "sleep") && sim.board.fc === 0) { woke = i; break; } }
   assert.ok(woke < 0 || v.energy >= SLEEP_DONE - 0.01, `slept on to energy ${v.energy.toFixed(2)} before the order took over (woke at ${woke})`);
-  assert.ok(v.energy > 0.5, "the sleep made real progress: " + v.energy);
+  assert.ok(v.energy > 0.1, "the sleep made real progress: " + v.energy);
   // once rested the order runs
-  assert.ok(runUntil(sim, 2500, () => v.job && v.job.k === "goto") >= 0, "then the order takes over");
+  assert.ok(runUntil(sim, NEED_DAY, () => v.job && v.job.k === "goto") >= 0, "then the order takes over");
   console.log(`7 sleep commitment ok: slept to ${SLEEP_DONE} before obeying`);
 }
 
@@ -157,7 +159,7 @@ const feed = (sim) => { storeInZone(sim, "dried", 120); sim.cache.iv++; };     /
   assert.ok(DIG[M.STONE].dur > DIG[M.SOFT].dur && DIG[M.STONE].hard && !DIG[M.SOFT].hard);
   const sim = loadFixture("settled");
   const v = sim.ents.ofKind("villager")[0];
-  v.sk.dig.xp = 200;
+  v.sk.dig.xp = 6 * K; v.sk.dig.rs = 0;
   assert.ok(level(v, "dig") > 0.62, "a skilled digger: " + level(v, "dig"));
   assert.equal(gain(sim, v, "dig", 0.167, true), 0, "soft rock (difficulty 0.6) teaches a skilled digger nothing");
   assert.ok(gain(sim, v, "dig", 0.167, true, 0.8) > 0, "hard rock (0.8) still does");

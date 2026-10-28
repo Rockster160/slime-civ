@@ -6,7 +6,9 @@
 //   node game/tests/possess.js
 import "./legacy.js";
 import assert from "node:assert/strict";
+import { DAY } from "../src/sim/clock.js";
 import { Sim } from "../src/sim/sim.js";
+import { LIFE_DAYS } from "../src/sim/villager.js";
 import { INSPIRE } from "../src/sim/inspire.js";
 import { rate } from "../src/sim/tasks.js";
 import { possessed } from "../src/sim/possess.js";
@@ -16,7 +18,7 @@ import { toJSON, restore } from "../src/sim/save.js";
 function world(seed) {
   const sim = Sim.create(seed, { villagers: 0 });
   const v = sim.spawnVillager();
-  v.born = -Math.round(0.35 * 400 * 1800); v.hunger = v.thirst = v.energy = 1;
+  v.born = -Math.round(0.35 * LIFE_DAYS * DAY); v.hunger = v.thirst = v.energy = 1;
   let tree = null, bd = 1e9;
   for (const p of sim.ents.ofKind("plant")) {
     if (p.species !== "tree") continue;

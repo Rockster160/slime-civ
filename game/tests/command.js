@@ -7,7 +7,7 @@ import { flatSpot, clearArea } from "./helpers.js";
 import { toJSON, restore } from "../src/sim/save.js";
 import { isAdult } from "../src/sim/villager.js";
 import { plan } from "../src/sim/jobs.js";
-import { DAY } from "../src/sim/clock.js";
+import { DUR_DAY } from "../src/sim/clock.js";
 import { isNight } from "../src/sim/season.js";
 import { M, F } from "../src/sim/world.js";
 import { BMAT, builtPiece } from "../src/sim/build.js";
@@ -310,5 +310,5 @@ function revisionWorld() {
   const o = restore(JSON.stringify(old)); assert.deepEqual(o.crews, { n: 0, list: [] }); assert.deepEqual(o.bps.inst, []);
   ok("save round-trip with crews and a revision in flight, and determinism");
 }
-void DAY; void survey; void toJSON;
+void DUR_DAY; void survey; void toJSON;
 console.log("command ok");

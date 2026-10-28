@@ -17,6 +17,7 @@ import { spawnFauna } from "./fauna.js";
 import { depthOn } from "./depth.js";
 import { HIGHLAND, MARSH } from "./biome.js";
 import { sleepChunks, wakeChunks } from "./dormant.js";
+import { WORLD } from "./worldgen.js";
 
 export const ACT_CH = 3;            // chunks round an anchor's chunk that are active (7 x 7 chunks: at least 33 cells every way)
 export const ACT_R = 48;            // (cells; the same reach for callers that think in cells: activateAround at creation)
@@ -46,9 +47,9 @@ export function anchorsOf(sim) {
   return out;
 }
 
-/** Saved and hashed: [[key, active, changed, lastNear, asleepSince, packedPlants]] of every resident chunk, ascending (the last two only when the chunk is dormant). */
+/** Saved and hashed: [[key, active, changed, lastNear, asleepSince, packedPlants, packedItems]] of every resident chunk, ascending (the last two only when the chunk is dormant). */
 export function chunkMeta(sim) {
-  return sim.world.chunkKeys().map(k => { const c = sim.world.chunks.get(k); return c.dz ? [k, c.act, c.mod, c.last, c.dz, c.pk] : [k, c.act, c.mod, c.last]; });
+  return sim.world.chunkKeys().map(k => { const c = sim.world.chunks.get(k); return c.dz ? [k, c.act, c.mod, c.last, c.dz, c.pk, c.pi] : [k, c.act, c.mod, c.last]; });
 }
 
 export const SLEEP_PERIOD = 100;
@@ -78,6 +79,7 @@ export function chunkTick(sim) {
 
 /** Changed chunks farther than DEACT_CH from every anchor fall asleep. */
 function sleepFar(sim, anchorChunks) {
+  if (!WORLD.dormant) return;                                   // (tests/legacy.js: the older tests were tuned on a world where far land stayed awake)
   const w = sim.world, near = new Set();
   for (const k of anchorChunks) { const ax = chunkKX(k), ay = chunkKY(k); for (let cx = ax - DEACT_CH; cx <= ax + DEACT_CH; cx++) for (let cy = ay - DEACT_CH; cy <= ay + DEACT_CH; cy++) near.add(chunkKey(cx, cy)); }
   const cs = [];

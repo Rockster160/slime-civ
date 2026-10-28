@@ -2,6 +2,7 @@
 // by the village), what autonomy refuses and possession may enter, bad air and what clears it, torches and the dark, possession's torch and
 // support verbs, the new biomes, save round-trip and determinism.
 //   node tests/underground.js
+import { DUR_DAY } from "../src/sim/clock.js";
 import assert from "node:assert/strict";
 import { loadFixture } from "./fixture.js";
 import { Sim } from "../src/sim/sim.js";
@@ -27,7 +28,7 @@ import { BMAT, checkPlace } from "../src/sim/build.js";
 const step = (sim, n) => { for (let i = 0; i < n; i++) sim.step(); };
 const ok = (m) => console.log("ok " + m);
 const idx = World.idx;
-const DAY_T = 1800;
+const DAY_T = DUR_DAY;
 
 /** A patch of rock east of the camp with room for a w x h hall at stand level z: flat enough, dry, away from the cave and gas. */
 function site(sim, w, h) {
@@ -266,7 +267,7 @@ function tunnel(sim, q, len = 24) {
   grant(s2, adults(s2)[0], "FIRE_TENDING", 0.6); s2.cache.kn = null; storeInZone(s2, "stick", 20); s2.cache.iv++;
   const FACE2 = mineSpots(s2).FACE;                                                  // (S16: search where the mine is: a surface stain sighted nearer the camp is a shallow dig that needs no torch)
   assert.ok(s2.apply({ type: "mine", op: "seek", item: "malachite", x: FACE2[0] - 1, y: FACE2[1] }), s2.lastBlocker);
-  let torch = false; for (let i = 0; i < 1800 && !torch; i++) { s2.step(); torch = s2.ents.ofKind("csite").some(c => c.w === "torch") || s2.ents.ofKind("furniture").some(f => f.f === "torch"); }
+  let torch = false; for (let i = 0; i < DUR_DAY && !torch; i++) { s2.step(); torch = s2.ents.ofKind("csite").some(c => c.w === "torch") || s2.ents.ofKind("furniture").some(f => f.f === "torch"); }
   assert.ok(torch, "a torch was planned along the tunnel being dug");
   ok("the mining planner plans torches along a tunnel when fire is known");
 }

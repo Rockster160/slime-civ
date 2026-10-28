@@ -12,7 +12,7 @@
 // combination satisfies a phenomenon it fires with the tinker performing; if not it is a dead end, remembered with the heat level
 // tried. When an attempt matches on inputs but falls short on context it counts toward the Almanac's near-miss hint.
 // Tinkering for a craft nobody knows, next to evidence of it, weights the matching try EVIDENCE_X higher: the rediscovery discount (R11).
-import { DAY } from "./clock.js";
+import { DUR_DAY } from "./clock.js";
 import { clamp } from "./util.js";
 import { PHENOMENA, PHENOMENON_IDS, matches, tagsOf, TAG_PRESSURE, PRESSURE_TAGS, TOOL_ITEMS } from "./phenomena.js";
 import { setFam, famOf, can, pressure, trace, evidenceOf, EVIDENCE_X, DISCOVER_FAM, WITNESS_FAM } from "./knowledge.js";
@@ -240,7 +240,7 @@ export function satisfies(c) {
  */
 export function tinkerCandidates(sim) {
   const sites = sitesOf(sim), d = sim.disc, sv = survey(sim), ask = askActive(sim);
-  const sig = sim.cache.iv + "|" + sites.map(s => s.key + ":" + s.heat + (s.hf ? "/" + s.hf.charcoal + "/" + s.hf.coal : "")).join() + "|" + d.dead.length + "|" + (ask ? (ask.item || "*") + "@" + (ask.at || "") : "") + "|" + Math.floor(sim.tick / DAY) + "|" + Object.keys(d.lost).join();
+  const sig = sim.cache.iv + "|" + sites.map(s => s.key + ":" + s.heat + (s.hf ? "/" + s.hf.charcoal + "/" + s.hf.coal : "")).join() + "|" + d.dead.length + "|" + (ask ? (ask.item || "*") + "@" + (ask.at || "") : "") + "|" + Math.floor(sim.tick / DUR_DAY) + "|" + Object.keys(d.lost).join();
   if (sim.cache.tkSig === sig) return sim.cache.tk;
   const mats = [];
   if (sites.some(s => s.kind !== "camp" && !s.hf)) mats.push("deadwood");              // branches lying around a fire cost nothing (listed first: the representative of the fuel family)
@@ -293,7 +293,7 @@ export function tinkerCandidates(sim) {
   }
   // The village considers at most CAND_CAP experiments at a time (§15.4): a weighted draw from everything possible, redrawn each day. The draw is a hash
   // of (candidate, day) rather than a stream, so previews and repeated cache refreshes never move the RNG and the pool is the same for every villager.
-  const day = Math.floor(sim.tick / DAY);
+  const day = Math.floor(sim.tick / DUR_DAY);
   for (const c of list) c.u = mix32(fnv1aStr(c.key), day) / 4294967296;
   list.sort((a, b) => b.w * (0.7 + 0.6 * b.u) - a.w * (0.7 + 0.6 * a.u) || (a.key < b.key ? -1 : 1));
   sim.cache.tk = list.slice(0, CAND_CAP); sim.cache.tkSig = sig; sim.cache.tkAll = list;      // (tkAll: everything possible, for tests and the debug panel)

@@ -6,7 +6,10 @@ import { COMFORT } from "../sim/villager.js";
 import { inZone } from "../sim/items.js";
 import { CLASS } from "../ui/text.js";
 import { drawSites, drawRoom, drawMarks, drawMining } from "./ghosts.js";
+import { drawDecor } from "./mapdecor.js";
 import { provisionalRoom } from "../sim/proom.js";
+import { drawIcon } from "../ui/icons.js";
+import { TOKENS } from "../ui/kit.js";
 import { litHearths, flames, FIRE_R, FIRE_WARM } from "../sim/fire.js";
 
 const TAU = 6.2832;
@@ -14,7 +17,7 @@ const TAU = 6.2832;
 export function drawOverlays(game) {
   const { sim, cam, renderer, ui } = game, ctx = renderer.ctx, ts = cam.zoom;
   ctx.setTransform(renderer.dpr, 0, 0, renderer.dpr, 0, 0);
-  const at = (e) => cam.toScreen(e.x + 0.5, e.y + 0.5);
+  const at = (e) => { const p = renderer.drawPos ? renderer.drawPos(e) : [e.x + 0.5, e.y + 0.5]; return cam.toScreen(p[0], p[1], e.z); };      // where a thing stands (its feet); villagers glide, so this follows the drawn position
   const sel = new Set(ui.sel);
 
   drawSites(game, ctx);
@@ -26,27 +29,30 @@ export function drawOverlays(game) {
   if (ui.overlays.zones || ui.hoverStock || (ui.other && ui.other.kind === "stock")) zones(game, ctx, at, ts);
   if (ui.overlays.jobs) jobLines(game, ctx, at, sel, ts);
 
+  if (game.cam.oblique) drawDecor(game, ctx);
+  concernMarkers(game, ctx);
   drawLight(game, ctx);
 
   // Hover outline: the cell, or a ring if a villager is under the cursor.
   const h = ui.hover;
   if (h && h.kind !== "none" && !ui.press) {
     ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,255,.65)";
-    if (h.villager) { const [sx, sy] = at(h.villager); ring(ctx, sx, sy, ts * 0.55); }
-    else { const [sx, sy] = cam.toScreen(h.x, h.y); ctx.strokeRect(sx + .5, sy + .5, ts - 1, ts - 1); }
+    if (h.villager) { const [sx, sy] = at(h.villager); ring(ctx, sx, sy, ts * 0.55, cam.sinP); }
+    else if (h.face && cam.oblique && h.face[1] === 1) { const [sx, sy] = cam.toScreen(h.x, h.y + 1, h.cz), rh = cam.riseH; ctx.strokeRect(sx + .5, sy - rh + .5, ts - 1, rh - 1); }      // the front face of a block
+    else { const [sx, sy, cw, th] = cam.rect(h.x, h.y, h.x + 1, h.y + 1, cam.oblique && h.cz !== undefined ? h.cz + 1 : h.z); ctx.strokeRect(sx + .5, sy + .5, cw - 1, th - 1); }
   }
 
   // A selected non-villager thing.
   const o = ui.other && ui.other.kind === "entity" ? sim.ents.get(ui.other.id) : null;
-  if (o) { const [sx, sy] = cam.toScreen(o.x, o.y); ctx.lineWidth = 2; ctx.strokeStyle = "#ffd166"; ctx.strokeRect(sx + 1, sy + 1, ts - 2, ts - 2); }
+  if (o) { const [sx, sy, cw, th] = cam.rect(o.x, o.y, o.x + 1, o.y + 1, o.z); ctx.lineWidth = 2; ctx.strokeStyle = "#ffd166"; ctx.strokeRect(sx + 1, sy + 1, cw - 2, th - 2); }
 
   // Selected villagers: bright ring (thicker on the focused one) and their standing order's target.
   for (const id of ui.sel) {
     const v = sim.ents.get(id); if (!v || !renderer.isShown(v)) continue;
     const [sx, sy] = at(v), r = Math.max(6, ts * 0.58);
     ctx.lineWidth = id === ui.focus ? 3 : 2; ctx.strokeStyle = id === ui.focus ? "#ffe27a" : "#fff";
-    ring(ctx, sx, sy, r);
-    if (id === ui.focus) { ctx.lineWidth = 1; ctx.strokeStyle = "rgba(255,226,122,.35)"; ring(ctx, sx, sy, r + 4); }
+    ring(ctx, sx, sy - (cam.oblique ? 0 : 0), r, cam.sinP);
+    if (id === ui.focus) { ctx.lineWidth = 1; ctx.strokeStyle = "rgba(255,226,122,.35)"; ring(ctx, sx, sy, r + 4, cam.sinP); }
     if (v.order) orderFlag(ctx, cam, v.order, ts);
   }
 
@@ -54,9 +60,9 @@ export function drawOverlays(game) {
   const now = performance.now();
   ui.markers = ui.markers.filter(m => now - m.t < 1500);
   for (const m of ui.markers) {
-    const k = (now - m.t) / 1500, [sx, sy] = cam.toScreen(m.x + 0.5, m.y + 0.5);
+    const k = (now - m.t) / 1500, [sx, sy] = cam.toScreen(m.x + 0.5, m.y + 0.5, m.z0);
     ctx.globalAlpha = 1 - k; ctx.strokeStyle = "#7cc4ff"; ctx.lineWidth = 2;
-    ring(ctx, sx, sy, ts * (0.4 + 0.8 * k) + 3);
+    ring(ctx, sx, sy, ts * (0.4 + 0.8 * k) + 3, cam.sinP);
     ctx.font = "bold 13px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
     label(ctx, m.label, sx, sy - ts * 0.6 - k * 14 - 4, "#cfeaff");
     ctx.globalAlpha = 1;
@@ -70,27 +76,35 @@ export function drawOverlays(game) {
   if (ui.mode !== "select" && game.modes[ui.mode] && game.modes[ui.mode].draw) game.modes[ui.mode].draw(game, ctx);   // S4: build-mode ghosts etc.
 }
 
-function ring(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke(); }
+/** A ring on the ground: a circle seen from above, an ellipse (foreshortened by sinP) in the angled view. */
+function ring(ctx, x, y, r, sp = 1) { ctx.beginPath(); if (sp === 1) ctx.arc(x, y, r, 0, TAU); else ctx.ellipse(x, y, r, r * sp, 0, 0, TAU); ctx.stroke(); }
 function label(ctx, text, x, y, color) {
   ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.strokeText(text, x, y);
   ctx.fillStyle = color; ctx.fillText(text, x, y);
 }
 
 function orderFlag(ctx, cam, o, ts) {
-  const [sx, sy] = cam.toScreen(o.x + 0.5, o.y + 0.5);
+  const [sx, sy] = cam.toScreen(o.x + 0.5, o.y + 0.5, o.z);
   ctx.strokeStyle = "rgba(124,196,255,.8)"; ctx.lineWidth = 1.5;
-  if (o.verb !== "move") { ctx.setLineDash([4, 3]); ring(ctx, sx, sy, 10 * ts); ctx.setLineDash([]); }   // the area the order covers (radius 10)
+  if (o.verb !== "move") { ctx.setLineDash([4, 3]); ring(ctx, sx, sy, 10 * ts, cam.sinP); ctx.setLineDash([]); }   // the area the order covers (radius 10)
   ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx, sy - ts * 0.9); ctx.lineTo(sx + ts * 0.6, sy - ts * 0.7); ctx.lineTo(sx, sy - ts * 0.5); ctx.stroke();
 }
 
 function zones(game, ctx, at, ts) {
   const { sim, cam } = game, z = sim.stock;
   if (z) {
-    const [ax, ay] = cam.toScreen(z.x0, z.y0), [bx, by] = cam.toScreen(z.x1 + 1, z.y1 + 1);
-    ctx.fillStyle = "rgba(240,220,150,.14)"; ctx.fillRect(ax, ay, bx - ax, by - ay);
-    ctx.strokeStyle = "rgba(240,220,150,.7)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(ax, ay, bx - ax, by - ay); ctx.setLineDash([]);
+    const [ax, ay, zw, zh] = cam.rect(z.x0, z.y0, z.x1 + 1, z.y1 + 1, z.z);
+    ctx.fillStyle = "rgba(240,220,150,.14)"; ctx.fillRect(ax, ay, zw, zh);
+    ctx.strokeStyle = "rgba(240,220,150,.7)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(ax, ay, zw, zh); ctx.setLineDash([]);
     ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
     label(ctx, "STOCKPILE", ax + 3, ay - 2, "#f0dc96");
+  }
+  if (sim.zones) for (const q of sim.zones.list) {                       // S17: drawn zones, named by what they take
+    const [ax, ay, zw, zh] = cam.rect(q.x0, q.y0, q.x1 + 1, q.y1 + 1, q.z !== undefined ? q.z : sim.stock && sim.stock.z);
+    ctx.fillStyle = "rgba(240,220,150,.10)"; ctx.fillRect(ax, ay, zw, zh);
+    ctx.strokeStyle = "rgba(240,220,150,.6)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(ax, ay, zw, zh); ctx.setLineDash([]);
+    ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+    label(ctx, "ZONE " + q.id + ": " + ({ all: "ANYTHING", food: "FOOD", mat: "MATERIALS" }[q.f || "all"]), ax + 3, ay - 2, "#f0dc96");
   }
   // beds -> owners, so "who sleeps where" is visible
   ctx.lineWidth = 1; ctx.strokeStyle = "rgba(143,208,106,.55)";
@@ -114,11 +128,11 @@ function jobLines(game, ctx, at, sel, ts) {
       const e = sim.ents.get(tid); if (!e) continue;
       const [ex, ey] = at(e);
       ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(ex, ey); ctx.stroke();
-      ctx.setLineDash([]); ctx.strokeRect(ex - ts * 0.45, ey - ts * 0.45, ts * 0.9, ts * 0.9); ctx.setLineDash([6, 3]);
+      ctx.setLineDash([]); ctx.strokeRect(ex - ts * 0.45, ey - ts * 0.45 * cam.sinP, ts * 0.9, ts * 0.9 * cam.sinP); ctx.setLineDash([6, 3]);
     }
     ctx.setLineDash([]);
     const a = v.action; // walking destination
-    if (a && a.type === "Move" && a.tx !== undefined) { const [gx, gy] = cam.toScreen(a.tx + 0.5, a.ty + 0.5); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(gx, gy, 3, 0, TAU); ctx.fill(); }
+    if (a && a.type === "Move" && a.tx !== undefined) { const [gx, gy] = cam.toScreen(a.tx + 0.5, a.ty + 0.5, v.z); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(gx, gy, 3, 0, TAU); ctx.fill(); }
   }
 }
 
@@ -131,22 +145,22 @@ function warmth(game, ctx, at) {
   for (const r of sim.rooms.all()) drawRoom(game, ctx, r, "warm");
   for (const h of litHearths(sim)) {                       // a fire warms the open air around it, fading to nothing at FIRE_R cells
     if (!renderer.isShown(h)) continue;
-    const [fx, fy] = at(h), rad = (FIRE_R + 1) * cam.zoom, g = ctx.createRadialGradient(fx, fy, 0, fx, fy, rad);
+    const [fx, fy] = at(h), rad = (FIRE_R + 1) * cam.zoom, g = ctx.createRadialGradient(0, 0, 0, 0, 0, rad);
     g.addColorStop(0, "rgba(255,150,40,.50)"); g.addColorStop(1, "rgba(255,150,40,0)");
-    ctx.fillStyle = g; ctx.fillRect(fx - rad, fy - rad, rad * 2, rad * 2);
+    ctx.save(); ctx.translate(fx, fy); ctx.scale(1, cam.sinP); ctx.fillStyle = g; ctx.fillRect(-rad, -rad, rad * 2, rad * 2); ctx.restore();
     ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
     label(ctx, "fire +" + FIRE_WARM[h.hl].toFixed(2), fx, fy - cam.zoom * 0.7, "#ffd9a0");
   }
   for (const f of flames(sim)) {
     if (!renderer.isShown(f)) continue;
-    const [fx, fy] = at(f), rad = 4 * cam.zoom, g = ctx.createRadialGradient(fx, fy, 0, fx, fy, rad);
+    const [fx, fy] = at(f), rad = 4 * cam.zoom, g = ctx.createRadialGradient(0, 0, 0, 0, 0, rad);
     g.addColorStop(0, "rgba(255,120,40,.4)"); g.addColorStop(1, "rgba(255,120,40,0)");
-    ctx.fillStyle = g; ctx.fillRect(fx - rad, fy - rad, rad * 2, rad * 2);
+    ctx.save(); ctx.translate(fx, fy); ctx.scale(1, cam.sinP); ctx.fillStyle = g; ctx.fillRect(-rad, -rad, rad * 2, rad * 2); ctx.restore();
   }
   for (const v of sim.ents.ofKind("villager")) {
     if (!renderer.isShown(v)) continue;
     const [sx, sy] = at(v), t = v.warm;
-    ctx.beginPath(); ctx.arc(sx, sy, Math.max(7, cam.zoom * 0.7), 0, TAU);
+    ctx.beginPath(); ctx.ellipse(sx, sy, Math.max(7, cam.zoom * 0.7), Math.max(7, cam.zoom * 0.7) * cam.sinP, 0, 0, TAU);
     ctx.strokeStyle = t < 0.3 ? "#6fe0ff" : t < 0.55 ? "#b9ecff" : "#ffcf70"; ctx.lineWidth = 3; ctx.stroke();
   }
   ctx.font = "bold 13px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "top";
@@ -157,12 +171,12 @@ function warmth(game, ctx, at) {
 function drawProom(game, ctx) {
   const { cam, ui, sim } = game, pr = provisionalRoom(sim, ui.other.x, ui.other.y, ui.other.z);
   if (!pr) return;
-  const ts = cam.zoom;
+  const ts = cam.zoom, pz = pr.z;
   ctx.fillStyle = "rgba(255,200,90,.16)";
-  for (const [x, y] of pr.cells) { const [sx, sy] = cam.toScreen(x, y); ctx.fillRect(sx, sy, ts, ts); }
+  for (const [x, y] of pr.cells) { const [sx, sy, cw, th] = cam.rect(x, y, x + 1, y + 1, pz); ctx.fillRect(sx, sy, cw, th); }
   ctx.strokeStyle = "#ffb259"; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
   for (const [x, y] of pr.gaps) {
-    const [sx, sy] = cam.toScreen(x, y); ctx.strokeRect(sx + 1, sy + 1, ts - 2, ts - 2);
+    const [sx, sy, cw, th] = cam.rect(x, y, x + 1, y + 1, pz); ctx.strokeRect(sx + 1, sy + 1, cw - 2, th - 2);
     ctx.setLineDash([]); ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
     ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.strokeText(pr.planned ? "door planned" : "needs a door", sx + ts / 2, sy - 2);
     ctx.fillStyle = "#ffe0a8"; ctx.fillText(pr.planned ? "door planned" : "needs a door", sx + ts / 2, sy - 2);
@@ -178,7 +192,7 @@ function drawProom(game, ctx) {
 const LIGHT_R = 6.5;
 function drawLight(game, ctx) {
   const { sim, cam, renderer } = game, v = game.possessed ? game.possessed() : null;
-  if (!v || !renderer.isShown(v)) return;
+  if (cam.oblique || !v || !renderer.isShown(v)) return;               // (the angled view lights the land itself)
   let under = false;
   for (let k = 1; k <= 4 && !under; k++) under = sim.world.isSolid(v.x, v.y, v.z + k);
   if (!under) return;
@@ -196,4 +210,26 @@ function drawLight(game, ctx) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.drawImage(m, 0, 0, w, h, 0, 0, w * renderer.dpr, h * renderer.dpr);
   ctx.setTransform(renderer.dpr, 0, 0, renderer.dpr, 0, 0);
+}
+
+
+/** UI_SPEC §3.4 / a9: a concern of level 2 or more that sits on screen gets an icon + severity pip above its place (off-screen ones are DOM edge pointers, ui/pointers.js). */
+function concernMarkers(game, ctx) {
+  const list = game.ui.concerns; if (!list || !list.length) return;
+  const { cam, renderer } = game, calm = game.access && game.access.calm;
+  for (const c of list) {
+    if (c.sev < 2 || !c.loc) continue;
+    const lz = c.loc.z !== undefined && c.loc.z >= 0 ? c.loc.z : undefined;
+    if (lz !== undefined && (cam.oblique ? !(lz <= renderer.z && (renderer.z < game.D - 1 || lz >= renderer.topAt(c.loc.x, c.loc.y))) : lz !== renderer.z && Math.abs(lz - renderer.z) > 1)) continue;
+    const [sx, sy] = cam.toScreen(c.loc.x + 0.5, c.loc.y + 0.5, lz);
+    if (sx < 20 || sy < 20 || sx > cam.vw - 20 || sy > cam.vh - 20) continue;
+    const col = c.sev >= 3 ? TOKENS.danger : TOKENS.warm, y = sy - 22 - (c.sev >= 3 && !calm ? Math.abs(Math.sin(performance.now() / 300)) * 3 : 0);
+    ctx.fillStyle = TOKENS.s2; ctx.strokeStyle = col; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(sx, y, 12, 0, TAU); ctx.fill(); ctx.stroke();
+    drawIcon(ctx, c.icon, sx - 7, y - 7, 14, TOKENS.tx);
+    ctx.fillStyle = col;                                                       // the pip shape: triangle (2) or diamond (3)
+    ctx.beginPath();
+    if (c.sev >= 3) { ctx.moveTo(sx + 11, y - 14); ctx.lineTo(sx + 16, y - 9); ctx.lineTo(sx + 11, y - 4); ctx.lineTo(sx + 6, y - 9); } else { ctx.moveTo(sx + 11, y - 15); ctx.lineTo(sx + 16, y - 6); ctx.lineTo(sx + 6, y - 6); }
+    ctx.closePath(); ctx.fill();
+  }
 }

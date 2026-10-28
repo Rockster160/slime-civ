@@ -153,7 +153,7 @@ export class World extends CellReader {
       c = this.gc.get(k);
       if (c) { this.gc.delete(k); this.gc.set(k, c); }
       else {
-        c = this.gen(cx, cy); c.mod = 0; c.act = 0; c.last = 0; c.dz = 0; c.pk = null; this.genCount++;
+        c = this.gen(cx, cy); c.mod = 0; c.act = 0; c.last = 0; c.dz = 0; c.pk = null; c.pi = null; this.genCount++;
         this.gc.set(k, c);
         if (this.gc.size > CHUNK_CACHE) this.gc.delete(this.gc.keys().next().value);
       }
@@ -168,7 +168,7 @@ export class World extends CellReader {
     if (c) return c;
     c = this.gc.get(k);
     if (c) this.gc.delete(k);
-    else { c = this.gen(cx, cy); c.mod = 0; c.act = 0; c.last = 0; c.dz = 0; c.pk = null; this.genCount++; }
+    else { c = this.gen(cx, cy); c.mod = 0; c.act = 0; c.last = 0; c.dz = 0; c.pk = null; c.pi = null; this.genCount++; }
     this.chunks.set(k, c);
     this.resVer++;
     this._cx = 1e9; this._c = null;
