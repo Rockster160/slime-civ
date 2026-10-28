@@ -42,3 +42,30 @@ export function createPanel(parent, id, title, { open = true, icon = "", flat = 
   p.html = (s) => { if (s !== last) { last = s; p.body.innerHTML = s; } };
   return p;
 }
+
+/**
+ * Update a container IN PLACE from an HTML string (6.20): same-tag children are kept and only their changed attributes and text are written, so an element the pointer is on
+ * is never replaced (hover, a half-made click and a scroll position all survive a refresh) and nothing moves unless its size changes. Elements are matched by position and tag;
+ * an `<input>` keeps its typed value, a `<details>` keeps its open state. Returns true if anything changed.
+ */
+export function morph(root, html) {
+  const t = document.createElement("template"); t.innerHTML = html;
+  return syncKids(root, t.content);
+}
+function syncKids(a, b) {
+  let changed = false, i = 0;
+  const bk = b.childNodes;
+  for (; i < bk.length; i++) {
+    const nb = bk[i], na = a.childNodes[i];
+    if (!na) { a.appendChild(document.importNode(nb, true)); changed = true; continue; }
+    if (na.nodeType !== nb.nodeType || na.nodeName !== nb.nodeName) { a.replaceChild(document.importNode(nb, true), na); changed = true; continue; }
+    if (nb.nodeType === 3 || nb.nodeType === 8) { if (na.nodeValue !== nb.nodeValue) { na.nodeValue = nb.nodeValue; changed = true; } continue; }
+    // element
+    for (const at of Array.from(nb.attributes)) { if (na.getAttribute(at.name) !== at.value && !(at.name === "open" && na.nodeName === "DETAILS")) { na.setAttribute(at.name, at.value); changed = true; } }
+    for (const at of Array.from(na.attributes)) { if (!nb.hasAttribute(at.name) && !(at.name === "open" && na.nodeName === "DETAILS")) { na.removeAttribute(at.name); changed = true; } }
+    if (na.nodeName === "INPUT" || na.nodeName === "TEXTAREA" || na.nodeName === "CANVAS") continue;
+    if (syncKids(na, nb)) changed = true;
+  }
+  while (a.childNodes.length > bk.length) { a.removeChild(a.lastChild); changed = true; }
+  return changed;
+}

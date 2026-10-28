@@ -64,14 +64,15 @@
   .pop.open { display:block; }
   .tb-menuwrap { position:relative; }
   .pop.menu { width:300px; right:0; } .pop button[data-m] { display:flex; width:100%; text-align:left; margin-bottom:4px; } .pop .mrow { display:flex; gap:8px; align-items:center; margin:8px 0 4px; }
-  .pop label.mrow { gap:6px; } .pop .autos { margin:4px 0; } .pop .autos button { font-size:12px; width:100%; margin-bottom:3px; }
+  .pop label.mrow { gap:6px; } .pop .autos { margin:4px 0; } .pop .autos button { font-size:12px; display:flex; width:100%; margin-bottom:3px; text-align:left; } .pop .autos .atxt { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pop.menu .mrow { flex-wrap:wrap; min-width:0; } .pop.menu .mrow b { overflow-wrap:anywhere; } .pop.menu .saveinfo { overflow-wrap:anywhere; white-space:normal; } .pop.menu button { min-width:0; } .pop.menu { box-sizing:border-box; overflow-x:hidden; }      /* nothing in the Menu may run past its edge */
   .pop .layers { display:flex; gap:var(--sp1); }
   .pop .lbl, .lbl { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--tx2); margin:var(--sp2) 0 var(--sp1); }
 
   .slot { position:absolute; top:calc(var(--tb) + 8px); display:flex; flex-direction:column; gap:var(--sp2); overflow-y:auto; scrollbar-width:thin; pointer-events:none; }
   .slot { pointer-events:none; } .slot > * { pointer-events:auto; flex:none; }      /* the empty part of a column belongs to the map */
   #slotV { left:8px; width:var(--colL); bottom:calc(var(--mm) + 16px); }
-  #slotI { right:8px; width:var(--colR); bottom:8px; }
+  #slotI { right:8px; width:var(--colR); bottom:269px; }      /* the Inspector column ends above the depth gauge, which owns the bottom-right corner */
   body.nopanels #hud > * { display:none !important; }
 
   /* ===== one panel chrome (§2.2) ===== */
@@ -196,7 +197,7 @@
   .sick-row { display:flex; gap:var(--sp2); align-items:center; margin:var(--sp1) 0; color:var(--sick); } .sick-row .help { display:flex; gap:4px; color:var(--tx3); } .sick-row .help .lit { color:var(--ok); }
 
   /* ===== dock (§5, §7): orders / build / possess ===== */
-  #dock { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:var(--sp2); width:calc(100vw / var(--ui) - var(--colL) - var(--colR) - 48px); pointer-events:none; } #dock > * { pointer-events:auto; }
+  #dock { position:absolute; bottom:8px; left:calc(50% - 60px); transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:var(--sp2); width:calc(100vw / var(--ui) - var(--colL) - 168px - 120px); pointer-events:none; } #dock > * { pointer-events:auto; }
   #dock > div { display:none; }
   .dk { background:var(--s1); border-radius:var(--r3); box-shadow:var(--e1); padding:6px 8px; display:flex; gap:var(--sp1); align-items:center; flex-wrap:wrap; justify-content:center; }
   #dkOrders .ob-count { display:inline-flex; align-items:center; gap:4px; font-weight:600; margin-right:var(--sp1); } .dk .grp { display:inline-flex; gap:4px; align-items:center; } .dk .grp + .grp { margin-left:var(--sp2); padding-left:var(--sp2); border-left:1px solid var(--line); }
@@ -220,19 +221,19 @@
   #whisper svg { color:var(--sel); } #whisper.blocked svg { color:var(--warm); } #whisper.done svg { color:var(--ok); }
   #pointers { position:fixed; inset:0; pointer-events:none; zoom:1 !important; z-index:4; }
   /* 6.19b the depth gauge (right edge of the map): it always says what level you are looking at */
-  #gauge { z-index:4; display:flex; flex-direction:column; align-items:center; gap:4px; width:92px; user-select:none; }
-  #gauge .g-now { font-size:12px; font-weight:700; background:var(--s1); box-shadow:var(--e1); border-radius:var(--rp); padding:3px 10px; white-space:nowrap; border:1px solid var(--line-hi); } #gauge .g-now.surf { color:var(--ok); border-color:var(--ok); }
-  #gauge .g-ctl { display:flex; gap:4px; } #gauge .g-rows { display:flex; flex-direction:column; background:var(--s1); box-shadow:var(--e1); border-radius:var(--r2); padding:4px 0; width:56px; }
+  #gauge { z-index:4; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:4px; width:92px; height:253px; right:8px; bottom:8px; overflow:hidden; box-sizing:border-box; user-select:none; }      /* 6.20: fixed anchor, fixed size */
+  #gauge .g-now { box-sizing:border-box; width:92px; height:24px; line-height:18px; text-align:center; overflow:hidden; text-overflow:ellipsis; flex:none; font-size:11.5px; font-weight:700; background:var(--s1); box-shadow:var(--e1); border-radius:var(--rp); padding:3px 10px; white-space:nowrap; border:1px solid var(--line-hi); } #gauge .g-now.surf { color:var(--ok); border-color:var(--ok); }
+  #gauge .g-ctl { display:flex; gap:4px; height:28px; flex:none; } #gauge .g-rows { display:flex; flex-direction:column; background:var(--s1); box-shadow:var(--e1); border-radius:var(--r2); padding:4px 0; width:56px; height:161px; box-sizing:border-box; flex:none; }
   #gauge .g-row { all:unset; box-sizing:border-box; position:relative; height:17px; display:flex; align-items:center; gap:4px; padding:0 6px; cursor:pointer; color:var(--tx2); } #gauge .g-row:hover { background:var(--s3); }
   #gauge .g-row .g-t { flex:1; height:2px; background:var(--tx3); border-radius:1px; } #gauge .g-row.camp .g-t { background:var(--ok); height:3px; } #gauge .g-row.cur { background:var(--s3); box-shadow:inset 3px 0 0 var(--sel); } #gauge .g-row.cur .g-t { background:var(--sel); height:4px; }
-  #gauge .g-row.surf { height:22px; } #gauge .g-row .g-l { width:12px; display:flex; } #gauge .g-row.surf .g-l { color:var(--ok); }
+  #gauge .g-row.surf { height:17px; } #gauge .g-pad { display:block; height:17px; flex:none; } #gauge .g-row { flex:none; } #gauge .g-row .g-l { width:12px; display:flex; } #gauge .g-row.surf .g-l { color:var(--ok); }
   #gauge .g-dot { min-width:11px; height:11px; border-radius:6px; background:var(--water); color:#001; font-size:9px; font-weight:800; display:flex; align-items:center; justify-content:center; line-height:1; padding:0 2px; }
   #gauge .g-dug { width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-top:6px solid var(--warm); }
   #gauge .tog.on { box-shadow:inset 0 -2px 0 var(--sel); }
   /* 6.19b onboarding: a pulse ring, a ghost hand and a short caption (one at a time) */
   #guide .gd-ring { position:absolute; transform:translate(-50%,-50%); border:3px solid var(--sel); border-radius:50%; box-shadow:0 0 0 2px rgba(0,0,0,.4), 0 0 14px var(--sel); animation:gdp 1.1s ease-in-out infinite; }
   #guide .gd-hand { position:absolute; transform:translate(4px,6px); animation:gdh 1.6s ease-in-out infinite; filter:drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
-  #guide .gd-cap { position:absolute; transform:translateX(-50%); background:var(--s2); color:var(--tx); font-weight:700; font-size:13px; padding:3px 11px; border-radius:var(--rp); box-shadow:var(--e1); border:1px solid var(--sel); white-space:nowrap; }
+  #guide .gd-cap { position:absolute; transform:translateX(-50%); background:var(--s2); color:var(--tx); font-weight:700; font-size:15px; padding:5px 14px; border-radius:var(--rp); box-shadow:var(--e2), 0 0 12px var(--sel); border:2px solid var(--sel); white-space:nowrap; }
   @keyframes gdp { 50% { transform:translate(-50%,-50%) scale(1.14); opacity:.75; } } @keyframes gdh { 0% { transform:translate(30px,34px); } 55%,70% { transform:translate(4px,6px) scale(.9); } 100% { transform:translate(30px,34px); } }
   body.calm #guide .gd-ring, body.calm #guide .gd-hand { animation:none; }
   .db { position:absolute; left:-4px; bottom:-5px; font-size:10px; font-weight:700; line-height:13px; padding:0 3px; border-radius:7px; background:var(--bg); color:var(--water); box-shadow:0 0 0 1px var(--water); pointer-events:none; white-space:nowrap; }
@@ -323,6 +324,30 @@
   .fv-state { font-size:14px; font-weight:600; bottom:80px; }
   .row.inl { display:inline-flex; margin-right:var(--sp3); } .row.beds { flex-wrap:nowrap; } .row.beds .bedi svg { width:12px; height:12px; } .row.beds { gap:3px; } .row.beds .rl { margin-right:3px; }
   .vh-pop { display:flex; align-items:center; justify-content:space-between; gap:var(--sp2); margin-bottom:2px; } .vh-pop .pips { margin:0; flex-wrap:nowrap; } .bcap { margin-top:var(--sp1); } .cchips { margin:var(--sp1) 0; }
+
+  /* ===== 6.20 stability: every HUD element has a fixed anchor and a fixed size; panels scroll INSIDE themselves and never push, shift or resize a neighbour ===== */
+  #slotI, #slotV { overflow:hidden; } #slotV { bottom:208px; }                                  /* the Village column ends above the minimap's open size, whether or not the minimap is open */
+  #slotV > [data-test=village] { flex:1 1 0; min-height:0; display:flex; flex-direction:column; }
+  #slotV > [data-test=village] > .pbody { flex:1 1 0; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+  [data-test=village] .v-top { flex:none; } [data-test=village] .tabs { flex:none; }
+  [data-test=village] .tab { flex:1 1 0; min-height:0; overflow-y:auto; scrollbar-width:thin; } [data-test=village] .tab.tab-stores[style*="none"], [data-test=village] .tab.tab-crews[style*="none"] { display:none; }
+  .cchips { height:56px; align-content:flex-start; overflow-y:auto; scrollbar-width:thin; box-sizing:border-box; } .doit { height:30px; box-sizing:border-box; }
+  .vrows { height:96px; overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; }
+  #slotI > [data-test=inspector] { flex:none; height:min(520px, calc(100vh / var(--ui) - 330px)); display:flex; flex-direction:column; }
+  #slotI > [data-test=inspector] > .pbody { flex:1 1 0; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+  #slotI > [data-test=exp] { flex:none; max-height:132px; display:flex; flex-direction:column; } #slotI > [data-test=exp] > .pbody { overflow-y:auto; min-height:0; scrollbar-width:thin; }
+  .sec-now { flex:none; } .sec-body { flex:1 1 0; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+  .sec-body:not(:has(> .fx)) { display:block; overflow-y:auto; scrollbar-width:thin; }
+  .sec-body > .fx { flex:none; } .sec-body > .vr { flex:1 1 0; min-height:0; overflow-y:auto; scrollbar-width:thin; }
+  .sec-now .chain { height:46px; flex-wrap:nowrap; overflow:hidden; margin:0; box-sizing:border-box; } .sec-now .chain .cls { width:96px; flex:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; line-height:18px; }
+  .sec-now .chain .score { min-width:0; height:36px; justify-content:center; overflow:hidden; }
+  .sec-now .rejl { height:30px; flex-wrap:nowrap; overflow:hidden; margin:0; box-sizing:border-box; } .sec-now .rejl .rj { flex:none; max-width:128px; overflow:hidden; white-space:nowrap; } .sec-now .rejl .rj.more { color:var(--tx); }
+  .sec-now .parts { height:26px; margin:0; overflow:hidden; box-sizing:border-box; } .sec-now details.parts[open] { height:150px; overflow-y:auto; scrollbar-width:thin; }
+  .fx .ins-head { height:34px; margin:0; box-sizing:border-box; flex-wrap:nowrap; overflow:hidden; } .fx .rings { height:62px; margin:0; box-sizing:border-box; overflow:hidden; } .fx .rings { gap:4px; } .fx .rings .rc:not(.mood) { width:36px; flex:none; }
+  .fx .gene { height:68px; margin:4px 0; } .fx .skl { height:28px; margin:0; flex-wrap:nowrap; overflow:hidden; box-sizing:border-box; }
+  #topbar .tb-day { display:inline-block; width:116px; overflow:hidden; text-overflow:ellipsis; } #topbar .tb-tod { display:inline-block; width:84px; overflow:hidden; } #topbar .tb-tod:empty { display:inline-block; }
+  .sheet > .card { height:min(600px, 90vh); }
+  #dock .ob-count { min-width:84px; }
 </style>
 </head>
 <body>
@@ -339,6 +364,7 @@
 <div id="helpOverlay"></div>
 <div id="settingsOverlay" data-test="settings"></div>
 <script>
+window.__BUILD = {"stage":"6.20","commit":"be2b631","dirty":true,"time":"2026-10-28 17:09"};
 (function () {
   "use strict";
   
@@ -14718,10 +14744,22 @@
       for (let n = hi; n >= lo; n--) rows.push({ n, label: levelLabel(n, campZ, D), slimes: counts.get(n) || 0, dug: dug.has(n), cur: cur === n, camp: n === campZ });
       return rows;
     }
+    /**
+     * The FIXED window of the depth gauge (6.20): always `size` rows. The Surface row is pinned on top, the other size-1 rows are the levels, scrolled so the current level (or, at the
+     * Surface, the camp's level) sits in the middle; short lists are padded with null so the gauge never changes height.
+     */
+    function gaugeWindow(rows, size = 9, focusN = null) {
+      const surf = rows[0], lv = rows.slice(1), room = size - 1;
+      let at = lv.findIndex(r => r.cur); if (at < 0) at = Math.max(0, lv.findIndex(r => r.camp || r.n === focusN));
+      const start = Math.max(0, Math.min(Math.max(0, lv.length - room), at - Math.floor(room / 2)));
+      const out = [surf, ...lv.slice(start, start + room)];
+      while (out.length < size) out.push(null);
+      return out;
+    }
     /** The depth band of a face h cells under the cut plane: 0 = this level (full colour) .. 4 (darkest). The shader repeats this formula. */
     const depthBand = (under) => Math.max(0, Math.min(4, Math.floor(under - 0.999)));
     
-    return { obliqueVP, projectVP, pickCell, levelLabel, depthBadge, viewLevelFor, gaugeRows, KZ, depthBand };
+    return { obliqueVP, projectVP, pickCell, levelLabel, depthBadge, viewLevelFor, gaugeRows, gaugeWindow, KZ, depthBand };
   })();
   
   __mod["render/oblique.js"] = (function () {
@@ -15135,8 +15173,8 @@
           const SPp = [[cx - sw, cy - sw, sh0[0], sh0[1]], [cx + sw, cy - sw, sh0[2], sh0[1]], [cx + sw, cy + sw, sh0[2], sh0[3]], [cx - sw, cy + sw, sh0[0], sh0[3]]];
           for (let q = 0; q < 4; q++) { const i = so + q * FLOATS, v = SPp[q]; sh[i] = v[0]; sh[i + 1] = yy - hop; sh[i + 2] = v[1]; sh[i + 3] = sh[i + 4] = sh[i + 5] = 1; sh[i + 6] = v[2]; sh[i + 7] = v[3]; sh[i + 8] = sky; sh[i + 9] = 0; sh[i + 10] = 0; }
           ns++;
-          const [sx, sy] = cam.toScreen(px, py, ez), zm = cam.zoom;
-          drawn.push({ e, l: sx - hw * zm, r: sx + hw * zm, t: sy - h * zm, b: sy + 2, fx: sx, fy: sy, pri: kind, idx });
+          const [sx, sy0] = cam.toScreen(px, py, ez + 0.02 + hop), zm = cam.zoom, sy = sy0;       // the quad's real base (hop and the 0.02 lift included), so a hopping slime's rect rides with its sprite
+          drawn.push({ e, l: sx - hw * zm, r: sx + hw * zm, t: sy - h * zm, b: sy + 2, fx: sx, fy: sy, pri: kind, idx, hop });
           if (kind === "villager" && ez >= this.topAt(e.x, e.y)) sil.push(idx);
         };
         const kinds = PICKABLE_KINDS, headFx = 0, headFy = -1;
@@ -16238,7 +16276,34 @@
       return p;
     }
     
-    return { bar, needColor, remember, createPanel, esc };
+    /**
+     * Update a container IN PLACE from an HTML string (6.20): same-tag children are kept and only their changed attributes and text are written, so an element the pointer is on
+     * is never replaced (hover, a half-made click and a scroll position all survive a refresh) and nothing moves unless its size changes. Elements are matched by position and tag;
+     * an `<input>` keeps its typed value, a `<details>` keeps its open state. Returns true if anything changed.
+     */
+    function morph(root, html) {
+      const t = document.createElement("template"); t.innerHTML = html;
+      return syncKids(root, t.content);
+    }
+    function syncKids(a, b) {
+      let changed = false, i = 0;
+      const bk = b.childNodes;
+      for (; i < bk.length; i++) {
+        const nb = bk[i], na = a.childNodes[i];
+        if (!na) { a.appendChild(document.importNode(nb, true)); changed = true; continue; }
+        if (na.nodeType !== nb.nodeType || na.nodeName !== nb.nodeName) { a.replaceChild(document.importNode(nb, true), na); changed = true; continue; }
+        if (nb.nodeType === 3 || nb.nodeType === 8) { if (na.nodeValue !== nb.nodeValue) { na.nodeValue = nb.nodeValue; changed = true; } continue; }
+        // element
+        for (const at of Array.from(nb.attributes)) { if (na.getAttribute(at.name) !== at.value && !(at.name === "open" && na.nodeName === "DETAILS")) { na.setAttribute(at.name, at.value); changed = true; } }
+        for (const at of Array.from(na.attributes)) { if (!nb.hasAttribute(at.name) && !(at.name === "open" && na.nodeName === "DETAILS")) { na.removeAttribute(at.name); changed = true; } }
+        if (na.nodeName === "INPUT" || na.nodeName === "TEXTAREA" || na.nodeName === "CANVAS") continue;
+        if (syncKids(na, nb)) changed = true;
+      }
+      while (a.childNodes.length > bk.length) { a.removeChild(a.lastChild); changed = true; }
+      return changed;
+    }
+    
+    return { bar, needColor, remember, createPanel, morph, esc };
   })();
   
   __mod["sim/proom.js"] = (function () {
@@ -16367,7 +16432,7 @@
     const { ITEMS, survey, inZone, STACK_CAP, zoneCapacity, stockZoneAt, stockCapacity } = __mod["sim/items.js"];
     const { DUR_DAY } = __mod["sim/clock.js"];
     const { LEVEL_NAME } = __mod["sim/heat.js"];
-    const { esc, bar, needColor, createPanel } = __mod["ui/dom.js"];
+    const { esc, bar, needColor, createPanel, morph } = __mod["ui/dom.js"];
     const { svg } = __mod["ui/icons.js"];
     const { ring, meter, rankPips, avatar, tipAttr, sr, CLASS_ROLE } = __mod["ui/kit.js"];
     const { roomHtml, roomAct, proomHtml } = __mod["ui/rooms.js"];
@@ -16405,23 +16470,25 @@
           const { sim } = game;
           let h = "";
           if (v.poss) {
-            h = `<div class="chain" data-test="why-chain"><span class="jc big r-circle" style="border-color:var(--poss)"${tipAttr("Guided: you are guiding " + v.name)}>${svg("possess", 22)}</span><span class="cls">${svg("release", 14)}<kbd>Esc</kbd></span></div>`
+            h = `<div class="chain" data-sec="job" data-test="why-chain"><span class="jc big r-circle" style="border-color:var(--poss)"${tipAttr("Guided: you are guiding " + v.name)}>${svg("possess", 22)}</span><span class="cls">${svg("release", 14)}<kbd>Esc</kbd></span></div>`
               + `<div class="sr" data-test="why-words"><b>You are guiding ${esc(v.name)}.</b> You are Steadfast: a guided villager never flees, and may go where villagers will not (the thornback's cave, unmapped caves). They do exactly what you tell them; the village does not plan around them.</div>`;
-            if (h !== last) { last = h; root.innerHTML = h; }
+            if (h !== last) { last = h; morph(root, h); }
             return;
           }
           let pending = null;
           if (game.state.paused && (v.ep !== sim.board.ep || v.rp) && isAdult(sim, v)) pending = plan(sim, v, false, null, true);
           const x = explain(sim, v, pending);
-          if (!x) { h = `<div class="sr">${esc(v.name)} has not decided anything yet.</div>`; if (h !== last) { last = h; root.innerHTML = h; } return; }
+          if (!x) { h = `<div class="sr">${esc(v.name)} has not decided anything yet.</div>`; if (h !== last) { last = h; morph(root, h); } return; }
           const jobK = pending ? pending.job : v.job ? v.job.k : v.why ? v.why.job : "";
           const icon = JOB_ICON[jobK] || "idle", rim = RIM[x.cls] || "none";
           const say = x.sentence, tot = Math.max(1, x.score === null ? 0 : x.score);
-          h = `<div class="chain" data-test="why-chain"><span class="jc big r-${rim} ${x.pending ? "next" : ""}" data-class="${x.cls}"${tipAttr(say + "\n" + x.classLabel)}>${svg(icon, 22)}</span>`
+          h = `<div class="chain" data-sec="job" data-test="why-chain"><span class="jc big r-${rim} ${x.pending ? "next" : ""}" data-class="${x.cls}"${tipAttr(say + "\n" + x.classLabel)}>${svg(icon, 22)}</span>`
             + `<span class="cls" data-test="job-label">${esc(JOB[jobK] ? JOB[jobK].noun : "")}</span><span class="score">${x.score !== null ? `<span class="cap">${esc(CLASS_SHORT[x.cls] || "Priority")}</span>` + meter(Math.min(1, tot / 160), { color: `var(--${CLASS_ROLE[x.cls] || "tx3"})`, tip: "Score " + x.score + ". Higher wins." }) : ""}</span></div>`;
-          if (x.rejected.length) {
-            h += `<div class="rejl" data-test="why-rejected"><span class="cap">Passed over</span>`;
-            for (const r of x.rejected) h += `<span class="rj"${tipAttr(r.label + "\n" + r.text)}><span class="jc rej r-${RIM[r.cls] || "none"}">${svg(JOB_ICON[r.job] || JOB_ICON[Object.keys(JOB).find(k => JOB[k].noun === r.label.replace(/ order$/, ""))] || "blocked", 14)}</span><b>${esc(r.label.replace(/ order$/, ""))}</b><span class="bk">${svg("blocked", 12)}${esc(shortBlocker(r.blocker))}</span></span>`;
+          {                                                                           // "Passed over": ALWAYS present, one fixed-height row; two chips and a "+N" chip, never a second line
+            const SHOW = 2, rest = x.rejected.slice(SHOW);
+            h += `<div class="rejl" data-sec="passed" data-test="why-rejected">${x.rejected.length ? `<span class="cap">Passed over</span>` : ""}`;
+            for (const r of x.rejected.slice(0, SHOW)) h += `<span class="rj"${tipAttr(r.label + "\n" + r.text)}><span class="jc rej r-${RIM[r.cls] || "none"}">${svg(JOB_ICON[r.job] || JOB_ICON[Object.keys(JOB).find(k => JOB[k].noun === r.label.replace(/ order$/, ""))] || "blocked", 14)}</span><b>${esc(r.label.replace(/ order$/, ""))}</b><span class="bk">${svg("blocked", 12)}${esc(shortBlocker(r.blocker))}</span></span>`;
+            if (rest.length) h += `<span class="rj more"${tipAttr("Also passed over\n" + rest.map(r => r.label.replace(/ order$/, "") + ": " + shortBlocker(r.blocker)).join("\n"))}><b>+${rest.length}</b></span>`;
             h += `</div>`;
           }
           // the words: the headline stays in the DOM (hidden), the table sits in a closed disclosure
@@ -16433,11 +16500,11 @@
           if (x.fail && x.fail.ago < 1800) h += `<p>Last failure: ${esc(jobNoun(x.fail.job, ""))} did not work out: ${esc(x.fail.text)} (${Math.max(1, Math.round(x.fail.ago / 20))}s ago)</p>`;
           h += `</div>`;
           if (x.parts.length) {
-            h += `<details class="parts" ${game.ui.partsOpen ? "open" : ""}><summary>${svg("chev-r", 12)} Why?</summary><table>`;
+            h += `<details class="parts" data-sec="why" ${game.ui.partsOpen ? "open" : ""}><summary>${svg("chev-r", 12)} Why?</summary><table>`;
             for (const r of x.parts) h += `<tr><td>${esc(r.label)}</td><td class="num ${r.value < 0 ? "neg" : ""}">${r.value > 0 && r.k !== "base" ? "+" : ""}${r.value}</td></tr>`;
             h += `</table><p class="dim">Score ${x.score}. Higher wins. The class base decides first (needs beat village emergencies beat your orders beat standing orders beat village demand); the rest only breaks ties inside a class.</p></details>`;
-          }
-          if (h !== last) { last = h; root.innerHTML = h; }
+          } else h += `<div class="parts ph" data-sec="why"></div>`;
+          if (h !== last) { last = h; morph(root, h); }
         },
       };
     }
@@ -16447,7 +16514,7 @@
       const p = createPanel(parent, "inspector", "Selected", { icon: "eye" });
       p.body.innerHTML = `<div class="sec-now" data-test="inspector-now"></div><div class="sec-body" data-test="inspector-body"></div>`;
       const nowEl = p.body.querySelector(".sec-now"), bodyEl = p.body.querySelector(".sec-body"), now = createNow(nowEl, game), icoEl = p.head.querySelector(".pi");
-      let lastBody = "", lastIco = "";
+      let lastBody = "", lastIco = "", lastKey = "", lastAt = 0;
       p.body.addEventListener("click", (e) => {
         const t = e.target.closest("[data-act]"); if (!t || t.disabled) return;
         const [a, arg] = t.dataset.act.split(":");
@@ -16467,11 +16534,16 @@
           game.toast("Investigating here: " + ids.map(id => sim.ents.get(id).name).join(", ") + " will try things out at this spot for three days (a standing job; it never beats food or shelter).");
         }
       });
+      p.body.addEventListener("click", () => { lastAt = 0; });                  // a click that changes something refreshes at once
       p.update = () => {
         const { sim, ui } = game;
         const v = ui.focus ? sim.ents.get(ui.focus) : null;
+        // 6.20: the text refreshes at about 4 Hz (and at once when the selection, the pause state or the tick-jump changes), so a number is readable before it changes
+        const key = (v ? "v" + v.id + ":" + ui.sel.length : ui.other ? "o" + JSON.stringify(ui.other) : "-") + (game.state.paused ? "p" : "r"), nowMs = performance.now();
+        if (key === lastKey && nowMs - lastAt < 240 && !game.ui.inspectorForce) return;
+        lastKey = key; lastAt = nowMs;
         const setIco = (h) => { if (h !== lastIco) { lastIco = h; icoEl.innerHTML = h; } };
-        const setBody = (h) => { if (h !== lastBody) { lastBody = h; bodyEl.innerHTML = h; } };
+        const setBody = (h) => { if (h !== lastBody) { lastBody = h; morph(bodyEl, h); } };
         if (v) {
           p.show(true); p.setTitle(v.name); setIco(avatar(v.hue, v.lin, 20, !isAdult(sim, v)));
           nowEl.style.display = ""; now.update(v); setBody(villagerHtml(game, v)); return;
@@ -16491,41 +16563,41 @@
     
     function villagerHtml(game, v) {
       const { sim, ui } = game, age = ageDays(sim, v), fit = fitness(v, age), mh = maxHp(v, fit), kid = !isAdult(sim, v), elder = isElder(sim, v);
-      let h = "";
+      let h = "", vr = "", selH = "";
       if (ui.sel.length > 1) {
-        h += `<div class="kin" data-test="selection">`;
+        selH += `<div class="kin" data-test="selection">`;
         const CHIPS = 14;                                                          // S11: at 20-60 selected the chip list would fill the panel
         const shownIds = ui.sel.slice(0, CHIPS); if (ui.focus && !shownIds.includes(ui.focus)) shownIds.push(ui.focus);
-        shownIds.forEach((id) => { const o = sim.ents.get(id); if (o) h += `<button data-act="focus:${id}" class="${id === ui.focus ? "on" : ""}"${tipAttr(o.name)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}${id === ui.focus ? `<span class="nm">${esc(o.name.split(" ")[0])}</span>` : sr(o.name)}</button>`; });
-        if (ui.sel.length > CHIPS) h += `<span class="rel">+${ui.sel.length - CHIPS}</span>`;
-        h += `</div>`;
+        shownIds.forEach((id) => { const o = sim.ents.get(id); if (o) selH += `<button data-act="focus:${id}" class="${id === ui.focus ? "on" : ""}"${tipAttr(o.name)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}${id === ui.focus ? `<span class="nm">${esc(o.name.split(" ")[0])}</span>` : sr(o.name)}</button>`; });
+        if (ui.sel.length > CHIPS) selH += `<span class="rel">+${ui.sel.length - CHIPS}</span>`;
+        selH += `</div>`;
       }
       // life bar: child / adult / elder segments, a marker where they are
       const lifeFrac = Math.min(1, age / LIFE_DAYS);
-      h += `<div class="ins-head"><span class="cap lifecap">${{ child: "Child", adult: "Adult", elder: "Elder" }[lifeStage(sim, v)]}</span><span class="mt" style="flex:1;height:10px"${tipAttr(stageText(sim, v) + (elder ? " (past their prime)" : "") + "\n" + family(sim, v))}><i style="width:20%;background:var(--water);opacity:.55"></i><i style="left:20%;width:60%;background:var(--ok);opacity:.55"></i><i style="left:80%;width:20%;background:var(--cold);opacity:.55"></i><b class="mk" style="left:${(lifeFrac * 100).toFixed(1)}%;background:#fff;width:3px"></b></span>`
+      h += `<div class="ins-head" data-sec="life"><span class="cap lifecap">${{ child: "Child", adult: "Adult", elder: "Elder" }[lifeStage(sim, v)]}</span><span class="mt" style="flex:1;height:10px"${tipAttr(stageText(sim, v) + (elder ? " (past their prime)" : "") + "\n" + family(sim, v))}><i style="width:20%;background:var(--water);opacity:.55"></i><i style="left:20%;width:60%;background:var(--ok);opacity:.55"></i><i style="left:80%;width:20%;background:var(--cold);opacity:.55"></i><b class="mk" style="left:${(lifeFrac * 100).toFixed(1)}%;background:#fff;width:3px"></b></span>`
         + `<button class="btn ${ui.follow === v.id ? "on" : ""}" data-act="follow" data-test="follow"${tipAttr("Follow\nKeep the camera on them", "F")} aria-label="Follow">${svg("follow", 16)}<span class="bl">Follow</span></button>`
         + (v.poss ? `<button class="btn" data-act="release" data-test="release"${tipAttr("Release\nLet go of them", "Esc")} aria-label="Release">${svg("release", 16)}<span class="bl">Release</span></button>` : isAdult(sim, v) ? `<button class="btn" data-act="possess" data-test="possess"${tipAttr("Guide this villager\nWASD to walk, E to use what is next to you, Esc to let go", "Q")} aria-label="Guide">${svg("possess", 16)}<span class="bl">Guide</span></button>` : "")
         + `</div>`;
       // needs: four rings, health, mood
-      h += `<div class="rings" data-test="needs">`;
+      h += `<div class="rings" data-sec="needs" data-test="needs">`;
       for (const [k, label] of NEEDS.slice(0, 4)) { const [soft, crit] = SOFT[k]; h += `<span class="rc">` + ring({ icon: NEED_ICON[k], v: v[k], soft, crit, px: 30, tip: `${label} ${pct(v[k])}\nUrgent below ${pct(soft)}, critical below ${pct(crit)}`, test: "need-" + k }) + `<span class="cap">${RING_CAP[k]}</span></span>`; }
       const hr = v.hp / mh;
       h += `<span class="rc">` + ring({ icon: "health", v: hr, soft: 0.6, crit: 0.3, px: 30, tip: `Health ${Math.round(v.hp)}/${Math.round(mh)}`, test: "need-health" }) + `<span class="cap">Health</span></span>`;
       h += `<span class="rc mood"${tipAttr(`Mood ${pct(v.mood)}`)}><span class="mrow">${svg(v.mood > 0.66 ? "mood-hi" : v.mood > SOFT.mood[0] ? "mood" : "mood-lo", 16)}${meter(v.mood, { color: "var(--energy)", marks: [{ at: SOFT.mood[0], cls: "soft" }, { at: SOFT.mood[1], cls: "crit" }], tip: `Mood ${pct(v.mood)}` })}</span><span class="cap">Mood</span></span></div>`;
       if (v.ill) {
         const help = [["sleep", "Rest", v.slp === 1], ["warmth", "A warm bed", v.warm > 0.55], ["tend", "A nurse", sim.ents.ofKind("villager").some(o => o.job && o.job.k === "tend_sick" && o !== v)], ["eat", "Cooked food", v.hunger > 0.5], ["jar", "A herbal remedy", false]];
-        h += `<div class="sick-row" data-test="sick"${tipAttr("Sick\n" + illLines(sim, v).join("\n"))}>${svg("sick", 18)}${ring({ icon: "health", v: v.ill.p, px: 24, tip: `Recovered ${pct(v.ill.p)}` })}<span class="help">${help.map(([ic, t, on]) => `<span class="${on ? "lit" : ""}"${tipAttr(t)}>${svg(ic, 16)}</span>`).join("")}</span></div>`;
+        vr += `<div class="sick-row" data-test="sick"${tipAttr("Sick\n" + illLines(sim, v).join("\n"))}>${svg("sick", 18)}${ring({ icon: "health", v: v.ill.p, px: 24, tip: `Recovered ${pct(v.ill.p)}` })}<span class="help">${help.map(([ic, t, on]) => `<span class="${on ? "lit" : ""}"${tipAttr(t)}>${svg(ic, 16)}</span>`).join("")}</span></div>`;
       }
       // genes: nine columns round a centre line (1.00 = average); the notable ones sit in the middle
       const dev = TRAITS.map(k => ({ k, d: v.t[k] - 1 })).sort((a, b) => Math.abs(a.d) - Math.abs(b.d));
       const mid = []; dev.forEach((q, i) => { if (i % 2 === 0) mid.push(q); else mid.unshift(q); });
-      h += `<div class="gene" data-test="genes">` + mid.map(({ k, d }) => {
+      h += `<div class="gene" data-sec="genes" data-test="genes">` + mid.map(({ k, d }) => {
         const hgt = Math.min(50, Math.abs(d) / 0.25 * 50), tip = `${TRAIT_INFO[k].name} ${v.t[k].toFixed(2)} (${traitWord(k, v.t[k])})\n${TRAIT_INFO[k].what}`;
         return `<span class="gc ${Math.abs(d) > 0.12 ? "hi" : ""}"${tipAttr(tip)}><span class="zone">${d >= 0 ? `<i class="bpos" style="height:${hgt}%"></i>` : `<i class="bneg" style="height:${hgt}%"></i>`}</span>${svg(TRAIT_ICON[k], 12)}<span class="cap">${GENE_CAP[k]}</span></span>`;
       }).join("") + `</div>`;
       // skills: icon + rank pips (rust shown by a hatch)
       const pref = preferred(v);
-      h += `<div class="skl" data-test="skills">` + SKILLS.map(s => {
+      h += `<div class="skl" data-sec="skills" data-test="skills">` + SKILLS.map(s => {
         const l = level(v, s), rs = rustOf(v, s);
         const tip = SKILL_INFO[s].name + ": " + skillWord(l) + " (" + l.toFixed(2) + ")\n" + SKILL_INFO[s].what + (rs > 0.02 ? "\nRusty: unused for a long while, it has slipped from " + peakLevel(v, s).toFixed(2) : "");
         return `<span${tipAttr(tip)}>${svg(SKILL_ICON[s], 16)}<b class="rl">${SKILL_CAP[s]}</b>${rankPips(l, rs > 0.02)}${pref === s ? `<i class="star">${svg("star", 12)}</i>` : ""}</span>`;
@@ -16534,20 +16606,20 @@
       const kin = sim.ents.ofKind("villager").filter(o => o !== v).map(o => [o, kinship(v, o), relationWord(v, o)]).filter(k => k[1] > 0 && k[2]);
       const rel = (v.rel || []).map(r => [sim.ents.get(r.o), r]).filter(q => q[0]);
       if (kin.length || rel.length || v.mate) {
-        h += `<div class="kin" data-test="kin">`;
+        vr += `<div class="kin" data-test="kin">`;
         const seen = new Set();
-        const one = (o, glyph, tip) => { if (seen.has(o.id)) return; seen.add(o.id); h += `<button data-act="focus:${o.id}"${tipAttr(o.name + "\n" + tip)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}<span class="nm">${esc(o.name.split(" ")[0].slice(0, 8))}</span><span class="rel">${svg(glyph, 12)}</span></button>`; };
+        const one = (o, glyph, tip) => { if (seen.has(o.id)) return; seen.add(o.id); vr += `<button data-act="focus:${o.id}"${tipAttr(o.name + "\n" + tip)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}<span class="nm">${esc(o.name.split(" ")[0].slice(0, 8))}</span><span class="rel">${svg(glyph, 12)}</span></button>`; };
         const mate = v.mate ? sim.ents.get(v.mate) : null;
         if (mate) one(mate, "star", "Partner");
         for (const [o, k, w] of kin) one(o, w && /child|son|daughter/i.test(w) ? "sprout" : "people", w + (k >= 0.5 ? ", very close" : ""));
         for (const [o, r] of rel) one(o, r.k === "rival" ? "fear" : "check", TIER_WORD[r.k] + ": " + reasonLine(r, o.name));
-        h += `</div>`;
+        vr += `</div>`;
       }
       // actions: teach / split
       const pupils = ui.sel.filter(id => id !== v.id).map(id => sim.ents.get(id)).filter(o => o && isAdult(sim, o));
       const acts = (isAdult(sim, v) && pupils.length ? pupils.slice(0, 2).map(o => `<button class="btn" data-act="teach:${o.id}"${tipAttr("Teach " + o.name + "\nWork the same craft beside them and they learn 3x faster; you work at 80%. Give you both the same order (e.g. dig) so you end up side by side.")}>${svg("knowledge", 14)}${avatar(o.hue, o.lin, 16)}<span class="bl">Teach ${esc(o.name.split(" ")[0])}</span></button>`).join("") : "")
         + (isAdult(sim, v) ? `<button class="btn" data-act="split" ${canSplit(sim, v) ? "" : "disabled"}${tipAttr("Split (clone)\nSplit off a clone of " + v.name + ": once per life, the clone regresses toward the village average and is frailer. Costs health, food and energy.")} aria-label="Split">${svg("plus", 14)}${svg("people", 14)}<span class="bl">Split</span></button>` : "");
-      if (acts) h += `<div class="actions">${acts}</div>`;
+      if (acts) vr += `<div class="actions">${acts}</div>`;
       // the old prose, hidden
       let w = `<div class="idrow"><b>${esc(stageText(sim, v))}</b>${elder ? " (past their prime)" : ""}<br><span>${esc(family(sim, v))}</span></div><div class="sub">Needs</div><div class="grid">`;
       for (const [k, label] of NEEDS) w += `<span>${label}</span><span>${pct(v[k])}</span>`;
@@ -16563,7 +16635,7 @@
       else for (const c of known) { const f = famOf(v, c), only = holders(sim, c).length === 1; w += `<p>${esc(CRAFTS[c].name)}: ${esc(famWord(f))} ${f.toFixed(2)}${only ? " (the only living villager who knows it)" : ""}. ${esc(CRAFTS[c].opens.join(", "))}</p>`; }
       if (v.tch) { const pu = sim.ents.get(v.tch.p); if (pu && v.tch.u > sim.tick) w += `<p>Teaching ${esc(pu.name)}: when they work the same craft side by side, ${esc(pu.name)} learns 3x faster and ${esc(v.name)} works at 80%.</p>`; }
       w += `<div class="kv"><span>Carrying</span><b>${v.carry ? v.carry.n + " " + esc(itemName(v.carry.item)) : "nothing"}</b><span>Bed</span><b>${esc(bedText(sim, v))}</b><span>Doing</span><b>${v.slp === 1 ? "sleeping" : v.job ? esc(v.job.k.replace("_", " ")) : "deciding"}</b><span>Order</span><b>${v.order ? esc(v.order.verb) + (v.order.done ? " (" + v.order.done + " done)" : "") : "none"}</b></div>`;
-      return h + `<div class="sr" data-test="villager-words">${words(w)}</div>`;
+      return `<div class="fx">${h}</div><div class="vr" data-sec="more">${selH}${vr}<div class="sr" data-test="villager-words">${words(w)}</div></div>`;
     }
     
     /** S13: hobby, titles, heirloom, grief, relationships with their reasons, and kin. */
@@ -16849,6 +16921,57 @@
     return { drawDecor };
   })();
   
+  __mod["ui/concernplace.js"] = (function () {
+    // Where a concern's place is on screen: ONE projection decides both "is it on screen" and "where is it drawn" (6.20). The pointer layer (ui/pointers.js, DOM edge chips) and the
+    // canvas marker (render/overlays.js, in-place chips) both read `concernPlaces(game)`, so they can never disagree.
+    //   z      the target's real cell height in the CURRENT view: in the Surface view something underground is shown on the surface above it (with a "↓3" badge), in a slice a thing
+    //          above the slice is shown on the slice's plane (badge "↑2"); everything else is projected at its own z.
+    //   on     the target is inside the free map area. It has HYSTERESIS (it must cross 14 px inside to become "on" and 14 px outside to stop being "on"), so a target on the border
+    //          never flips between an edge pointer and an in-place marker frame by frame.
+    //   Edge pointers are never made for a target that is on; a target that is on is never hidden because of its depth.
+    const { depthBadge } = __mod["render/obmath.js"];
+    
+    const HYST = 14;
+    
+    /** The free map area in real pixels (between the columns, under the top bar, above the dock). */
+    function freeRect(game) {
+      const el = (id) => document.getElementById(id), L = el("slotV").getBoundingClientRect(), R = el("slotI").getBoundingClientRect(), T = el("topbar").getBoundingClientRect();
+      const rv = game.ui.sel.length || game.ui.other ? R.left : window.innerWidth;
+      return { x0: L.right + 24, x1: Math.max(L.right + 80, rv - 24), y0: T.bottom + 56, y1: window.innerHeight - 90 };
+    }
+    
+    /** The projection of one concern loc in the current view: {sx, sy, z, badge}. */
+    function placeOf(game, loc) {
+      const { cam, renderer } = game, D = game.D;
+      const lz = loc.z !== undefined && loc.z >= 0 ? loc.z : undefined;
+      if (!cam.oblique || lz === undefined || !renderer.view) { const [sx, sy] = cam.toScreen(loc.x + 0.5, loc.y + 0.5, lz); return { sx, sy, z: lz, badge: "" }; }
+      const top = renderer.topAt(loc.x, loc.y), badge = depthBadge(renderer.z, lz, top, D);
+      const z = renderer.z >= D - 1 ? (badge ? top + 1 : lz) : Math.min(lz, renderer.z);
+      const [sx, sy] = cam.toScreen(loc.x + 0.5, loc.y + 0.5, z);
+      return { sx, sy, z, badge };
+    }
+    
+    /** Per concern index: {c, key, sx, sy, badge, on}. Idempotent within a frame (hysteresis reads the state left by the previous frame, not by an earlier call). */
+    function concernPlaces(game) {
+      const ui = game.ui, list = ui.concerns || [], st = ui.cplaceState || (ui.cplaceState = new Map()), f = freeRect(game), out = [];
+      const stamp = f.x0 + "," + f.x1 + "," + game.cam.x + "," + game.cam.y + "," + game.cam.zoom + "," + game.renderer.z + "," + list.length + "," + ui.sel.length;
+      if (ui.cplaceFor === list && ui.cplaceStamp === stamp && ui.cplace) return ui.cplace;
+      list.forEach((c, i) => {
+        if (c.sev < 2 || !c.loc) return;
+        const p = placeOf(game, c.loc), was = st.get(c.k);
+        const inner = p.sx >= f.x0 + HYST && p.sx <= f.x1 - HYST && p.sy >= f.y0 + HYST && p.sy <= f.y1 - HYST;
+        const outer = p.sx >= f.x0 - HYST && p.sx <= f.x1 + HYST && p.sy >= f.y0 - HYST && p.sy <= f.y1 + HYST;
+        const on = was ? (was.on ? outer : inner) : inner;
+        st.set(c.k, { on });
+        out.push({ c, i, key: c.k, sx: p.sx, sy: p.sy, badge: p.badge, on, f });
+      });
+      ui.cplaceFor = list; ui.cplaceStamp = stamp; ui.cplace = out;
+      return out;
+    }
+    
+    return { freeRect, placeOf, concernPlaces };
+  })();
+  
   __mod["render/overlays.js"] = (function () {
     // Everything drawn ON TOP of the world for the player: selection rings, hover
     // outline, drag box, order markers, and the optional overlays (zones, job
@@ -16862,6 +16985,7 @@
     const { provisionalRoom } = __mod["sim/proom.js"];
     const { drawIcon } = __mod["ui/icons.js"];
     const { TOKENS } = __mod["ui/kit.js"];
+    const { concernPlaces } = __mod["ui/concernplace.js"];
     const { litHearths, flames, FIRE_R, FIRE_WARM } = __mod["sim/fire.js"];
     
     const TAU = 6.2832;
@@ -17068,14 +17192,10 @@
     /** UI_SPEC §3.4 / a9: a concern of level 2 or more that sits on screen gets an icon + severity pip above its place (off-screen ones are DOM edge pointers, ui/pointers.js). */
     function concernMarkers(game, ctx) {
       const list = game.ui.concerns; if (!list || !list.length) return;
-      const { cam, renderer } = game, calm = game.access && game.access.calm;
-      for (const c of list) {
-        if (c.sev < 2 || !c.loc) continue;
-        const lz = c.loc.z !== undefined && c.loc.z >= 0 ? c.loc.z : undefined;
-        if (lz !== undefined && (cam.oblique ? !(lz <= renderer.z && (renderer.z < game.D - 1 || lz >= renderer.topAt(c.loc.x, c.loc.y))) : lz !== renderer.z && Math.abs(lz - renderer.z) > 1)) continue;
-        const [sx, sy] = cam.toScreen(c.loc.x + 0.5, c.loc.y + 0.5, lz);
-        if (sx < 20 || sy < 20 || sx > cam.vw - 20 || sy > cam.vh - 20) continue;
-        const col = c.sev >= 3 ? TOKENS.danger : TOKENS.warm, y = sy - 22 - (c.sev >= 3 && !calm ? Math.abs(Math.sin(performance.now() / 300)) * 3 : 0);
+      for (const pl of concernPlaces(game)) {                                       // 6.20: the same projection and the same on/off decision (with hysteresis) as the edge pointers
+        if (!pl.on) continue;
+        const c = pl.c, sx = pl.sx, sy = pl.sy;
+        const col = c.sev >= 3 ? TOKENS.danger : TOKENS.warm, y = sy - 22;                    // (no bob: a marker that moves is a marker you cannot click or read)
         ctx.fillStyle = TOKENS.s2; ctx.strokeStyle = col; ctx.lineWidth = 2;
         ctx.beginPath(); ctx.arc(sx, y, 12, 0, TAU); ctx.fill(); ctx.stroke();
         drawIcon(ctx, c.icon, sx - 7, y - 7, 14, TOKENS.tx);
@@ -17083,6 +17203,7 @@
         ctx.beginPath();
         if (c.sev >= 3) { ctx.moveTo(sx + 11, y - 14); ctx.lineTo(sx + 16, y - 9); ctx.lineTo(sx + 11, y - 4); ctx.lineTo(sx + 6, y - 9); } else { ctx.moveTo(sx + 11, y - 15); ctx.lineTo(sx + 16, y - 6); ctx.lineTo(sx + 6, y - 6); }
         ctx.closePath(); ctx.fill();
+        if (pl.badge) { ctx.font = "bold 11px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; const w = ctx.measureText(pl.badge).width + 8; ctx.fillStyle = TOKENS.s2; ctx.fillRect(sx - w / 2, y + 12, w, 14); ctx.fillStyle = TOKENS.tx; ctx.fillText(pl.badge, sx, y + 19); }      // "↓3": the place is on another level
       }
     }
     
@@ -17555,6 +17676,7 @@
       seed = Math.floor(Number(seed));
       if (!(seed >= 0)) { game.toast("Seed must be a number."); return; }
       game.setSim(Sim.create(seed, { ironman }));
+      if (game.goHome) game.goHome();                          // 6.20: a new world opens on its camp, on the Surface
       game.toast(ironman ? "New ironman world, seed " + seed + ": it saves itself once a day into one slot, and cannot be loaded." : "New world, seed " + seed + ". It autosaves once a day.");
     }
     
@@ -17662,7 +17784,7 @@
             <button data-m="dl" data-test="m-dl">${svg("save", 16)}Download save (.json)</button>
             <button data-m="file" data-test="m-file">${svg("load", 16)}Load save from file...</button>
             <input type="file" accept=".json,application/json" style="display:none">
-            <div class="mrow" data-test="about-world" data-tip="The seed names this world: the same seed makes the same land. Share it to replay it.">About this world: seed <b class="aboutseed" data-test="about-seed"></b></div>
+            <div class="mrow" data-test="about-world" data-tip="The seed names this world: the same seed makes the same land. Share it to replay it.">World seed <b class="aboutseed" data-test="about-seed"></b></div><div class="mrow dim">Version <span data-test="about-build" data-tip="Build time"></span></div>
             <div class="mrow"><label>New game <select class="seedmode" data-test="seed-mode"><option value="random" selected>Random</option><option value="enter">Enter seed</option></select></label><input class="seed" type="number" value="1" min="0" style="display:none" data-test="seed-input"></div>
             <div class="mrow"><button data-m="new" data-test="m-new">${svg("plus", 14)}Start</button></div>
             <label class="mrow" data-tip="One autosave slot, written once a game day. No manual saving, no loading: what happens, happens."><input type="checkbox" class="iron" data-test="ironman"> <span class="iron">Ironman</span></label>
@@ -17710,11 +17832,11 @@
       q(".tb-game").onclick = (e) => {
         e.stopPropagation(); toggle(menu);
         const i = savedInfo();
-        q(".saveinfo").textContent = i ? "Browser save: " + i.label + " (seed " + i.seed + ", " + i.kb + " KB)" : "";
-        q(".seed").value = game.sim.seed; q(".aboutseed").textContent = game.sim.seed;
+        q(".saveinfo").textContent = i ? "Browser save: " + i.label + " · seed " + i.seed : "";
+        q(".seed").value = game.sim.seed; q(".aboutseed").textContent = game.sim.seed; { const ab = q("[data-test=about-build]"); ab.textContent = game.buildText ? "· " + game.buildText : ""; ab.dataset.tip = game.build ? "Built " + game.build.time + (game.build.dirty ? "\n(with uncommitted changes)" : "") : ""; }
         const iron = game.sim.ironman, autos = autoList();                    // S12: autosaves on offer; an ironman game can load nothing, and its own slot only from another game
         for (const id of ["save", "load", "dl", "file"]) { const b = menu.querySelector(`[data-m="${id}"]`); b.disabled = iron; b.dataset.tip = iron ? "Ironman: no manual saving or loading" : ""; }
-        q(".autos-l").style.display = autos.length ? "" : "none"; q(".autos").innerHTML = autos.length ? autos.map(a => `<button data-auto="${a.key}" ${iron ? "disabled" : ""}>${svg("load", 14)}${a.iron ? "Ironman: " : ""}Day ${a.day}, ${a.pop} villagers (seed ${a.seed}, ${a.kb} KB)</button>`).join("") : "";
+        q(".autos-l").style.display = autos.length ? "" : "none"; q(".autos").innerHTML = autos.length ? autos.map(a => `<button data-auto="${a.key}" ${iron ? "disabled" : ""}>${svg("load", 14)}<span class="atxt">${a.iron ? "Ironman: " : ""}Day ${a.day}, ${a.pop} slimes · seed ${a.seed}</span></button>`).join("") : "";
       };
       window.addEventListener("click", (e) => { if (!e.target.closest || !e.target.closest(".tb-menuwrap")) closePops(); });
       menu.addEventListener("click", (e) => {
@@ -18489,7 +18611,7 @@
     const { dateOf, DAYS_PER_SEASON, DAYS_PER_YEAR, SEASON_NAMES } = __mod["sim/clock.js"];
     const { dayF, WINTER_START, winterAhead } = __mod["sim/season.js"];
     const { isElder } = __mod["sim/villager.js"];
-    const { createPanel, esc } = __mod["ui/dom.js"];
+    const { createPanel, esc, morph } = __mod["ui/dom.js"];
     const { warnings, runwayText, itemName } = __mod["ui/text.js"];
     const { seasonLine, spoilText } = __mod["ui/village.js"];
     const { concerns, stableOrder, CONCERN_DO } = __mod["ui/concerns.js"];
@@ -18513,6 +18635,7 @@
         + `<div class="tab tab-crews" style="display:none"></div>`;
       const top = p.body.querySelector(".v-top"), stockEl = p.body.querySelector(".stock"), ed = p.body.querySelector(".stepper"), dem = p.body.querySelector(".v-dem"), tabs = p.body.querySelector(".tabs");
       const crews = createCrewsPanel(p.body.querySelector(".tab-crews"), game, { flat: true });
+      stockEl.after(ed);                                 // 6.20: the keep-N editor sits BELOW the tiles, so clicking a tile never moves the tiles
       const input = ed.querySelector("input"), etitle = ed.querySelector(".et"), ehelp = ed.querySelector(".ehelp"), ecv = ed.querySelector("canvas");
       let tab = "stores"; const last = { top: "", dem: "", order: "", ed: "" };
       const tiles = new Map();
@@ -18613,9 +18736,10 @@
         });
         h += `</div>`;
         const doit = [...new Set(list.flatMap(c => (CONCERN_DO[c.k] || [])))].slice(0, 3);
-        if (doit.length) h += `<div class="doit">` + doit.map(k => `<button class="btn" data-tool="${k}" data-test="do-${k}"${tipAttr(TOOL_TIP[k] || k)} aria-label="${esc(TOOL_TIP[k] || k)}">${svg(k, 16)}<span class="bl">${TOOL_CAP[k] || k}</span></button>`).join("") + `</div>`;
+        h += `<div class="doit" data-sec="doit">` + doit.map(k => `<button class="btn" data-tool="${k}" data-test="do-${k}"${tipAttr(TOOL_TIP[k] || k)} aria-label="${esc(TOOL_TIP[k] || k)}">${svg(k, 16)}<span class="bl">${TOOL_CAP[k] || k}</span></button>`).join("") + `</div>`;
         // beds: one icon per adult (filled = a bed for them, outline = needs one, dim = being built); racks; fields; pens
         const bedsBuilt = vl.beds.length, bedsSite = vl.sites.filter(s => s.what === "bed").length;
+        h += `<div class="vrows" data-sec="rows">`;
         h += `<div class="row beds" data-test="beds"${tipAttr(`Beds: ${bedsBuilt} for ${vl.adults} adults` + (bedsSite ? ` (+${bedsSite} being built)` : ""))}>${svg("bed", 16)}<b class="rl">Beds ${bedsBuilt}/${vl.adults}</b>`;
         for (let i = 0; i < Math.min(vl.adults, 10); i++) h += `<span class="bedi ${i < bedsBuilt ? "" : i < bedsBuilt + bedsSite ? "build" : "need"}">${svg("bed", 14)}</span>`;
         if (vl.adults > 10) h += `<span class="more-l">+${vl.adults - 10}</span>`;
@@ -18634,11 +18758,12 @@
         }
         const spt = spoilText(sim);
         if (spt) h += `<div class="row inl" data-test="spoil"${tipAttr(spt)}>${svg("spoilage", 16)}<b class="rl">Spoiling ${Object.values(sim.farm.sp.d).reduce((a, x) => a + x, 0) || ""}</b></div>`;
+        h += `</div>`;
         // all the old sentences, hidden: the same words, one tab-stop away for screen readers and the text tests
         h += `<div class="sr" data-test="village-words">` + `People ${vs.length}, ${adults} adults, ${elders} elders, ${kids} children. <span class="seasonline">${esc(seasonLine(sim))}</span> Food: ${sv.rations} rations = ${esc(runwayText(b.runway))} per head. Critical below ${crit.toFixed(1)} days; the village goes foraging as soon as it is reached. `
           + `Beds ${vl.beds.length} for ${vl.adults} adults${vl.sites.length ? " (+" + bedsSite + " being built)" : ""}. Drying racks ${vl.racks.length}. `
           + warnings(sim).map(w => `${esc(w.title)} ${esc(w.text)}`).join(" ") + ` ` + farmWords(sim, sv, pl) + `</div>`;
-        if (h !== last.top) { last.top = h; top.innerHTML = h; }
+        if (h !== last.top) { last.top = h; morph(top, h); }
     
         // stores: the tiles
         const order = [];
@@ -19027,11 +19152,11 @@
       const km = game.keymap, text = (v) => (typeof v === "function" ? v(km) : v);
       let last = "";
       const render = () => {
-        const h = `<div class="helpcard" data-test="keys"><button class="hclose">Close (${esc(km.label("help"))})</button><h2>Keys</h2><details class="how"><summary>How to play</summary><ol>${HOW.map(t => `<li>${esc(t)}</li>`).join("")}</ol></details>
+        const h = `<div class="helpcard" data-test="keys"><button class="hclose">Close (${esc(km.label("help"))})</button> <button class="hreplay" data-test="replay-tips">Replay tips</button><h2>Keys</h2><details class="how"><summary>How to play</summary><ol>${HOW.map(t => `<li>${esc(t)}</li>`).join("")}</ol></details>
           <h3>Controls</h3><div class="dim2">Keys shown are your current ones (Settings, top bar, changes them).</div><table>${CONTROLS.map(([k, d]) => `<tr><td><kbd>${esc(text(k))}</kbd></td><td>${esc(text(d))}</td></tr>`).join("")}</table></div>`;
         if (h !== last) { last = h; root.innerHTML = h; }
       };
-      root.addEventListener("click", (e) => { if (e.target === root || e.target.closest(".hclose")) game.ui.help = false; });
+      root.addEventListener("click", (e) => { if (e.target.closest(".hreplay")) { game.resetTips(); game.setTips(true); game.ui.help = false; game.toast("Tips will show again."); return; } if (e.target === root || e.target.closest(".hclose")) game.ui.help = false; });
       return { update() { const on = game.ui.help; root.style.display = on ? "flex" : "none"; if (on) render(); } };
     }
     
@@ -19104,42 +19229,57 @@
   
   __mod["ui/pointers.js"] = (function () {
     // Concern edge pointers (UI_SPEC §3.4): a concern of level 2 or more whose place is OFF screen gets a 30 px chip (class icon + severity pip shape) pinned to the edge of
-    // the free map area along the ray from the view centre to that place; click = look at it. At most 4 per side-less pool: beyond that a "+N" chip. On-screen concerns are
-    // drawn on the canvas (render/overlays.js). Positions are in real pixels (this layer is not scaled by the interface zoom).
+    // the free map area along the ray from the view centre to that place; click = look at it. At most 4, beyond that a "+N" chip. A concern that is ON screen is drawn in place
+    // on the canvas (render/overlays.js) and has NO pointer. 6.20: ui/concernplace.js is the one projection and the one on/off decision (with hysteresis) for both; the chips are
+    // persistent DOM elements whose position is eased along the edge (and only moved when it changed by more than half a pixel), so a pointer never jumps and never flickers.
+    // Positions are in real pixels (this layer is not scaled by the interface zoom).
     const { svg } = __mod["ui/icons.js"];
     const { pip, tipAttr } = __mod["ui/kit.js"];
-    const { depthBadge } = __mod["render/obmath.js"];
+    const { concernPlaces } = __mod["ui/concernplace.js"];
     
     function createPointers(root, game) {
-      let last = "";
+      const els = new Map();                                // concern class -> {el, x, y, sig}
+      let more = null, lastT = performance.now();
       root.addEventListener("click", (e) => {
         const t = e.target.closest("[data-i]"); if (!t) return;
         const c = game.ui.concerns && game.ui.concerns[Number(t.dataset.i)];
         if (c && c.loc) game.locate(c.loc);
       });
-      const free = () => {                                  // the world area between the columns, in real px
-        const L = document.getElementById("slotV").getBoundingClientRect(), R = document.getElementById("slotI").getBoundingClientRect(), T = document.getElementById("topbar").getBoundingClientRect();
-        const rv = game.ui.sel.length || game.ui.other ? R.left : window.innerWidth;
-        return { x0: L.right + 24, x1: rv - 24, y0: T.bottom + 56, y1: window.innerHeight - 90 };
-      };
+      const place = (o, x, y) => { if (!o.set || Math.abs(x - o.px) > 0.4 || Math.abs(y - o.py) > 0.4) { o.px = x; o.py = y; o.set = true; o.el.style.left = x.toFixed(1) + "px"; o.el.style.top = y.toFixed(1) + "px"; } };
       return {
         update() {
-          const list = game.ui.concerns || [], { cam } = game, f = free(), cx = (f.x0 + f.x1) / 2, cy = (f.y0 + f.y1) / 2;
-          let h = "", n = 0, extra = 0;
-          list.forEach((c, i) => {
-            if (c.sev < 2 || !c.loc) return;
-            const lz = c.loc.z !== undefined && c.loc.z >= 0 ? c.loc.z : undefined, [sx, sy] = cam.toScreen(c.loc.x + 0.5, c.loc.y + 0.5, lz);
-            const badge = lz !== undefined && cam.oblique ? depthBadge(game.renderer.z, lz, game.renderer.topAt(c.loc.x, c.loc.y), game.D) : "";      // "↓3": the place is on another level
-            if (!badge && sx >= f.x0 && sx <= f.x1 && sy >= f.y0 && sy <= f.y1) return;           // on screen: the canvas draws it
-            if (n >= 4) { extra++; return; }
+          const now = performance.now(), dt = Math.min(0.1, (now - lastT) / 1000), k = 1 - Math.exp(-dt * 14); lastT = now;
+          const places = concernPlaces(game), want = new Set();
+          let n = 0, extra = 0, f = null;
+          for (const p of places) {
+            f = p.f;
+            if (p.on) continue;                             // on screen: the canvas draws it in place
+            if (n >= 4) { extra++; continue; }
             n++;
-            const dx = sx - cx, dy = sy - cy, k = Math.min((f.x1 - cx) / Math.max(1e-6, Math.abs(dx)), (f.y1 - cy) / Math.max(1e-6, Math.abs(dy)), 1e9);
-            const px = Math.max(f.x0, Math.min(f.x1, cx + dx * k)), py = Math.max(f.y0, Math.min(f.y1, cy + dy * k)), ang = Math.atan2(dy, dx) * 180 / Math.PI;
-            h += `<div class="ptr l${c.sev}" data-test="pointer" data-class="${c.k}" data-i="${i}" style="left:${px.toFixed(0)}px;top:${py.toFixed(0)}px"${tipAttr(c.text)}>${svg(c.icon, 16)}${badge ? `<span class="db">${badge}</span>` : ""}<span class="pip-w">${pip(c.sev, 10)}</span>`
-              + `<svg class="parr" width="12" height="12" viewBox="0 0 12 12" style="transform:rotate(${ang.toFixed(0)}deg) translate(21px,0)"><path d="M0 0L9 6L0 12z" fill="currentColor"/></svg><span class="sr">${c.text}</span></div>`;
-          });
-          if (extra) h += `<div class="ptr more" style="left:${(f.x1 - 10).toFixed(0)}px;top:${(f.y0).toFixed(0)}px" data-test="pointer-more"><b>+${extra}</b></div>`;
-          if (h !== last) { last = h; root.innerHTML = h; }
+            const c = p.c, cx = (f.x0 + f.x1) / 2, cy = (f.y0 + f.y1) / 2, dx = p.sx - cx, dy = p.sy - cy;
+            const kk = Math.min((f.x1 - cx) / Math.max(1e-6, Math.abs(dx)), (f.y1 - cy) / Math.max(1e-6, Math.abs(dy)), 1e9);       // along the ray from the centre to the place...
+            const tx = Math.max(f.x0, Math.min(f.x1, cx + dx * kk)), ty = Math.max(f.y0, Math.min(f.y1, cy + dy * kk)), ang = Math.atan2(dy, dx) * 180 / Math.PI;
+            let o = els.get(p.key);
+            const sig = c.sev + "|" + c.text + "|" + p.badge + "|" + c.icon;
+            if (!o) { const el = document.createElement("div"); o = { el, x: tx, y: ty, sig: "", set: false }; els.set(p.key, o); root.appendChild(el); }
+            if (o.sig !== sig) {
+              o.sig = sig; o.el.className = "ptr l" + c.sev; o.el.dataset.test = "pointer"; o.el.dataset.class = c.k;
+              o.el.innerHTML = `${svg(c.icon, 16)}${p.badge ? `<span class="db">${p.badge}</span>` : ""}<span class="pip-w">${pip(c.sev, 10)}</span><svg class="parr" width="12" height="12" viewBox="0 0 12 12"><path d="M0 0L9 6L0 12z" fill="currentColor"/></svg><span class="sr">${c.text}</span>`;
+              o.el.setAttribute("data-tip", c.text); o.arr = o.el.querySelector(".parr");
+            }
+            o.el.dataset.i = String(p.i);
+            if (!o.set) { o.x = tx; o.y = ty; } else { o.x += (tx - o.x) * k; o.y += (ty - o.y) * k; }          // eased along the edge
+            place(o, o.x, o.y);
+            const a = Math.round(ang / 3) * 3;               // the arrow turns in 3 degree steps (no shimmer from sub-pixel motion)
+            if (o.a !== a) { o.a = a; o.arr.style.transform = `rotate(${a}deg) translate(21px,0)`; }
+            want.add(p.key);
+          }
+          for (const [key, o] of els) if (!want.has(key)) { o.el.remove(); els.delete(key); }
+          if (extra) {
+            if (!more) { more = document.createElement("div"); more.className = "ptr more"; more.dataset.test = "pointer-more"; }
+            if (!more.parentNode) root.appendChild(more);
+            more.innerHTML = `<b>+${extra}</b>`; more.style.left = (f.x1 - 10).toFixed(0) + "px"; more.style.top = f.y0.toFixed(0) + "px";
+          } else if (more && more.parentNode) more.remove();
         },
       };
     }
@@ -19981,7 +20121,7 @@
           <span>Reduced flashing</span><label><input type="checkbox" class="a-calm" ${a.calm ? "checked" : ""}> no hit rings, steady flames, no flickering cracks</label></div>
           <h3>Game</h3><div class="acc"><span>Pause on death</span><label><input type="checkbox" class="s-autop" data-test="opt-autopause" ${ui.autoPause ? "checked" : ""}> pause when a villager dies</label>
           <span>Show all tools</span><label><input type="checkbox" class="s-showall" data-test="opt-showall" ${ui.showAll ? "checked" : ""}> standing orders, blueprints and crews normally appear as the village earns them</label>
-          <span>Show tips</span><label><input type="checkbox" class="s-tips" data-test="opt-tips" ${game.guide && game.guide.on ? "checked" : ""}> short hints that show you what to click in the first minutes</label>
+          <span>Show tips</span><label><input type="checkbox" class="s-tips" data-test="opt-tips" ${game.guide && game.guide.on ? "checked" : ""}> short hints that show you what to click in the first minutes <button class="btn s-replay" data-test="replay-tips-set">Replay tips</button></label>
           <span>Mouse sway</span><label><input type="checkbox" class="s-sway" data-test="opt-sway" ${game.sway ? "checked" : ""}> in first person the view leans a little towards the mouse (hold the right button to look around)</label>
           <span>Developer tools</span><label><input type="checkbox" class="s-dev" data-test="opt-dev" ${game.dev ? "checked" : ""}> game speed, MAX, skip-to, debug events, the fps line (keys 1-9 always work)</label></div></div>`;
         if (h !== last) { last = h; root.innerHTML = h; }
@@ -20003,6 +20143,7 @@
         else if (e.target.matches(".s-dev")) game.setDev(e.target.checked);
         else if (e.target.matches(".s-sway")) game.setSway(e.target.checked);
         else if (e.target.matches(".s-tips")) game.setTips(e.target.checked);
+        else if (e.target.closest(".s-replay")) { game.resetTips(); game.setTips(true); game.toast("Tips will show again."); }
       });
       // while a row is waiting for a key: the next key press binds (Esc cancels); it must not also act as a command
       window.addEventListener("keydown", (e) => {
@@ -20090,9 +20231,9 @@
     /** Villagers drawn inside a screen rectangle. */
     function villagersIn(game, x0, y0, x1, y1) {
       const { sim, cam, renderer } = game, out = [];
-      if (cam.oblique && renderer.drawn) {                                                  // the angled view: a slime is in the box when its sprite's centre is
+      if (cam.oblique && renderer.drawn) {                                                  // the angled view: a slime is in the box when its DRAWN sprite rectangle overlaps it (any overlap counts)
         const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);
-        for (const d of renderer.drawn) { if (d.pri !== "villager") continue; const cx = (d.l + d.r) / 2, cy = (d.t + d.b) / 2; if (cx >= ax && cx <= bx && cy >= ay && cy <= by && !out.includes(d.e)) out.push(d.e); }
+        for (const d of renderer.drawn) { if (d.pri !== "villager") continue; if (d.r >= ax && d.l <= bx && d.b >= ay && d.t <= by && renderer.isShown(d.e) && !out.includes(d.e)) out.push(d.e); }
         return out;
       }
       const [ax, ay] = cam.toWorld(Math.min(x0, x1), Math.min(y0, y1)), [bx, by] = cam.toWorld(Math.max(x0, x1), Math.max(y0, y1));
@@ -20151,6 +20292,7 @@
       const { ui, cam } = game;
       const keys = game.keys = new Set();                                  // held pan / walk actions ("panLeft" ...), not raw keys, so a remapped key works the same
       const km = game.keymap;
+      game.villagersIn = (x0, y0, x1, y1) => villagersIn(game, x0, y0, x1, y1).map(v => v);        // (the same hit test the drag box uses; tools and tests call it)
     
       window.addEventListener("keydown", (e) => {
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
@@ -21047,7 +21189,7 @@
     //             level changes (or it is newly selected), so a level you pick by hand is never fought.
     const { World, D, M } = __mod["sim/world.js"];
     const { svg } = __mod["ui/icons.js"];
-    const { levelLabel, gaugeRows, viewLevelFor } = __mod["render/obmath.js"];
+    const { levelLabel, gaugeRows, gaugeWindow, viewLevelFor } = __mod["render/obmath.js"];
     
     function createLevels(game, root) {
       const { ui } = game, R = () => game.renderer;
@@ -21100,18 +21242,18 @@
           root.style.display = game.possessed && game.possessed() ? "none" : "";
           const counts = new Map();
           for (const v of sim.ents.ofKind("villager")) counts.set(v.z, (counts.get(v.z) || 0) + 1);
-          const rows = gaugeRows(r.z, camp(), D, counts, dugLevels(sim));
+          const rows = gaugeWindow(gaugeRows(r.z, camp(), D, counts, dugLevels(sim)), 9, camp());      // a fixed 9-row window: it scrolls round the current level, the gauge never changes height
           const lab = game.levelLabel();
           let h = "";
           for (const q of rows) {
+            if (!q) { h += `<span class="g-row g-pad" aria-hidden="true"></span>`; continue; }
             h += `<button class="g-row${q.cur ? " cur" : ""}${q.surface ? " surf" : ""}${q.camp ? " camp" : ""}" data-n="${q.n}" data-test="gauge-row" data-label="${lab === q.label ? "" : ""}" data-tip="${q.label}${q.slimes ? "\n" + q.slimes + (q.slimes === 1 ? " slime" : " slimes") : ""}${q.dug ? "\ncarved space" : ""}">`
               + `<span class="g-l">${q.surface ? svg("day", 12) : ""}</span><span class="g-t"></span>${q.slimes ? `<span class="g-dot" data-test="gauge-dot">${q.slimes > 1 ? q.slimes : ""}</span>` : ""}${q.dug ? `<span class="g-dug"></span>` : ""}<span class="sr">${q.label}</span></button>`;
           }
-          const sig = rows.map(q => q.n + ":" + (q.cur ? 1 : 0) + ":" + q.slimes + ":" + (q.dug ? 1 : 0)).join("|") + lab;
+          const sig = rows.map(q => !q ? "-" : q.n + ":" + (q.cur ? 1 : 0) + ":" + q.slimes + ":" + (q.dug ? 1 : 0)).join("|") + lab;
           if (sig !== last) { last = sig; rowsEl.innerHTML = h; now.textContent = lab; now.classList.toggle("surf", r.z >= D - 1); }
-          above.style.display = r.z < D - 1 ? "" : "none";
-          const insp = document.getElementById("slotI"), ri = insp && insp.style.display !== "none" ? 296 + 16 : 8;
-          root.style.right = ri + "px"; root.style.top = "96px";
+          above.style.visibility = r.z < D - 1 ? "" : "hidden";                  // (hidden, not removed: the gauge's size never changes)
+          // placement is CSS only (#gauge in shell.html): a fixed bottom-right slot at the edge of the map area, a fixed height, never moved by a panel
         },
         /** Every frame: follow the focused slime between levels. */
         follow() {
@@ -21132,19 +21274,23 @@
     // a pulse ring round the thing to use, a ghost hand that moves (and clicks or drags) to it, and a 1-3 word caption. A hint finishes the moment the player does the thing,
     // is shown at most twice, yields to anything urgent and to guiding a slime, never comes more than once per 20 s (the first at 4 s), and is off with Settings > Show tips
     // and in tests that load fixtures (`?tools=all`). `calm` makes the ring static. Seen counts are remembered in browser storage.
+    // 6.20: why nobody saw a hint: at the start of every world a diamond-severity concern (Cold: no beds yet) is up, and hints yielded to ANY urgent concern, so they never started.
+    // The first-contact hints (select, look at a concern, why, order) now ignore urgency (they are how you answer it); each hint shows ONCE per browser (not per save; key tips.seen2),
+    // a new game or a load re-arms the 4 s delay, the caption is clamped inside the window and lifted above the HUD, and Settings / Keys have "Replay tips".
     const { remember } = __mod["ui/dom.js"];
     const { D } = __mod["sim/world.js"];
     
-    const FIRST_MS = 4000, GAP_MS = 20000, MAX_SHOWN = 2;
+    const FIRST_MS = 4000, GAP_MS = 20000, MAX_SHOWN = 1, SEEN_KEY = "tips.seen2";
     
     function createGuide(game, root) {
       const { ui } = game, params = new URLSearchParams(location.search);
       const G = game.guide = { on: remember("tips") !== "0" && ui.progression && params.get("tips") !== "0" || params.get("tips") === "1", cur: null, t0: performance.now(), last: 0, shown: {}, done: {}, log: [] };
-      try { G.shown = JSON.parse(remember("tips.seen") || "{}"); } catch (e) { G.shown = {}; }
+      try { G.shown = JSON.parse(remember(SEEN_KEY) || "{}"); } catch (e) { G.shown = {}; }
       game.setTips = (on) => { G.on = !!on; remember("tips", on ? "1" : "0"); if (!on) stop(); };
-      game.resetTips = () => { G.shown = {}; G.done = {}; G.last = 0; G.t0 = performance.now(); stop(); remember("tips.seen", "{}"); };
+      game.resetTips = () => { G.shown = {}; G.done = {}; G.last = 0; G.t0 = performance.now(); stop(); remember(SEEN_KEY, "{}"); };
+      game.guide.rearm = () => { G.t0 = performance.now(); G.last = 0; G.done = {}; stop(); };      // a new game or a loaded save: the 4 s clock restarts (what was seen stays seen)
       root.dataset.test = "guide";
-      root.style.cssText += "inset:0;z-index:7;";
+      root.style.cssText += "inset:0;z-index:40;zoom:1 !important;";
       const ring = document.createElement("div"), hand = document.createElement("div"), cap = document.createElement("div");
       ring.className = "gd-ring"; hand.className = "gd-hand"; cap.className = "gd-cap";
       ring.dataset.test = "guide-ring"; cap.dataset.test = "guide-caption"; hand.dataset.test = "guide-hand";
@@ -21156,10 +21302,12 @@
       const dom = (sel) => { const e = document.querySelector(sel); if (!e) return null; const r = e.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2, r: Math.max(r.width, r.height) / 2 + 6 } : null; };
       const at = (e) => { const [x, y] = game.cam.toScreen(e.x + 0.5, e.y + 0.5, e.z); return { x, y: y - game.cam.zoom * 0.4, r: Math.max(18, game.cam.zoom * 0.9) }; };
       const clearSpot = (p) => p.x > 330 && p.x < game.cam.vw - 340 && p.y > 130 && p.y < game.cam.vh - 130;
+      document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("[data-test=concern-chip],[data-test=pointer]")) ui.chipClicked = 1; }, true);
       const HINTS = [
-        { id: "select", at: 0, words: "Click a slime", act: "click", when: () => !ui.sel.length, done: () => ui.sel.length > 0, target: () => { const v = ent("villager").find(v => game.renderer.isShown(v) && clearSpot(at(v))); return v && at(v); } },
-        { id: "why", at: 1, words: "See why they act", act: "point", when: () => ui.sel.length > 0 && !!document.querySelector("[data-test=why-chain]"), done: () => !!ui.whyHover, target: () => dom("[data-test=why-chain]") },
-        { id: "order", at: 1, words: "Right-click to order", act: "rclick", when: () => ui.sel.length > 0, done: () => game.sim.ents.ofKind("villager").some(v => v.order), target: () => { const t = ent("plant").find(p => p.species === "tree" && game.renderer.isShown(p) && clearSpot(at(p))); return t && at(t); } },
+        { id: "select", intro: 1, at: 0, words: "Click a slime", act: "click", when: () => !ui.sel.length, done: () => ui.sel.length > 0, target: () => { const v = ent("villager").find(v => game.renderer.isShown(v) && clearSpot(at(v))); return v && at(v); } },
+        { id: "concern", intro: 1, at: 1, words: "Click to look", act: "click", when: () => (ui.concerns || []).some(c => c.sev >= 2) && !!document.querySelector("[data-test=concern-chip]"), done: () => !!ui.chipClicked, target: () => dom("[data-test=concern-chip]") },
+        { id: "why", intro: 1, at: 1, words: "See why they act", act: "point", when: () => ui.sel.length > 0 && !!document.querySelector("[data-test=why-chain]"), done: () => !!ui.whyHover, target: () => dom("[data-test=why-chain]") },
+        { id: "order", intro: 1, at: 1, words: "Right-click to order", act: "rclick", when: () => ui.sel.length > 0, done: () => game.sim.ents.ofKind("villager").some(v => v.order), target: () => { const t = ent("plant").find(p => p.species === "tree" && game.renderer.isShown(p) && clearSpot(at(p))); return t && at(t); } },
         { id: "stock", at: 1, words: "Click to keep a stock", act: "click", when: () => !!document.querySelector("[data-test=stock-tile]"), done: () => Object.keys(game.sim.board.keeps || {}).length > 0, target: () => dom("[data-test=stock-tile]") },
         { id: "build", at: 1, words: "Drag to plan", act: "drag", when: () => game.unlocked && game.unlocked("build") && ui.mode === "select", done: () => game.sim.ents.ofKind("csite").length > 0, target: () => dom("[data-test=build-toggle]") },
         { id: "possess", at: 1, words: "Q: guide them", act: "click", when: () => ui.focus && ui.sel.length && performance.now() - G.t0 > 300000, done: () => !!game.possessed(), target: () => dom("[data-act=possess]") },
@@ -21167,7 +21315,7 @@
       ];
       function stop() { G.cur = null; root.style.display = "none"; ring.style.display = hand.style.display = cap.style.display = "none"; }
       function start(h, now) {
-        G.cur = h; G.last = now; G.shown[h.id] = (G.shown[h.id] || 0) + 1; G.cur.t = now; remember("tips.seen", JSON.stringify(G.shown)); G.log.push(h.id);
+        G.cur = h; G.last = now; G.shown[h.id] = (G.shown[h.id] || 0) + 1; G.cur.t = now; remember(SEEN_KEY, JSON.stringify(G.shown)); G.log.push(h.id);
         root.style.display = ""; ring.style.display = hand.style.display = cap.style.display = "";
         cap.textContent = h.words; root.dataset.hint = h.id; root.className = "act-" + h.act;
       }
@@ -21179,16 +21327,18 @@
           if (G.cur) {
             const h = G.cur;
             if (h.done()) { G.done[h.id] = 1; stop(); return; }
-            if (urgent || now - h.t > 25000) { stop(); return; }
+            if ((urgent && !h.intro) || now - h.t > 25000) { stop(); return; }
             const p = h.target();
             if (!p) { stop(); return; }
             ring.style.left = p.x + "px"; ring.style.top = p.y + "px"; ring.style.width = ring.style.height = p.r * 2 + "px";
-            hand.style.left = p.x + "px"; hand.style.top = p.y + "px"; cap.style.left = p.x + "px"; cap.style.top = (p.y + p.r + 10) + "px";
+            hand.style.left = p.x + "px"; hand.style.top = p.y + "px"; const cw = cap.offsetWidth || 120, ch = cap.offsetHeight || 26, vw = window.innerWidth, vh = window.innerHeight;
+            const cx = Math.max(cw / 2 + 8, Math.min(vw - cw / 2 - 8, p.x)), below = p.y + p.r + 10, cy = below + ch + 8 > vh ? Math.max(48, p.y - p.r - 10 - ch) : below;      // always inside the window, under the target or (at the bottom) above it
+            cap.style.left = cx + "px"; cap.style.top = cy + "px";
             return;
           }
-          if (urgent || now - G.t0 < FIRST_MS || (G.last && now - G.last < GAP_MS)) return;
+          if (now - G.t0 < FIRST_MS || (G.last && now - G.last < GAP_MS)) return;
           for (const h of HINTS) {
-            if (G.done[h.id] || (G.shown[h.id] || 0) >= MAX_SHOWN || !h.when() || !h.target()) continue;
+            if (G.done[h.id] || (G.shown[h.id] || 0) >= MAX_SHOWN || (urgent && !h.intro) || !h.when() || !h.target()) continue;
             start(h, now); return;
           }
         },
@@ -21386,9 +21536,14 @@
       game.lastAutoDay = -1;                  // S12: the autosave clock restarts from this game's day
       orderSeen.clear();
       possessCtl.resume();                    // a loaded save may be mid-possession
+      if (game.guide && game.guide.rearm) game.guide.rearm();      // 6.20: hints restart their 4 s clock for the new world
     };
     
     installSprite();
+    {                                                              // 6.20: the build stamp ("v6.20 · a1b2c3d+ · 10-28 14:05"), shown only in Menu > About this world; window.__BUILD is injected by tools/build.js. Not part of the sim or any save.
+      const B = window.__BUILD || { stage: "dev", commit: "src", dirty: false, time: "" };
+      game.build = B; game.buildText = "v" + B.stage + " · " + B.commit + (B.dirty ? "+" : "") + (B.time ? " · " + B.time.slice(5) : "");
+    }
     createAccess(game);                     // S12: UI scale, contrast, colour-blind marks, reduced flashing
     const slots = createHud(game, params);  // the HUD grid (ui/hud.js): every panel is mounted into one of its slots
     createSkip(game);

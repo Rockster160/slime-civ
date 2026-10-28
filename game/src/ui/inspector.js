@@ -10,7 +10,7 @@ import { canSplit } from "../sim/population.js";
 import { ITEMS, survey, inZone, STACK_CAP, zoneCapacity, stockZoneAt, stockCapacity } from "../sim/items.js";
 import { DUR_DAY } from "../sim/clock.js";
 import { LEVEL_NAME } from "../sim/heat.js";
-import { esc, bar, needColor, createPanel } from "./dom.js";
+import { esc, bar, needColor, createPanel, morph } from "./dom.js";
 import { svg } from "./icons.js";
 import { ring, meter, rankPips, avatar, tipAttr, sr, CLASS_ROLE } from "./kit.js";
 import { roomHtml, roomAct, proomHtml } from "./rooms.js";
@@ -48,23 +48,25 @@ function createNow(root, game) {
       const { sim } = game;
       let h = "";
       if (v.poss) {
-        h = `<div class="chain" data-test="why-chain"><span class="jc big r-circle" style="border-color:var(--poss)"${tipAttr("Guided: you are guiding " + v.name)}>${svg("possess", 22)}</span><span class="cls">${svg("release", 14)}<kbd>Esc</kbd></span></div>`
+        h = `<div class="chain" data-sec="job" data-test="why-chain"><span class="jc big r-circle" style="border-color:var(--poss)"${tipAttr("Guided: you are guiding " + v.name)}>${svg("possess", 22)}</span><span class="cls">${svg("release", 14)}<kbd>Esc</kbd></span></div>`
           + `<div class="sr" data-test="why-words"><b>You are guiding ${esc(v.name)}.</b> You are Steadfast: a guided villager never flees, and may go where villagers will not (the thornback's cave, unmapped caves). They do exactly what you tell them; the village does not plan around them.</div>`;
-        if (h !== last) { last = h; root.innerHTML = h; }
+        if (h !== last) { last = h; morph(root, h); }
         return;
       }
       let pending = null;
       if (game.state.paused && (v.ep !== sim.board.ep || v.rp) && isAdult(sim, v)) pending = plan(sim, v, false, null, true);
       const x = explain(sim, v, pending);
-      if (!x) { h = `<div class="sr">${esc(v.name)} has not decided anything yet.</div>`; if (h !== last) { last = h; root.innerHTML = h; } return; }
+      if (!x) { h = `<div class="sr">${esc(v.name)} has not decided anything yet.</div>`; if (h !== last) { last = h; morph(root, h); } return; }
       const jobK = pending ? pending.job : v.job ? v.job.k : v.why ? v.why.job : "";
       const icon = JOB_ICON[jobK] || "idle", rim = RIM[x.cls] || "none";
       const say = x.sentence, tot = Math.max(1, x.score === null ? 0 : x.score);
-      h = `<div class="chain" data-test="why-chain"><span class="jc big r-${rim} ${x.pending ? "next" : ""}" data-class="${x.cls}"${tipAttr(say + "\n" + x.classLabel)}>${svg(icon, 22)}</span>`
+      h = `<div class="chain" data-sec="job" data-test="why-chain"><span class="jc big r-${rim} ${x.pending ? "next" : ""}" data-class="${x.cls}"${tipAttr(say + "\n" + x.classLabel)}>${svg(icon, 22)}</span>`
         + `<span class="cls" data-test="job-label">${esc(JOB[jobK] ? JOB[jobK].noun : "")}</span><span class="score">${x.score !== null ? `<span class="cap">${esc(CLASS_SHORT[x.cls] || "Priority")}</span>` + meter(Math.min(1, tot / 160), { color: `var(--${CLASS_ROLE[x.cls] || "tx3"})`, tip: "Score " + x.score + ". Higher wins." }) : ""}</span></div>`;
-      if (x.rejected.length) {
-        h += `<div class="rejl" data-test="why-rejected"><span class="cap">Passed over</span>`;
-        for (const r of x.rejected) h += `<span class="rj"${tipAttr(r.label + "\n" + r.text)}><span class="jc rej r-${RIM[r.cls] || "none"}">${svg(JOB_ICON[r.job] || JOB_ICON[Object.keys(JOB).find(k => JOB[k].noun === r.label.replace(/ order$/, ""))] || "blocked", 14)}</span><b>${esc(r.label.replace(/ order$/, ""))}</b><span class="bk">${svg("blocked", 12)}${esc(shortBlocker(r.blocker))}</span></span>`;
+      {                                                                           // "Passed over": ALWAYS present, one fixed-height row; two chips and a "+N" chip, never a second line
+        const SHOW = 2, rest = x.rejected.slice(SHOW);
+        h += `<div class="rejl" data-sec="passed" data-test="why-rejected">${x.rejected.length ? `<span class="cap">Passed over</span>` : ""}`;
+        for (const r of x.rejected.slice(0, SHOW)) h += `<span class="rj"${tipAttr(r.label + "\n" + r.text)}><span class="jc rej r-${RIM[r.cls] || "none"}">${svg(JOB_ICON[r.job] || JOB_ICON[Object.keys(JOB).find(k => JOB[k].noun === r.label.replace(/ order$/, ""))] || "blocked", 14)}</span><b>${esc(r.label.replace(/ order$/, ""))}</b><span class="bk">${svg("blocked", 12)}${esc(shortBlocker(r.blocker))}</span></span>`;
+        if (rest.length) h += `<span class="rj more"${tipAttr("Also passed over\n" + rest.map(r => r.label.replace(/ order$/, "") + ": " + shortBlocker(r.blocker)).join("\n"))}><b>+${rest.length}</b></span>`;
         h += `</div>`;
       }
       // the words: the headline stays in the DOM (hidden), the table sits in a closed disclosure
@@ -76,11 +78,11 @@ function createNow(root, game) {
       if (x.fail && x.fail.ago < 1800) h += `<p>Last failure: ${esc(jobNoun(x.fail.job, ""))} did not work out: ${esc(x.fail.text)} (${Math.max(1, Math.round(x.fail.ago / 20))}s ago)</p>`;
       h += `</div>`;
       if (x.parts.length) {
-        h += `<details class="parts" ${game.ui.partsOpen ? "open" : ""}><summary>${svg("chev-r", 12)} Why?</summary><table>`;
+        h += `<details class="parts" data-sec="why" ${game.ui.partsOpen ? "open" : ""}><summary>${svg("chev-r", 12)} Why?</summary><table>`;
         for (const r of x.parts) h += `<tr><td>${esc(r.label)}</td><td class="num ${r.value < 0 ? "neg" : ""}">${r.value > 0 && r.k !== "base" ? "+" : ""}${r.value}</td></tr>`;
         h += `</table><p class="dim">Score ${x.score}. Higher wins. The class base decides first (needs beat village emergencies beat your orders beat standing orders beat village demand); the rest only breaks ties inside a class.</p></details>`;
-      }
-      if (h !== last) { last = h; root.innerHTML = h; }
+      } else h += `<div class="parts ph" data-sec="why"></div>`;
+      if (h !== last) { last = h; morph(root, h); }
     },
   };
 }
@@ -90,7 +92,7 @@ export function createInspector(parent, game) {
   const p = createPanel(parent, "inspector", "Selected", { icon: "eye" });
   p.body.innerHTML = `<div class="sec-now" data-test="inspector-now"></div><div class="sec-body" data-test="inspector-body"></div>`;
   const nowEl = p.body.querySelector(".sec-now"), bodyEl = p.body.querySelector(".sec-body"), now = createNow(nowEl, game), icoEl = p.head.querySelector(".pi");
-  let lastBody = "", lastIco = "";
+  let lastBody = "", lastIco = "", lastKey = "", lastAt = 0;
   p.body.addEventListener("click", (e) => {
     const t = e.target.closest("[data-act]"); if (!t || t.disabled) return;
     const [a, arg] = t.dataset.act.split(":");
@@ -110,11 +112,16 @@ export function createInspector(parent, game) {
       game.toast("Investigating here: " + ids.map(id => sim.ents.get(id).name).join(", ") + " will try things out at this spot for three days (a standing job; it never beats food or shelter).");
     }
   });
+  p.body.addEventListener("click", () => { lastAt = 0; });                  // a click that changes something refreshes at once
   p.update = () => {
     const { sim, ui } = game;
     const v = ui.focus ? sim.ents.get(ui.focus) : null;
+    // 6.20: the text refreshes at about 4 Hz (and at once when the selection, the pause state or the tick-jump changes), so a number is readable before it changes
+    const key = (v ? "v" + v.id + ":" + ui.sel.length : ui.other ? "o" + JSON.stringify(ui.other) : "-") + (game.state.paused ? "p" : "r"), nowMs = performance.now();
+    if (key === lastKey && nowMs - lastAt < 240 && !game.ui.inspectorForce) return;
+    lastKey = key; lastAt = nowMs;
     const setIco = (h) => { if (h !== lastIco) { lastIco = h; icoEl.innerHTML = h; } };
-    const setBody = (h) => { if (h !== lastBody) { lastBody = h; bodyEl.innerHTML = h; } };
+    const setBody = (h) => { if (h !== lastBody) { lastBody = h; morph(bodyEl, h); } };
     if (v) {
       p.show(true); p.setTitle(v.name); setIco(avatar(v.hue, v.lin, 20, !isAdult(sim, v)));
       nowEl.style.display = ""; now.update(v); setBody(villagerHtml(game, v)); return;
@@ -134,41 +141,41 @@ function words(html) { return html.replace(/<button[\s\S]*?<\/button>/g, "").rep
 
 function villagerHtml(game, v) {
   const { sim, ui } = game, age = ageDays(sim, v), fit = fitness(v, age), mh = maxHp(v, fit), kid = !isAdult(sim, v), elder = isElder(sim, v);
-  let h = "";
+  let h = "", vr = "", selH = "";
   if (ui.sel.length > 1) {
-    h += `<div class="kin" data-test="selection">`;
+    selH += `<div class="kin" data-test="selection">`;
     const CHIPS = 14;                                                          // S11: at 20-60 selected the chip list would fill the panel
     const shownIds = ui.sel.slice(0, CHIPS); if (ui.focus && !shownIds.includes(ui.focus)) shownIds.push(ui.focus);
-    shownIds.forEach((id) => { const o = sim.ents.get(id); if (o) h += `<button data-act="focus:${id}" class="${id === ui.focus ? "on" : ""}"${tipAttr(o.name)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}${id === ui.focus ? `<span class="nm">${esc(o.name.split(" ")[0])}</span>` : sr(o.name)}</button>`; });
-    if (ui.sel.length > CHIPS) h += `<span class="rel">+${ui.sel.length - CHIPS}</span>`;
-    h += `</div>`;
+    shownIds.forEach((id) => { const o = sim.ents.get(id); if (o) selH += `<button data-act="focus:${id}" class="${id === ui.focus ? "on" : ""}"${tipAttr(o.name)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}${id === ui.focus ? `<span class="nm">${esc(o.name.split(" ")[0])}</span>` : sr(o.name)}</button>`; });
+    if (ui.sel.length > CHIPS) selH += `<span class="rel">+${ui.sel.length - CHIPS}</span>`;
+    selH += `</div>`;
   }
   // life bar: child / adult / elder segments, a marker where they are
   const lifeFrac = Math.min(1, age / LIFE_DAYS);
-  h += `<div class="ins-head"><span class="cap lifecap">${{ child: "Child", adult: "Adult", elder: "Elder" }[lifeStage(sim, v)]}</span><span class="mt" style="flex:1;height:10px"${tipAttr(stageText(sim, v) + (elder ? " (past their prime)" : "") + "\n" + family(sim, v))}><i style="width:20%;background:var(--water);opacity:.55"></i><i style="left:20%;width:60%;background:var(--ok);opacity:.55"></i><i style="left:80%;width:20%;background:var(--cold);opacity:.55"></i><b class="mk" style="left:${(lifeFrac * 100).toFixed(1)}%;background:#fff;width:3px"></b></span>`
+  h += `<div class="ins-head" data-sec="life"><span class="cap lifecap">${{ child: "Child", adult: "Adult", elder: "Elder" }[lifeStage(sim, v)]}</span><span class="mt" style="flex:1;height:10px"${tipAttr(stageText(sim, v) + (elder ? " (past their prime)" : "") + "\n" + family(sim, v))}><i style="width:20%;background:var(--water);opacity:.55"></i><i style="left:20%;width:60%;background:var(--ok);opacity:.55"></i><i style="left:80%;width:20%;background:var(--cold);opacity:.55"></i><b class="mk" style="left:${(lifeFrac * 100).toFixed(1)}%;background:#fff;width:3px"></b></span>`
     + `<button class="btn ${ui.follow === v.id ? "on" : ""}" data-act="follow" data-test="follow"${tipAttr("Follow\nKeep the camera on them", "F")} aria-label="Follow">${svg("follow", 16)}<span class="bl">Follow</span></button>`
     + (v.poss ? `<button class="btn" data-act="release" data-test="release"${tipAttr("Release\nLet go of them", "Esc")} aria-label="Release">${svg("release", 16)}<span class="bl">Release</span></button>` : isAdult(sim, v) ? `<button class="btn" data-act="possess" data-test="possess"${tipAttr("Guide this villager\nWASD to walk, E to use what is next to you, Esc to let go", "Q")} aria-label="Guide">${svg("possess", 16)}<span class="bl">Guide</span></button>` : "")
     + `</div>`;
   // needs: four rings, health, mood
-  h += `<div class="rings" data-test="needs">`;
+  h += `<div class="rings" data-sec="needs" data-test="needs">`;
   for (const [k, label] of NEEDS.slice(0, 4)) { const [soft, crit] = SOFT[k]; h += `<span class="rc">` + ring({ icon: NEED_ICON[k], v: v[k], soft, crit, px: 30, tip: `${label} ${pct(v[k])}\nUrgent below ${pct(soft)}, critical below ${pct(crit)}`, test: "need-" + k }) + `<span class="cap">${RING_CAP[k]}</span></span>`; }
   const hr = v.hp / mh;
   h += `<span class="rc">` + ring({ icon: "health", v: hr, soft: 0.6, crit: 0.3, px: 30, tip: `Health ${Math.round(v.hp)}/${Math.round(mh)}`, test: "need-health" }) + `<span class="cap">Health</span></span>`;
   h += `<span class="rc mood"${tipAttr(`Mood ${pct(v.mood)}`)}><span class="mrow">${svg(v.mood > 0.66 ? "mood-hi" : v.mood > SOFT.mood[0] ? "mood" : "mood-lo", 16)}${meter(v.mood, { color: "var(--energy)", marks: [{ at: SOFT.mood[0], cls: "soft" }, { at: SOFT.mood[1], cls: "crit" }], tip: `Mood ${pct(v.mood)}` })}</span><span class="cap">Mood</span></span></div>`;
   if (v.ill) {
     const help = [["sleep", "Rest", v.slp === 1], ["warmth", "A warm bed", v.warm > 0.55], ["tend", "A nurse", sim.ents.ofKind("villager").some(o => o.job && o.job.k === "tend_sick" && o !== v)], ["eat", "Cooked food", v.hunger > 0.5], ["jar", "A herbal remedy", false]];
-    h += `<div class="sick-row" data-test="sick"${tipAttr("Sick\n" + illLines(sim, v).join("\n"))}>${svg("sick", 18)}${ring({ icon: "health", v: v.ill.p, px: 24, tip: `Recovered ${pct(v.ill.p)}` })}<span class="help">${help.map(([ic, t, on]) => `<span class="${on ? "lit" : ""}"${tipAttr(t)}>${svg(ic, 16)}</span>`).join("")}</span></div>`;
+    vr += `<div class="sick-row" data-test="sick"${tipAttr("Sick\n" + illLines(sim, v).join("\n"))}>${svg("sick", 18)}${ring({ icon: "health", v: v.ill.p, px: 24, tip: `Recovered ${pct(v.ill.p)}` })}<span class="help">${help.map(([ic, t, on]) => `<span class="${on ? "lit" : ""}"${tipAttr(t)}>${svg(ic, 16)}</span>`).join("")}</span></div>`;
   }
   // genes: nine columns round a centre line (1.00 = average); the notable ones sit in the middle
   const dev = TRAITS.map(k => ({ k, d: v.t[k] - 1 })).sort((a, b) => Math.abs(a.d) - Math.abs(b.d));
   const mid = []; dev.forEach((q, i) => { if (i % 2 === 0) mid.push(q); else mid.unshift(q); });
-  h += `<div class="gene" data-test="genes">` + mid.map(({ k, d }) => {
+  h += `<div class="gene" data-sec="genes" data-test="genes">` + mid.map(({ k, d }) => {
     const hgt = Math.min(50, Math.abs(d) / 0.25 * 50), tip = `${TRAIT_INFO[k].name} ${v.t[k].toFixed(2)} (${traitWord(k, v.t[k])})\n${TRAIT_INFO[k].what}`;
     return `<span class="gc ${Math.abs(d) > 0.12 ? "hi" : ""}"${tipAttr(tip)}><span class="zone">${d >= 0 ? `<i class="bpos" style="height:${hgt}%"></i>` : `<i class="bneg" style="height:${hgt}%"></i>`}</span>${svg(TRAIT_ICON[k], 12)}<span class="cap">${GENE_CAP[k]}</span></span>`;
   }).join("") + `</div>`;
   // skills: icon + rank pips (rust shown by a hatch)
   const pref = preferred(v);
-  h += `<div class="skl" data-test="skills">` + SKILLS.map(s => {
+  h += `<div class="skl" data-sec="skills" data-test="skills">` + SKILLS.map(s => {
     const l = level(v, s), rs = rustOf(v, s);
     const tip = SKILL_INFO[s].name + ": " + skillWord(l) + " (" + l.toFixed(2) + ")\n" + SKILL_INFO[s].what + (rs > 0.02 ? "\nRusty: unused for a long while, it has slipped from " + peakLevel(v, s).toFixed(2) : "");
     return `<span${tipAttr(tip)}>${svg(SKILL_ICON[s], 16)}<b class="rl">${SKILL_CAP[s]}</b>${rankPips(l, rs > 0.02)}${pref === s ? `<i class="star">${svg("star", 12)}</i>` : ""}</span>`;
@@ -177,20 +184,20 @@ function villagerHtml(game, v) {
   const kin = sim.ents.ofKind("villager").filter(o => o !== v).map(o => [o, kinship(v, o), relationWord(v, o)]).filter(k => k[1] > 0 && k[2]);
   const rel = (v.rel || []).map(r => [sim.ents.get(r.o), r]).filter(q => q[0]);
   if (kin.length || rel.length || v.mate) {
-    h += `<div class="kin" data-test="kin">`;
+    vr += `<div class="kin" data-test="kin">`;
     const seen = new Set();
-    const one = (o, glyph, tip) => { if (seen.has(o.id)) return; seen.add(o.id); h += `<button data-act="focus:${o.id}"${tipAttr(o.name + "\n" + tip)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}<span class="nm">${esc(o.name.split(" ")[0].slice(0, 8))}</span><span class="rel">${svg(glyph, 12)}</span></button>`; };
+    const one = (o, glyph, tip) => { if (seen.has(o.id)) return; seen.add(o.id); vr += `<button data-act="focus:${o.id}"${tipAttr(o.name + "\n" + tip)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}<span class="nm">${esc(o.name.split(" ")[0].slice(0, 8))}</span><span class="rel">${svg(glyph, 12)}</span></button>`; };
     const mate = v.mate ? sim.ents.get(v.mate) : null;
     if (mate) one(mate, "star", "Partner");
     for (const [o, k, w] of kin) one(o, w && /child|son|daughter/i.test(w) ? "sprout" : "people", w + (k >= 0.5 ? ", very close" : ""));
     for (const [o, r] of rel) one(o, r.k === "rival" ? "fear" : "check", TIER_WORD[r.k] + ": " + reasonLine(r, o.name));
-    h += `</div>`;
+    vr += `</div>`;
   }
   // actions: teach / split
   const pupils = ui.sel.filter(id => id !== v.id).map(id => sim.ents.get(id)).filter(o => o && isAdult(sim, o));
   const acts = (isAdult(sim, v) && pupils.length ? pupils.slice(0, 2).map(o => `<button class="btn" data-act="teach:${o.id}"${tipAttr("Teach " + o.name + "\nWork the same craft beside them and they learn 3x faster; you work at 80%. Give you both the same order (e.g. dig) so you end up side by side.")}>${svg("knowledge", 14)}${avatar(o.hue, o.lin, 16)}<span class="bl">Teach ${esc(o.name.split(" ")[0])}</span></button>`).join("") : "")
     + (isAdult(sim, v) ? `<button class="btn" data-act="split" ${canSplit(sim, v) ? "" : "disabled"}${tipAttr("Split (clone)\nSplit off a clone of " + v.name + ": once per life, the clone regresses toward the village average and is frailer. Costs health, food and energy.")} aria-label="Split">${svg("plus", 14)}${svg("people", 14)}<span class="bl">Split</span></button>` : "");
-  if (acts) h += `<div class="actions">${acts}</div>`;
+  if (acts) vr += `<div class="actions">${acts}</div>`;
   // the old prose, hidden
   let w = `<div class="idrow"><b>${esc(stageText(sim, v))}</b>${elder ? " (past their prime)" : ""}<br><span>${esc(family(sim, v))}</span></div><div class="sub">Needs</div><div class="grid">`;
   for (const [k, label] of NEEDS) w += `<span>${label}</span><span>${pct(v[k])}</span>`;
@@ -206,7 +213,7 @@ function villagerHtml(game, v) {
   else for (const c of known) { const f = famOf(v, c), only = holders(sim, c).length === 1; w += `<p>${esc(CRAFTS[c].name)}: ${esc(famWord(f))} ${f.toFixed(2)}${only ? " (the only living villager who knows it)" : ""}. ${esc(CRAFTS[c].opens.join(", "))}</p>`; }
   if (v.tch) { const pu = sim.ents.get(v.tch.p); if (pu && v.tch.u > sim.tick) w += `<p>Teaching ${esc(pu.name)}: when they work the same craft side by side, ${esc(pu.name)} learns 3x faster and ${esc(v.name)} works at 80%.</p>`; }
   w += `<div class="kv"><span>Carrying</span><b>${v.carry ? v.carry.n + " " + esc(itemName(v.carry.item)) : "nothing"}</b><span>Bed</span><b>${esc(bedText(sim, v))}</b><span>Doing</span><b>${v.slp === 1 ? "sleeping" : v.job ? esc(v.job.k.replace("_", " ")) : "deciding"}</b><span>Order</span><b>${v.order ? esc(v.order.verb) + (v.order.done ? " (" + v.order.done + " done)" : "") : "none"}</b></div>`;
-  return h + `<div class="sr" data-test="villager-words">${words(w)}</div>`;
+  return `<div class="fx">${h}</div><div class="vr" data-sec="more">${selH}${vr}<div class="sr" data-test="villager-words">${words(w)}</div></div>`;
 }
 
 /** S13: hobby, titles, heirloom, grief, relationships with their reasons, and kin. */

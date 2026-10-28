@@ -65,9 +65,9 @@ function finish(game, out, best, x, y) {
 /** Villagers drawn inside a screen rectangle. */
 export function villagersIn(game, x0, y0, x1, y1) {
   const { sim, cam, renderer } = game, out = [];
-  if (cam.oblique && renderer.drawn) {                                                  // the angled view: a slime is in the box when its sprite's centre is
+  if (cam.oblique && renderer.drawn) {                                                  // the angled view: a slime is in the box when its DRAWN sprite rectangle overlaps it (any overlap counts)
     const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);
-    for (const d of renderer.drawn) { if (d.pri !== "villager") continue; const cx = (d.l + d.r) / 2, cy = (d.t + d.b) / 2; if (cx >= ax && cx <= bx && cy >= ay && cy <= by && !out.includes(d.e)) out.push(d.e); }
+    for (const d of renderer.drawn) { if (d.pri !== "villager") continue; if (d.r >= ax && d.l <= bx && d.b >= ay && d.t <= by && renderer.isShown(d.e) && !out.includes(d.e)) out.push(d.e); }
     return out;
   }
   const [ax, ay] = cam.toWorld(Math.min(x0, x1), Math.min(y0, y1)), [bx, by] = cam.toWorld(Math.max(x0, x1), Math.max(y0, y1));

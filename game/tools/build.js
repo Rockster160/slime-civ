@@ -20,6 +20,7 @@
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve, relative, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, "..");
@@ -132,7 +133,13 @@ for (const key of order) {
   );
 }
 
-const bundle = "(function () {\n" + parts.join("\n\n").replace(/^/gm, "  ") + "\n})();";
+// Build stamp (6.20): window.__BUILD = {stage, commit, dirty, time}. `stage` comes from game/VERSION (one line, e.g. "6.20"); commit and dirty from git (absent git: "nogit").
+const gitOut = (cmd) => { try { return execSync(cmd, { cwd: root, stdio: ["ignore", "pipe", "ignore"] }).toString().trim(); } catch (e) { return null; } };
+const stage = existsSync(join(root, "VERSION")) ? readFileSync(join(root, "VERSION"), "utf8").trim() : "?";
+const commit = gitOut("git rev-parse --short HEAD"), status = gitOut("git status --porcelain");
+const now = new Date(), p2 = (n) => String(n).padStart(2, "0");
+const stamp = { stage, commit: commit || "nogit", dirty: status === null ? false : status.length > 0, time: now.getFullYear() + "-" + p2(now.getMonth() + 1) + "-" + p2(now.getDate()) + " " + p2(now.getHours()) + ":" + p2(now.getMinutes()) };
+const bundle = "window.__BUILD = " + JSON.stringify(stamp) + ";\n(function () {\n" + parts.join("\n\n").replace(/^/gm, "  ") + "\n})();";
 
 const html = readFileSync(shell, "utf8");
 if (!html.includes("/*BUNDLE*/")) {
@@ -141,7 +148,7 @@ if (!html.includes("/*BUNDLE*/")) {
 writeFileSync(outFile, html.replace("/*BUNDLE*/", () => bundle), "utf8");
 
 const kb = (Buffer.byteLength(bundle, "utf8") / 1024).toFixed(1);
-console.log("built slime-civ.html — " + order.length + " modules, " + kb + " KB of script");
+console.log("built slime-civ.html v" + stamp.stage + " " + stamp.commit + (stamp.dirty ? "+" : "") + " — " + order.length + " modules, " + kb + " KB of script");
 for (const key of order) {
   const m = modules.get(key);
   if (process.env.VERBOSE) console.log("  " + key + "  (" + m.exports.length + " exports)");

@@ -12,6 +12,7 @@ export function setupInput(game, canvas) {
   const { ui, cam } = game;
   const keys = game.keys = new Set();                                  // held pan / walk actions ("panLeft" ...), not raw keys, so a remapped key works the same
   const km = game.keymap;
+  game.villagersIn = (x0, y0, x1, y1) => villagersIn(game, x0, y0, x1, y1).map(v => v);        // (the same hit test the drag box uses; tools and tests call it)
 
   window.addEventListener("keydown", (e) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;

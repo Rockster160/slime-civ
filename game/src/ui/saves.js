@@ -71,6 +71,7 @@ export function newGame(game, seed, { ironman = false } = {}) {
   seed = Math.floor(Number(seed));
   if (!(seed >= 0)) { game.toast("Seed must be a number."); return; }
   game.setSim(Sim.create(seed, { ironman }));
+  if (game.goHome) game.goHome();                          // 6.20: a new world opens on its camp, on the Surface
   game.toast(ironman ? "New ironman world, seed " + seed + ": it saves itself once a day into one slot, and cannot be loaded." : "New world, seed " + seed + ". It autosaves once a day.");
 }
 

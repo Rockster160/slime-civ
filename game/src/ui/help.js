@@ -49,10 +49,10 @@ export function createHelp(root, game) {
   const km = game.keymap, text = (v) => (typeof v === "function" ? v(km) : v);
   let last = "";
   const render = () => {
-    const h = `<div class="helpcard" data-test="keys"><button class="hclose">Close (${esc(km.label("help"))})</button><h2>Keys</h2><details class="how"><summary>How to play</summary><ol>${HOW.map(t => `<li>${esc(t)}</li>`).join("")}</ol></details>
+    const h = `<div class="helpcard" data-test="keys"><button class="hclose">Close (${esc(km.label("help"))})</button> <button class="hreplay" data-test="replay-tips">Replay tips</button><h2>Keys</h2><details class="how"><summary>How to play</summary><ol>${HOW.map(t => `<li>${esc(t)}</li>`).join("")}</ol></details>
       <h3>Controls</h3><div class="dim2">Keys shown are your current ones (Settings, top bar, changes them).</div><table>${CONTROLS.map(([k, d]) => `<tr><td><kbd>${esc(text(k))}</kbd></td><td>${esc(text(d))}</td></tr>`).join("")}</table></div>`;
     if (h !== last) { last = h; root.innerHTML = h; }
   };
-  root.addEventListener("click", (e) => { if (e.target === root || e.target.closest(".hclose")) game.ui.help = false; });
+  root.addEventListener("click", (e) => { if (e.target.closest(".hreplay")) { game.resetTips(); game.setTips(true); game.ui.help = false; game.toast("Tips will show again."); return; } if (e.target === root || e.target.closest(".hclose")) game.ui.help = false; });
   return { update() { const on = game.ui.help; root.style.display = on ? "flex" : "none"; if (on) render(); } };
 }

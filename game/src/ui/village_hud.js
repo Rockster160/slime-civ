@@ -10,7 +10,7 @@ import { village, CRIT_BASE, CRIT_WINTER, KEEP_LOW } from "../sim/board.js";
 import { dateOf, DAYS_PER_SEASON, DAYS_PER_YEAR, SEASON_NAMES } from "../sim/clock.js";
 import { dayF, WINTER_START, winterAhead } from "../sim/season.js";
 import { isElder } from "../sim/villager.js";
-import { createPanel, esc } from "./dom.js";
+import { createPanel, esc, morph } from "./dom.js";
 import { warnings, runwayText, itemName } from "./text.js";
 import { seasonLine, spoilText } from "./village.js";
 import { concerns, stableOrder, CONCERN_DO } from "./concerns.js";
@@ -34,6 +34,7 @@ export function createVillageHud(parent, game) {
     + `<div class="tab tab-crews" style="display:none"></div>`;
   const top = p.body.querySelector(".v-top"), stockEl = p.body.querySelector(".stock"), ed = p.body.querySelector(".stepper"), dem = p.body.querySelector(".v-dem"), tabs = p.body.querySelector(".tabs");
   const crews = createCrewsPanel(p.body.querySelector(".tab-crews"), game, { flat: true });
+  stockEl.after(ed);                                 // 6.20: the keep-N editor sits BELOW the tiles, so clicking a tile never moves the tiles
   const input = ed.querySelector("input"), etitle = ed.querySelector(".et"), ehelp = ed.querySelector(".ehelp"), ecv = ed.querySelector("canvas");
   let tab = "stores"; const last = { top: "", dem: "", order: "", ed: "" };
   const tiles = new Map();
@@ -134,9 +135,10 @@ export function createVillageHud(parent, game) {
     });
     h += `</div>`;
     const doit = [...new Set(list.flatMap(c => (CONCERN_DO[c.k] || [])))].slice(0, 3);
-    if (doit.length) h += `<div class="doit">` + doit.map(k => `<button class="btn" data-tool="${k}" data-test="do-${k}"${tipAttr(TOOL_TIP[k] || k)} aria-label="${esc(TOOL_TIP[k] || k)}">${svg(k, 16)}<span class="bl">${TOOL_CAP[k] || k}</span></button>`).join("") + `</div>`;
+    h += `<div class="doit" data-sec="doit">` + doit.map(k => `<button class="btn" data-tool="${k}" data-test="do-${k}"${tipAttr(TOOL_TIP[k] || k)} aria-label="${esc(TOOL_TIP[k] || k)}">${svg(k, 16)}<span class="bl">${TOOL_CAP[k] || k}</span></button>`).join("") + `</div>`;
     // beds: one icon per adult (filled = a bed for them, outline = needs one, dim = being built); racks; fields; pens
     const bedsBuilt = vl.beds.length, bedsSite = vl.sites.filter(s => s.what === "bed").length;
+    h += `<div class="vrows" data-sec="rows">`;
     h += `<div class="row beds" data-test="beds"${tipAttr(`Beds: ${bedsBuilt} for ${vl.adults} adults` + (bedsSite ? ` (+${bedsSite} being built)` : ""))}>${svg("bed", 16)}<b class="rl">Beds ${bedsBuilt}/${vl.adults}</b>`;
     for (let i = 0; i < Math.min(vl.adults, 10); i++) h += `<span class="bedi ${i < bedsBuilt ? "" : i < bedsBuilt + bedsSite ? "build" : "need"}">${svg("bed", 14)}</span>`;
     if (vl.adults > 10) h += `<span class="more-l">+${vl.adults - 10}</span>`;
@@ -155,11 +157,12 @@ export function createVillageHud(parent, game) {
     }
     const spt = spoilText(sim);
     if (spt) h += `<div class="row inl" data-test="spoil"${tipAttr(spt)}>${svg("spoilage", 16)}<b class="rl">Spoiling ${Object.values(sim.farm.sp.d).reduce((a, x) => a + x, 0) || ""}</b></div>`;
+    h += `</div>`;
     // all the old sentences, hidden: the same words, one tab-stop away for screen readers and the text tests
     h += `<div class="sr" data-test="village-words">` + `People ${vs.length}, ${adults} adults, ${elders} elders, ${kids} children. <span class="seasonline">${esc(seasonLine(sim))}</span> Food: ${sv.rations} rations = ${esc(runwayText(b.runway))} per head. Critical below ${crit.toFixed(1)} days; the village goes foraging as soon as it is reached. `
       + `Beds ${vl.beds.length} for ${vl.adults} adults${vl.sites.length ? " (+" + bedsSite + " being built)" : ""}. Drying racks ${vl.racks.length}. `
       + warnings(sim).map(w => `${esc(w.title)} ${esc(w.text)}`).join(" ") + ` ` + farmWords(sim, sv, pl) + `</div>`;
-    if (h !== last.top) { last.top = h; top.innerHTML = h; }
+    if (h !== last.top) { last.top = h; morph(top, h); }
 
     // stores: the tiles
     const order = [];

@@ -64,14 +64,15 @@
   .pop.open { display:block; }
   .tb-menuwrap { position:relative; }
   .pop.menu { width:300px; right:0; } .pop button[data-m] { display:flex; width:100%; text-align:left; margin-bottom:4px; } .pop .mrow { display:flex; gap:8px; align-items:center; margin:8px 0 4px; }
-  .pop label.mrow { gap:6px; } .pop .autos { margin:4px 0; } .pop .autos button { font-size:12px; width:100%; margin-bottom:3px; }
+  .pop label.mrow { gap:6px; } .pop .autos { margin:4px 0; } .pop .autos button { font-size:12px; display:flex; width:100%; margin-bottom:3px; text-align:left; } .pop .autos .atxt { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pop.menu .mrow { flex-wrap:wrap; min-width:0; } .pop.menu .mrow b { overflow-wrap:anywhere; } .pop.menu .saveinfo { overflow-wrap:anywhere; white-space:normal; } .pop.menu button { min-width:0; } .pop.menu { box-sizing:border-box; overflow-x:hidden; }      /* nothing in the Menu may run past its edge */
   .pop .layers { display:flex; gap:var(--sp1); }
   .pop .lbl, .lbl { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--tx2); margin:var(--sp2) 0 var(--sp1); }
 
   .slot { position:absolute; top:calc(var(--tb) + 8px); display:flex; flex-direction:column; gap:var(--sp2); overflow-y:auto; scrollbar-width:thin; pointer-events:none; }
   .slot { pointer-events:none; } .slot > * { pointer-events:auto; flex:none; }      /* the empty part of a column belongs to the map */
   #slotV { left:8px; width:var(--colL); bottom:calc(var(--mm) + 16px); }
-  #slotI { right:8px; width:var(--colR); bottom:8px; }
+  #slotI { right:8px; width:var(--colR); bottom:269px; }      /* the Inspector column ends above the depth gauge, which owns the bottom-right corner */
   body.nopanels #hud > * { display:none !important; }
 
   /* ===== one panel chrome (§2.2) ===== */
@@ -196,7 +197,7 @@
   .sick-row { display:flex; gap:var(--sp2); align-items:center; margin:var(--sp1) 0; color:var(--sick); } .sick-row .help { display:flex; gap:4px; color:var(--tx3); } .sick-row .help .lit { color:var(--ok); }
 
   /* ===== dock (§5, §7): orders / build / possess ===== */
-  #dock { position:absolute; bottom:8px; left:50%; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:var(--sp2); width:calc(100vw / var(--ui) - var(--colL) - var(--colR) - 48px); pointer-events:none; } #dock > * { pointer-events:auto; }
+  #dock { position:absolute; bottom:8px; left:calc(50% - 60px); transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:var(--sp2); width:calc(100vw / var(--ui) - var(--colL) - 168px - 120px); pointer-events:none; } #dock > * { pointer-events:auto; }
   #dock > div { display:none; }
   .dk { background:var(--s1); border-radius:var(--r3); box-shadow:var(--e1); padding:6px 8px; display:flex; gap:var(--sp1); align-items:center; flex-wrap:wrap; justify-content:center; }
   #dkOrders .ob-count { display:inline-flex; align-items:center; gap:4px; font-weight:600; margin-right:var(--sp1); } .dk .grp { display:inline-flex; gap:4px; align-items:center; } .dk .grp + .grp { margin-left:var(--sp2); padding-left:var(--sp2); border-left:1px solid var(--line); }
@@ -220,19 +221,19 @@
   #whisper svg { color:var(--sel); } #whisper.blocked svg { color:var(--warm); } #whisper.done svg { color:var(--ok); }
   #pointers { position:fixed; inset:0; pointer-events:none; zoom:1 !important; z-index:4; }
   /* 6.19b the depth gauge (right edge of the map): it always says what level you are looking at */
-  #gauge { z-index:4; display:flex; flex-direction:column; align-items:center; gap:4px; width:92px; user-select:none; }
-  #gauge .g-now { font-size:12px; font-weight:700; background:var(--s1); box-shadow:var(--e1); border-radius:var(--rp); padding:3px 10px; white-space:nowrap; border:1px solid var(--line-hi); } #gauge .g-now.surf { color:var(--ok); border-color:var(--ok); }
-  #gauge .g-ctl { display:flex; gap:4px; } #gauge .g-rows { display:flex; flex-direction:column; background:var(--s1); box-shadow:var(--e1); border-radius:var(--r2); padding:4px 0; width:56px; }
+  #gauge { z-index:4; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; gap:4px; width:92px; height:253px; right:8px; bottom:8px; overflow:hidden; box-sizing:border-box; user-select:none; }      /* 6.20: fixed anchor, fixed size */
+  #gauge .g-now { box-sizing:border-box; width:92px; height:24px; line-height:18px; text-align:center; overflow:hidden; text-overflow:ellipsis; flex:none; font-size:11.5px; font-weight:700; background:var(--s1); box-shadow:var(--e1); border-radius:var(--rp); padding:3px 10px; white-space:nowrap; border:1px solid var(--line-hi); } #gauge .g-now.surf { color:var(--ok); border-color:var(--ok); }
+  #gauge .g-ctl { display:flex; gap:4px; height:28px; flex:none; } #gauge .g-rows { display:flex; flex-direction:column; background:var(--s1); box-shadow:var(--e1); border-radius:var(--r2); padding:4px 0; width:56px; height:161px; box-sizing:border-box; flex:none; }
   #gauge .g-row { all:unset; box-sizing:border-box; position:relative; height:17px; display:flex; align-items:center; gap:4px; padding:0 6px; cursor:pointer; color:var(--tx2); } #gauge .g-row:hover { background:var(--s3); }
   #gauge .g-row .g-t { flex:1; height:2px; background:var(--tx3); border-radius:1px; } #gauge .g-row.camp .g-t { background:var(--ok); height:3px; } #gauge .g-row.cur { background:var(--s3); box-shadow:inset 3px 0 0 var(--sel); } #gauge .g-row.cur .g-t { background:var(--sel); height:4px; }
-  #gauge .g-row.surf { height:22px; } #gauge .g-row .g-l { width:12px; display:flex; } #gauge .g-row.surf .g-l { color:var(--ok); }
+  #gauge .g-row.surf { height:17px; } #gauge .g-pad { display:block; height:17px; flex:none; } #gauge .g-row { flex:none; } #gauge .g-row .g-l { width:12px; display:flex; } #gauge .g-row.surf .g-l { color:var(--ok); }
   #gauge .g-dot { min-width:11px; height:11px; border-radius:6px; background:var(--water); color:#001; font-size:9px; font-weight:800; display:flex; align-items:center; justify-content:center; line-height:1; padding:0 2px; }
   #gauge .g-dug { width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-top:6px solid var(--warm); }
   #gauge .tog.on { box-shadow:inset 0 -2px 0 var(--sel); }
   /* 6.19b onboarding: a pulse ring, a ghost hand and a short caption (one at a time) */
   #guide .gd-ring { position:absolute; transform:translate(-50%,-50%); border:3px solid var(--sel); border-radius:50%; box-shadow:0 0 0 2px rgba(0,0,0,.4), 0 0 14px var(--sel); animation:gdp 1.1s ease-in-out infinite; }
   #guide .gd-hand { position:absolute; transform:translate(4px,6px); animation:gdh 1.6s ease-in-out infinite; filter:drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
-  #guide .gd-cap { position:absolute; transform:translateX(-50%); background:var(--s2); color:var(--tx); font-weight:700; font-size:13px; padding:3px 11px; border-radius:var(--rp); box-shadow:var(--e1); border:1px solid var(--sel); white-space:nowrap; }
+  #guide .gd-cap { position:absolute; transform:translateX(-50%); background:var(--s2); color:var(--tx); font-weight:700; font-size:15px; padding:5px 14px; border-radius:var(--rp); box-shadow:var(--e2), 0 0 12px var(--sel); border:2px solid var(--sel); white-space:nowrap; }
   @keyframes gdp { 50% { transform:translate(-50%,-50%) scale(1.14); opacity:.75; } } @keyframes gdh { 0% { transform:translate(30px,34px); } 55%,70% { transform:translate(4px,6px) scale(.9); } 100% { transform:translate(30px,34px); } }
   body.calm #guide .gd-ring, body.calm #guide .gd-hand { animation:none; }
   .db { position:absolute; left:-4px; bottom:-5px; font-size:10px; font-weight:700; line-height:13px; padding:0 3px; border-radius:7px; background:var(--bg); color:var(--water); box-shadow:0 0 0 1px var(--water); pointer-events:none; white-space:nowrap; }
@@ -323,6 +324,30 @@
   .fv-state { font-size:14px; font-weight:600; bottom:80px; }
   .row.inl { display:inline-flex; margin-right:var(--sp3); } .row.beds { flex-wrap:nowrap; } .row.beds .bedi svg { width:12px; height:12px; } .row.beds { gap:3px; } .row.beds .rl { margin-right:3px; }
   .vh-pop { display:flex; align-items:center; justify-content:space-between; gap:var(--sp2); margin-bottom:2px; } .vh-pop .pips { margin:0; flex-wrap:nowrap; } .bcap { margin-top:var(--sp1); } .cchips { margin:var(--sp1) 0; }
+
+  /* ===== 6.20 stability: every HUD element has a fixed anchor and a fixed size; panels scroll INSIDE themselves and never push, shift or resize a neighbour ===== */
+  #slotI, #slotV { overflow:hidden; } #slotV { bottom:208px; }                                  /* the Village column ends above the minimap's open size, whether or not the minimap is open */
+  #slotV > [data-test=village] { flex:1 1 0; min-height:0; display:flex; flex-direction:column; }
+  #slotV > [data-test=village] > .pbody { flex:1 1 0; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+  [data-test=village] .v-top { flex:none; } [data-test=village] .tabs { flex:none; }
+  [data-test=village] .tab { flex:1 1 0; min-height:0; overflow-y:auto; scrollbar-width:thin; } [data-test=village] .tab.tab-stores[style*="none"], [data-test=village] .tab.tab-crews[style*="none"] { display:none; }
+  .cchips { height:56px; align-content:flex-start; overflow-y:auto; scrollbar-width:thin; box-sizing:border-box; } .doit { height:30px; box-sizing:border-box; }
+  .vrows { height:96px; overflow-y:auto; overflow-x:hidden; scrollbar-width:thin; }
+  #slotI > [data-test=inspector] { flex:none; height:min(520px, calc(100vh / var(--ui) - 330px)); display:flex; flex-direction:column; }
+  #slotI > [data-test=inspector] > .pbody { flex:1 1 0; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+  #slotI > [data-test=exp] { flex:none; max-height:132px; display:flex; flex-direction:column; } #slotI > [data-test=exp] > .pbody { overflow-y:auto; min-height:0; scrollbar-width:thin; }
+  .sec-now { flex:none; } .sec-body { flex:1 1 0; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+  .sec-body:not(:has(> .fx)) { display:block; overflow-y:auto; scrollbar-width:thin; }
+  .sec-body > .fx { flex:none; } .sec-body > .vr { flex:1 1 0; min-height:0; overflow-y:auto; scrollbar-width:thin; }
+  .sec-now .chain { height:46px; flex-wrap:nowrap; overflow:hidden; margin:0; box-sizing:border-box; } .sec-now .chain .cls { width:96px; flex:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; line-height:18px; }
+  .sec-now .chain .score { min-width:0; height:36px; justify-content:center; overflow:hidden; }
+  .sec-now .rejl { height:30px; flex-wrap:nowrap; overflow:hidden; margin:0; box-sizing:border-box; } .sec-now .rejl .rj { flex:none; max-width:128px; overflow:hidden; white-space:nowrap; } .sec-now .rejl .rj.more { color:var(--tx); }
+  .sec-now .parts { height:26px; margin:0; overflow:hidden; box-sizing:border-box; } .sec-now details.parts[open] { height:150px; overflow-y:auto; scrollbar-width:thin; }
+  .fx .ins-head { height:34px; margin:0; box-sizing:border-box; flex-wrap:nowrap; overflow:hidden; } .fx .rings { height:62px; margin:0; box-sizing:border-box; overflow:hidden; } .fx .rings { gap:4px; } .fx .rings .rc:not(.mood) { width:36px; flex:none; }
+  .fx .gene { height:68px; margin:4px 0; } .fx .skl { height:28px; margin:0; flex-wrap:nowrap; overflow:hidden; box-sizing:border-box; }
+  #topbar .tb-day { display:inline-block; width:116px; overflow:hidden; text-overflow:ellipsis; } #topbar .tb-tod { display:inline-block; width:84px; overflow:hidden; } #topbar .tb-tod:empty { display:inline-block; }
+  .sheet > .card { height:min(600px, 90vh); }
+  #dock .ob-count { min-width:84px; }
 </style>
 </head>
 <body>

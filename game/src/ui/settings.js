@@ -32,7 +32,7 @@ export function createSettings(root, game) {
       <span>Reduced flashing</span><label><input type="checkbox" class="a-calm" ${a.calm ? "checked" : ""}> no hit rings, steady flames, no flickering cracks</label></div>
       <h3>Game</h3><div class="acc"><span>Pause on death</span><label><input type="checkbox" class="s-autop" data-test="opt-autopause" ${ui.autoPause ? "checked" : ""}> pause when a villager dies</label>
       <span>Show all tools</span><label><input type="checkbox" class="s-showall" data-test="opt-showall" ${ui.showAll ? "checked" : ""}> standing orders, blueprints and crews normally appear as the village earns them</label>
-      <span>Show tips</span><label><input type="checkbox" class="s-tips" data-test="opt-tips" ${game.guide && game.guide.on ? "checked" : ""}> short hints that show you what to click in the first minutes</label>
+      <span>Show tips</span><label><input type="checkbox" class="s-tips" data-test="opt-tips" ${game.guide && game.guide.on ? "checked" : ""}> short hints that show you what to click in the first minutes <button class="btn s-replay" data-test="replay-tips-set">Replay tips</button></label>
       <span>Mouse sway</span><label><input type="checkbox" class="s-sway" data-test="opt-sway" ${game.sway ? "checked" : ""}> in first person the view leans a little towards the mouse (hold the right button to look around)</label>
       <span>Developer tools</span><label><input type="checkbox" class="s-dev" data-test="opt-dev" ${game.dev ? "checked" : ""}> game speed, MAX, skip-to, debug events, the fps line (keys 1-9 always work)</label></div></div>`;
     if (h !== last) { last = h; root.innerHTML = h; }
@@ -54,6 +54,7 @@ export function createSettings(root, game) {
     else if (e.target.matches(".s-dev")) game.setDev(e.target.checked);
     else if (e.target.matches(".s-sway")) game.setSway(e.target.checked);
     else if (e.target.matches(".s-tips")) game.setTips(e.target.checked);
+    else if (e.target.closest(".s-replay")) { game.resetTips(); game.setTips(true); game.toast("Tips will show again."); }
   });
   // while a row is waiting for a key: the next key press binds (Esc cancels); it must not also act as a command
   window.addEventListener("keydown", (e) => {

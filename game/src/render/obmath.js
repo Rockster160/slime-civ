@@ -56,5 +56,17 @@ export function gaugeRows(cur, campZ, D, counts, dug) {
   for (let n = hi; n >= lo; n--) rows.push({ n, label: levelLabel(n, campZ, D), slimes: counts.get(n) || 0, dug: dug.has(n), cur: cur === n, camp: n === campZ });
   return rows;
 }
+/**
+ * The FIXED window of the depth gauge (6.20): always `size` rows. The Surface row is pinned on top, the other size-1 rows are the levels, scrolled so the current level (or, at the
+ * Surface, the camp's level) sits in the middle; short lists are padded with null so the gauge never changes height.
+ */
+export function gaugeWindow(rows, size = 9, focusN = null) {
+  const surf = rows[0], lv = rows.slice(1), room = size - 1;
+  let at = lv.findIndex(r => r.cur); if (at < 0) at = Math.max(0, lv.findIndex(r => r.camp || r.n === focusN));
+  const start = Math.max(0, Math.min(Math.max(0, lv.length - room), at - Math.floor(room / 2)));
+  const out = [surf, ...lv.slice(start, start + room)];
+  while (out.length < size) out.push(null);
+  return out;
+}
 /** The depth band of a face h cells under the cut plane: 0 = this level (full colour) .. 4 (darkest). The shader repeats this formula. */
 export const depthBand = (under) => Math.max(0, Math.min(4, Math.floor(under - 0.999)));

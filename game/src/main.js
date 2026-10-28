@@ -185,9 +185,14 @@ game.setSim = (sim) => {
   game.lastAutoDay = -1;                  // S12: the autosave clock restarts from this game's day
   orderSeen.clear();
   possessCtl.resume();                    // a loaded save may be mid-possession
+  if (game.guide && game.guide.rearm) game.guide.rearm();      // 6.20: hints restart their 4 s clock for the new world
 };
 
 installSprite();
+{                                                              // 6.20: the build stamp ("v6.20 · a1b2c3d+ · 10-28 14:05"), shown only in Menu > About this world; window.__BUILD is injected by tools/build.js. Not part of the sim or any save.
+  const B = window.__BUILD || { stage: "dev", commit: "src", dirty: false, time: "" };
+  game.build = B; game.buildText = "v" + B.stage + " · " + B.commit + (B.dirty ? "+" : "") + (B.time ? " · " + B.time.slice(5) : "");
+}
 createAccess(game);                     // S12: UI scale, contrast, colour-blind marks, reduced flashing
 const slots = createHud(game, params);  // the HUD grid (ui/hud.js): every panel is mounted into one of its slots
 createSkip(game);

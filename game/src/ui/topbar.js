@@ -43,7 +43,7 @@ export function createTopBar(root, game) {
         <button data-m="dl" data-test="m-dl">${svg("save", 16)}Download save (.json)</button>
         <button data-m="file" data-test="m-file">${svg("load", 16)}Load save from file...</button>
         <input type="file" accept=".json,application/json" style="display:none">
-        <div class="mrow" data-test="about-world" data-tip="The seed names this world: the same seed makes the same land. Share it to replay it.">About this world: seed <b class="aboutseed" data-test="about-seed"></b></div>
+        <div class="mrow" data-test="about-world" data-tip="The seed names this world: the same seed makes the same land. Share it to replay it.">World seed <b class="aboutseed" data-test="about-seed"></b></div><div class="mrow dim">Version <span data-test="about-build" data-tip="Build time"></span></div>
         <div class="mrow"><label>New game <select class="seedmode" data-test="seed-mode"><option value="random" selected>Random</option><option value="enter">Enter seed</option></select></label><input class="seed" type="number" value="1" min="0" style="display:none" data-test="seed-input"></div>
         <div class="mrow"><button data-m="new" data-test="m-new">${svg("plus", 14)}Start</button></div>
         <label class="mrow" data-tip="One autosave slot, written once a game day. No manual saving, no loading: what happens, happens."><input type="checkbox" class="iron" data-test="ironman"> <span class="iron">Ironman</span></label>
@@ -91,11 +91,11 @@ export function createTopBar(root, game) {
   q(".tb-game").onclick = (e) => {
     e.stopPropagation(); toggle(menu);
     const i = savedInfo();
-    q(".saveinfo").textContent = i ? "Browser save: " + i.label + " (seed " + i.seed + ", " + i.kb + " KB)" : "";
-    q(".seed").value = game.sim.seed; q(".aboutseed").textContent = game.sim.seed;
+    q(".saveinfo").textContent = i ? "Browser save: " + i.label + " · seed " + i.seed : "";
+    q(".seed").value = game.sim.seed; q(".aboutseed").textContent = game.sim.seed; { const ab = q("[data-test=about-build]"); ab.textContent = game.buildText ? "· " + game.buildText : ""; ab.dataset.tip = game.build ? "Built " + game.build.time + (game.build.dirty ? "\n(with uncommitted changes)" : "") : ""; }
     const iron = game.sim.ironman, autos = autoList();                    // S12: autosaves on offer; an ironman game can load nothing, and its own slot only from another game
     for (const id of ["save", "load", "dl", "file"]) { const b = menu.querySelector(`[data-m="${id}"]`); b.disabled = iron; b.dataset.tip = iron ? "Ironman: no manual saving or loading" : ""; }
-    q(".autos-l").style.display = autos.length ? "" : "none"; q(".autos").innerHTML = autos.length ? autos.map(a => `<button data-auto="${a.key}" ${iron ? "disabled" : ""}>${svg("load", 14)}${a.iron ? "Ironman: " : ""}Day ${a.day}, ${a.pop} villagers (seed ${a.seed}, ${a.kb} KB)</button>`).join("") : "";
+    q(".autos-l").style.display = autos.length ? "" : "none"; q(".autos").innerHTML = autos.length ? autos.map(a => `<button data-auto="${a.key}" ${iron ? "disabled" : ""}>${svg("load", 14)}<span class="atxt">${a.iron ? "Ironman: " : ""}Day ${a.day}, ${a.pop} slimes · seed ${a.seed}</span></button>`).join("") : "";
   };
   window.addEventListener("click", (e) => { if (!e.target.closest || !e.target.closest(".tb-menuwrap")) closePops(); });
   menu.addEventListener("click", (e) => {

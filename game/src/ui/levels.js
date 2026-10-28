@@ -7,7 +7,7 @@
 //             level changes (or it is newly selected), so a level you pick by hand is never fought.
 import { World, D, M } from "../sim/world.js";
 import { svg } from "./icons.js";
-import { levelLabel, gaugeRows, viewLevelFor } from "../render/obmath.js";
+import { levelLabel, gaugeRows, gaugeWindow, viewLevelFor } from "../render/obmath.js";
 
 export function createLevels(game, root) {
   const { ui } = game, R = () => game.renderer;
@@ -60,18 +60,18 @@ export function createLevels(game, root) {
       root.style.display = game.possessed && game.possessed() ? "none" : "";
       const counts = new Map();
       for (const v of sim.ents.ofKind("villager")) counts.set(v.z, (counts.get(v.z) || 0) + 1);
-      const rows = gaugeRows(r.z, camp(), D, counts, dugLevels(sim));
+      const rows = gaugeWindow(gaugeRows(r.z, camp(), D, counts, dugLevels(sim)), 9, camp());      // a fixed 9-row window: it scrolls round the current level, the gauge never changes height
       const lab = game.levelLabel();
       let h = "";
       for (const q of rows) {
+        if (!q) { h += `<span class="g-row g-pad" aria-hidden="true"></span>`; continue; }
         h += `<button class="g-row${q.cur ? " cur" : ""}${q.surface ? " surf" : ""}${q.camp ? " camp" : ""}" data-n="${q.n}" data-test="gauge-row" data-label="${lab === q.label ? "" : ""}" data-tip="${q.label}${q.slimes ? "\n" + q.slimes + (q.slimes === 1 ? " slime" : " slimes") : ""}${q.dug ? "\ncarved space" : ""}">`
           + `<span class="g-l">${q.surface ? svg("day", 12) : ""}</span><span class="g-t"></span>${q.slimes ? `<span class="g-dot" data-test="gauge-dot">${q.slimes > 1 ? q.slimes : ""}</span>` : ""}${q.dug ? `<span class="g-dug"></span>` : ""}<span class="sr">${q.label}</span></button>`;
       }
-      const sig = rows.map(q => q.n + ":" + (q.cur ? 1 : 0) + ":" + q.slimes + ":" + (q.dug ? 1 : 0)).join("|") + lab;
+      const sig = rows.map(q => !q ? "-" : q.n + ":" + (q.cur ? 1 : 0) + ":" + q.slimes + ":" + (q.dug ? 1 : 0)).join("|") + lab;
       if (sig !== last) { last = sig; rowsEl.innerHTML = h; now.textContent = lab; now.classList.toggle("surf", r.z >= D - 1); }
-      above.style.display = r.z < D - 1 ? "" : "none";
-      const insp = document.getElementById("slotI"), ri = insp && insp.style.display !== "none" ? 296 + 16 : 8;
-      root.style.right = ri + "px"; root.style.top = "96px";
+      above.style.visibility = r.z < D - 1 ? "" : "hidden";                  // (hidden, not removed: the gauge's size never changes)
+      // placement is CSS only (#gauge in shell.html): a fixed bottom-right slot at the edge of the map area, a fixed height, never moved by a panel
     },
     /** Every frame: follow the focused slime between levels. */
     follow() {

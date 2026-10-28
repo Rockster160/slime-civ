@@ -408,8 +408,8 @@ export class ObliqueRenderer extends Renderer {
       const SPp = [[cx - sw, cy - sw, sh0[0], sh0[1]], [cx + sw, cy - sw, sh0[2], sh0[1]], [cx + sw, cy + sw, sh0[2], sh0[3]], [cx - sw, cy + sw, sh0[0], sh0[3]]];
       for (let q = 0; q < 4; q++) { const i = so + q * FLOATS, v = SPp[q]; sh[i] = v[0]; sh[i + 1] = yy - hop; sh[i + 2] = v[1]; sh[i + 3] = sh[i + 4] = sh[i + 5] = 1; sh[i + 6] = v[2]; sh[i + 7] = v[3]; sh[i + 8] = sky; sh[i + 9] = 0; sh[i + 10] = 0; }
       ns++;
-      const [sx, sy] = cam.toScreen(px, py, ez), zm = cam.zoom;
-      drawn.push({ e, l: sx - hw * zm, r: sx + hw * zm, t: sy - h * zm, b: sy + 2, fx: sx, fy: sy, pri: kind, idx });
+      const [sx, sy0] = cam.toScreen(px, py, ez + 0.02 + hop), zm = cam.zoom, sy = sy0;       // the quad's real base (hop and the 0.02 lift included), so a hopping slime's rect rides with its sprite
+      drawn.push({ e, l: sx - hw * zm, r: sx + hw * zm, t: sy - h * zm, b: sy + 2, fx: sx, fy: sy, pri: kind, idx, hop });
       if (kind === "villager" && ez >= this.topAt(e.x, e.y)) sil.push(idx);
     };
     const kinds = PICKABLE_KINDS, headFx = 0, headFy = -1;

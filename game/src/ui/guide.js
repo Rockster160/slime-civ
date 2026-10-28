@@ -2,19 +2,23 @@
 // a pulse ring round the thing to use, a ghost hand that moves (and clicks or drags) to it, and a 1-3 word caption. A hint finishes the moment the player does the thing,
 // is shown at most twice, yields to anything urgent and to guiding a slime, never comes more than once per 20 s (the first at 4 s), and is off with Settings > Show tips
 // and in tests that load fixtures (`?tools=all`). `calm` makes the ring static. Seen counts are remembered in browser storage.
+// 6.20: why nobody saw a hint: at the start of every world a diamond-severity concern (Cold: no beds yet) is up, and hints yielded to ANY urgent concern, so they never started.
+// The first-contact hints (select, look at a concern, why, order) now ignore urgency (they are how you answer it); each hint shows ONCE per browser (not per save; key tips.seen2),
+// a new game or a load re-arms the 4 s delay, the caption is clamped inside the window and lifted above the HUD, and Settings / Keys have "Replay tips".
 import { remember } from "./dom.js";
 import { D } from "../sim/world.js";
 
-const FIRST_MS = 4000, GAP_MS = 20000, MAX_SHOWN = 2;
+const FIRST_MS = 4000, GAP_MS = 20000, MAX_SHOWN = 1, SEEN_KEY = "tips.seen2";
 
 export function createGuide(game, root) {
   const { ui } = game, params = new URLSearchParams(location.search);
   const G = game.guide = { on: remember("tips") !== "0" && ui.progression && params.get("tips") !== "0" || params.get("tips") === "1", cur: null, t0: performance.now(), last: 0, shown: {}, done: {}, log: [] };
-  try { G.shown = JSON.parse(remember("tips.seen") || "{}"); } catch (e) { G.shown = {}; }
+  try { G.shown = JSON.parse(remember(SEEN_KEY) || "{}"); } catch (e) { G.shown = {}; }
   game.setTips = (on) => { G.on = !!on; remember("tips", on ? "1" : "0"); if (!on) stop(); };
-  game.resetTips = () => { G.shown = {}; G.done = {}; G.last = 0; G.t0 = performance.now(); stop(); remember("tips.seen", "{}"); };
+  game.resetTips = () => { G.shown = {}; G.done = {}; G.last = 0; G.t0 = performance.now(); stop(); remember(SEEN_KEY, "{}"); };
+  game.guide.rearm = () => { G.t0 = performance.now(); G.last = 0; G.done = {}; stop(); };      // a new game or a loaded save: the 4 s clock restarts (what was seen stays seen)
   root.dataset.test = "guide";
-  root.style.cssText += "inset:0;z-index:7;";
+  root.style.cssText += "inset:0;z-index:40;zoom:1 !important;";
   const ring = document.createElement("div"), hand = document.createElement("div"), cap = document.createElement("div");
   ring.className = "gd-ring"; hand.className = "gd-hand"; cap.className = "gd-cap";
   ring.dataset.test = "guide-ring"; cap.dataset.test = "guide-caption"; hand.dataset.test = "guide-hand";
@@ -26,10 +30,12 @@ export function createGuide(game, root) {
   const dom = (sel) => { const e = document.querySelector(sel); if (!e) return null; const r = e.getBoundingClientRect(); return r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2, r: Math.max(r.width, r.height) / 2 + 6 } : null; };
   const at = (e) => { const [x, y] = game.cam.toScreen(e.x + 0.5, e.y + 0.5, e.z); return { x, y: y - game.cam.zoom * 0.4, r: Math.max(18, game.cam.zoom * 0.9) }; };
   const clearSpot = (p) => p.x > 330 && p.x < game.cam.vw - 340 && p.y > 130 && p.y < game.cam.vh - 130;
+  document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("[data-test=concern-chip],[data-test=pointer]")) ui.chipClicked = 1; }, true);
   const HINTS = [
-    { id: "select", at: 0, words: "Click a slime", act: "click", when: () => !ui.sel.length, done: () => ui.sel.length > 0, target: () => { const v = ent("villager").find(v => game.renderer.isShown(v) && clearSpot(at(v))); return v && at(v); } },
-    { id: "why", at: 1, words: "See why they act", act: "point", when: () => ui.sel.length > 0 && !!document.querySelector("[data-test=why-chain]"), done: () => !!ui.whyHover, target: () => dom("[data-test=why-chain]") },
-    { id: "order", at: 1, words: "Right-click to order", act: "rclick", when: () => ui.sel.length > 0, done: () => game.sim.ents.ofKind("villager").some(v => v.order), target: () => { const t = ent("plant").find(p => p.species === "tree" && game.renderer.isShown(p) && clearSpot(at(p))); return t && at(t); } },
+    { id: "select", intro: 1, at: 0, words: "Click a slime", act: "click", when: () => !ui.sel.length, done: () => ui.sel.length > 0, target: () => { const v = ent("villager").find(v => game.renderer.isShown(v) && clearSpot(at(v))); return v && at(v); } },
+    { id: "concern", intro: 1, at: 1, words: "Click to look", act: "click", when: () => (ui.concerns || []).some(c => c.sev >= 2) && !!document.querySelector("[data-test=concern-chip]"), done: () => !!ui.chipClicked, target: () => dom("[data-test=concern-chip]") },
+    { id: "why", intro: 1, at: 1, words: "See why they act", act: "point", when: () => ui.sel.length > 0 && !!document.querySelector("[data-test=why-chain]"), done: () => !!ui.whyHover, target: () => dom("[data-test=why-chain]") },
+    { id: "order", intro: 1, at: 1, words: "Right-click to order", act: "rclick", when: () => ui.sel.length > 0, done: () => game.sim.ents.ofKind("villager").some(v => v.order), target: () => { const t = ent("plant").find(p => p.species === "tree" && game.renderer.isShown(p) && clearSpot(at(p))); return t && at(t); } },
     { id: "stock", at: 1, words: "Click to keep a stock", act: "click", when: () => !!document.querySelector("[data-test=stock-tile]"), done: () => Object.keys(game.sim.board.keeps || {}).length > 0, target: () => dom("[data-test=stock-tile]") },
     { id: "build", at: 1, words: "Drag to plan", act: "drag", when: () => game.unlocked && game.unlocked("build") && ui.mode === "select", done: () => game.sim.ents.ofKind("csite").length > 0, target: () => dom("[data-test=build-toggle]") },
     { id: "possess", at: 1, words: "Q: guide them", act: "click", when: () => ui.focus && ui.sel.length && performance.now() - G.t0 > 300000, done: () => !!game.possessed(), target: () => dom("[data-act=possess]") },
@@ -37,7 +43,7 @@ export function createGuide(game, root) {
   ];
   function stop() { G.cur = null; root.style.display = "none"; ring.style.display = hand.style.display = cap.style.display = "none"; }
   function start(h, now) {
-    G.cur = h; G.last = now; G.shown[h.id] = (G.shown[h.id] || 0) + 1; G.cur.t = now; remember("tips.seen", JSON.stringify(G.shown)); G.log.push(h.id);
+    G.cur = h; G.last = now; G.shown[h.id] = (G.shown[h.id] || 0) + 1; G.cur.t = now; remember(SEEN_KEY, JSON.stringify(G.shown)); G.log.push(h.id);
     root.style.display = ""; ring.style.display = hand.style.display = cap.style.display = "";
     cap.textContent = h.words; root.dataset.hint = h.id; root.className = "act-" + h.act;
   }
@@ -49,16 +55,18 @@ export function createGuide(game, root) {
       if (G.cur) {
         const h = G.cur;
         if (h.done()) { G.done[h.id] = 1; stop(); return; }
-        if (urgent || now - h.t > 25000) { stop(); return; }
+        if ((urgent && !h.intro) || now - h.t > 25000) { stop(); return; }
         const p = h.target();
         if (!p) { stop(); return; }
         ring.style.left = p.x + "px"; ring.style.top = p.y + "px"; ring.style.width = ring.style.height = p.r * 2 + "px";
-        hand.style.left = p.x + "px"; hand.style.top = p.y + "px"; cap.style.left = p.x + "px"; cap.style.top = (p.y + p.r + 10) + "px";
+        hand.style.left = p.x + "px"; hand.style.top = p.y + "px"; const cw = cap.offsetWidth || 120, ch = cap.offsetHeight || 26, vw = window.innerWidth, vh = window.innerHeight;
+        const cx = Math.max(cw / 2 + 8, Math.min(vw - cw / 2 - 8, p.x)), below = p.y + p.r + 10, cy = below + ch + 8 > vh ? Math.max(48, p.y - p.r - 10 - ch) : below;      // always inside the window, under the target or (at the bottom) above it
+        cap.style.left = cx + "px"; cap.style.top = cy + "px";
         return;
       }
-      if (urgent || now - G.t0 < FIRST_MS || (G.last && now - G.last < GAP_MS)) return;
+      if (now - G.t0 < FIRST_MS || (G.last && now - G.last < GAP_MS)) return;
       for (const h of HINTS) {
-        if (G.done[h.id] || (G.shown[h.id] || 0) >= MAX_SHOWN || !h.when() || !h.target()) continue;
+        if (G.done[h.id] || (G.shown[h.id] || 0) >= MAX_SHOWN || (urgent && !h.intro) || !h.when() || !h.target()) continue;
         start(h, now); return;
       }
     },

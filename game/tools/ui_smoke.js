@@ -10,6 +10,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { mkdirSync, readFileSync } from "node:fs";
 import assert from "node:assert/strict";
+import * as S20 from "./s20.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 mkdirSync(join(root, "tmp"), { recursive: true });
@@ -71,8 +72,9 @@ assert.ok(await page.locator("[data-test=inspector]").isVisible()); ok("inspecto
   // right-drag from the empty part of the side columns (below the Village panel, below the Inspector card) pans too, and the browser's own menu never opens
   await G(() => { window.__ctx = []; window.addEventListener("contextmenu", (e) => window.__ctx.push(e.defaultPrevented)); });
   for (const [slot, name] of [["slotV", "Village"], ["slotI", "Inspector"]]) {
-    const pt = await G((id) => { const s = document.getElementById(id), r = s.getBoundingClientRect(), k = s.lastElementChild; if (!k || s.style.display === "none") return null; const b = k.getBoundingClientRect(); return b.bottom + 25 < r.bottom - 5 ? { x: Math.round(r.left + r.width / 2), y: Math.round(b.bottom + 25) } : null; }, slot);
-    assert.ok(pt, name + " column has empty space below its panel");
+    const pt = await G((id) => { const s = document.getElementById(id), r = s.getBoundingClientRect(), k = s.lastElementChild; if (!k || s.style.display === "none") return null; const b = k.getBoundingClientRect(); if (id === "slotV") return { x: Math.round(r.right + 5), y: Math.round(r.top + r.height / 2) };      // 6.20: the Village panel fills its column (it never resizes), so the gutter beside it is the empty part
+      return { x: Math.round(r.left + 20), y: Math.round(r.bottom + 20) }; }, slot);      // the Inspector column ends above the depth gauge's corner; the map shows below it, left of the gauge
+    assert.ok(pt, name + " column has map beside or below it");
     const c0 = await G(() => [__game.cam.x, __game.cam.y]);
     await page.mouse.move(pt.x, pt.y); await page.mouse.down({ button: "right" }); await page.mouse.move(pt.x + 50, pt.y - 30, { steps: 6 }); await page.mouse.up({ button: "right" });
     const c1 = await G(() => [__game.cam.x, __game.cam.y]);
@@ -1575,6 +1577,18 @@ await G(() => { __game.fpvDevOff = false; });
   const gv = await G(() => { const g = __game, id = g.guide.cur && g.guide.cur.id, v = g.sim.ents.ofKind("villager")[0]; g.selectOnly(v.id); return id; }); await page.waitForTimeout(700);
   assert.equal(gv, "select"); assert.ok(!(await page.locator("[data-test=guide-caption]").isVisible()) || (await page.locator("[data-test=guide-caption]").innerText()).trim() !== "Click a slime"); ok("the first hint (\"Click a slime\") shows a pulse, a hand and a caption, and ends when you do it");
   await G(() => { __game.setTips(false); __game.clearSelection(); __game.setLevel(__game.D - 1); });
+}
+
+// 6.20 UX stability: off-screen markers, box select, the depth gauge, the slime inspector, and hints on a brand-new profile (tools/s20.js)
+{
+  await page.setViewportSize({ width: 1280, height: 720 }); await page.waitForTimeout(300);
+  const c20 = { G, ok, shot };
+  await S20.pointers(page, c20);
+  await S20.boxSelect(page, c20);
+  await S20.gauge(page, c20);
+  await S20.inspector(page, c20);
+  await S20.hints(browser, c20);
+  await S20.buildStamp(page, c20);
 }
 
 await browser.close();

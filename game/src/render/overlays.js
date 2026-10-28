@@ -10,6 +10,7 @@ import { drawDecor } from "./mapdecor.js";
 import { provisionalRoom } from "../sim/proom.js";
 import { drawIcon } from "../ui/icons.js";
 import { TOKENS } from "../ui/kit.js";
+import { concernPlaces } from "../ui/concernplace.js";
 import { litHearths, flames, FIRE_R, FIRE_WARM } from "../sim/fire.js";
 
 const TAU = 6.2832;
@@ -216,14 +217,10 @@ function drawLight(game, ctx) {
 /** UI_SPEC §3.4 / a9: a concern of level 2 or more that sits on screen gets an icon + severity pip above its place (off-screen ones are DOM edge pointers, ui/pointers.js). */
 function concernMarkers(game, ctx) {
   const list = game.ui.concerns; if (!list || !list.length) return;
-  const { cam, renderer } = game, calm = game.access && game.access.calm;
-  for (const c of list) {
-    if (c.sev < 2 || !c.loc) continue;
-    const lz = c.loc.z !== undefined && c.loc.z >= 0 ? c.loc.z : undefined;
-    if (lz !== undefined && (cam.oblique ? !(lz <= renderer.z && (renderer.z < game.D - 1 || lz >= renderer.topAt(c.loc.x, c.loc.y))) : lz !== renderer.z && Math.abs(lz - renderer.z) > 1)) continue;
-    const [sx, sy] = cam.toScreen(c.loc.x + 0.5, c.loc.y + 0.5, lz);
-    if (sx < 20 || sy < 20 || sx > cam.vw - 20 || sy > cam.vh - 20) continue;
-    const col = c.sev >= 3 ? TOKENS.danger : TOKENS.warm, y = sy - 22 - (c.sev >= 3 && !calm ? Math.abs(Math.sin(performance.now() / 300)) * 3 : 0);
+  for (const pl of concernPlaces(game)) {                                       // 6.20: the same projection and the same on/off decision (with hysteresis) as the edge pointers
+    if (!pl.on) continue;
+    const c = pl.c, sx = pl.sx, sy = pl.sy;
+    const col = c.sev >= 3 ? TOKENS.danger : TOKENS.warm, y = sy - 22;                    // (no bob: a marker that moves is a marker you cannot click or read)
     ctx.fillStyle = TOKENS.s2; ctx.strokeStyle = col; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(sx, y, 12, 0, TAU); ctx.fill(); ctx.stroke();
     drawIcon(ctx, c.icon, sx - 7, y - 7, 14, TOKENS.tx);
@@ -231,5 +228,6 @@ function concernMarkers(game, ctx) {
     ctx.beginPath();
     if (c.sev >= 3) { ctx.moveTo(sx + 11, y - 14); ctx.lineTo(sx + 16, y - 9); ctx.lineTo(sx + 11, y - 4); ctx.lineTo(sx + 6, y - 9); } else { ctx.moveTo(sx + 11, y - 15); ctx.lineTo(sx + 16, y - 6); ctx.lineTo(sx + 6, y - 6); }
     ctx.closePath(); ctx.fill();
+    if (pl.badge) { ctx.font = "bold 11px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; const w = ctx.measureText(pl.badge).width + 8; ctx.fillStyle = TOKENS.s2; ctx.fillRect(sx - w / 2, y + 12, w, 14); ctx.fillStyle = TOKENS.tx; ctx.fillText(pl.badge, sx, y + 19); }      // "↓3": the place is on another level
   }
 }
