@@ -1,7 +1,7 @@
 // What digging a cell does (GDD §14.2 materials as data): how long it takes, what falls out, and which cells
 // villagers may dig at all. One table, read by tasks.js (the dig verb), jobs.js, orders.js and mine.js.
 import { M, F } from "./world.js";
-import { inZone } from "./items.js";
+import { stockZoneAt } from "./items.js";
 
 /** dur = ticks of effort at level 0; item/n = what drops loose at the hole; hard = hard-rock difficulty 0.8 (§10). */
 export const DIG = {
@@ -30,7 +30,7 @@ export const HARD_DIFFICULTY = 0.8;
 /** Terrain we let villagers dig: natural ground, nothing standing on it, outside the stockpile. */
 export function diggable(sim, x, y, z) {
   if (z < 1 || !DIG[sim.world.mat(x, y, z)]) return false;
-  if (sim.stock && sim.stock.z === z + 1 && inZone(sim.stock, x, y)) return false;
+  if (sim.stock && stockZoneAt(sim, x, y, z + 1)) return false;
   for (const id of sim.ents.at(x, y, z + 1)) { const e = sim.ents.get(id); if (e.kind !== "item" && e.kind !== "fauna") return false; }
   return !(sim.world.flags(x, y, z + 1) & F.OBSTACLE);
 }
@@ -41,7 +41,7 @@ export function diggable(sim, x, y, z) {
  */
 export function diggableMarked(sim, x, y, z) {
   if (z < 1 || !DIG[sim.world.mat(x, y, z)]) return false;
-  if (sim.stock && sim.stock.z === z + 1 && inZone(sim.stock, x, y)) return false;
+  if (sim.stock && stockZoneAt(sim, x, y, z + 1)) return false;
   for (const id of sim.ents.at(x, y, z + 1)) { const e = sim.ents.get(id); if (e.kind !== "item" && e.kind !== "plant" && e.kind !== "fauna") return false; }
   return true;
 }

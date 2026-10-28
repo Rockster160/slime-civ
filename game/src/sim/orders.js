@@ -15,13 +15,13 @@
 //   {type:"split", id}          solo split (R16): a clone, at most once per villager per life
 //   {type:"cancel", ids?:[...]}   clears orders (all villagers if ids omitted)
 import { isAdult } from "./villager.js";
-import { ITEMS, zoneCapacity } from "./items.js";
+import { ITEMS, stockCapacity } from "./items.js";
 import { cancelAction } from "./jobstate.js";
 import { setTeach } from "./skills.js";
 import { splitSolo } from "./population.js";
 import { can } from "./knowledge.js";
 
-const VERBS = ["forage", "chop", "gather", "haul", "move", "dig", "hunt", "capture"];
+const VERBS = ["forage", "chop", "gather", "haul", "move", "dig", "hunt", "capture", "scout"];     // S17: scout = walk to unexplored land and reveal it (scout.js)
 
 export const ORDER_COMMANDS = {
   order(sim, c) {
@@ -52,7 +52,7 @@ export const ORDER_COMMANDS = {
   },
   keep(sim, c) {
     if (!ITEMS[c.item] || !(c.n >= 0)) return false;
-    const n = Math.min(Math.floor(c.n), zoneCapacity(sim.stock));       // cap N at storage capacity (§14.5 hoard exploit)
+    const n = Math.min(Math.floor(c.n), stockCapacity(sim));       // cap N at storage capacity (§14.5 hoard exploit)
     const k = sim.board.keeps.find(q => q.item === c.item);
     if (k) k.n = n; else sim.board.keeps.push({ item: c.item, n, on: 0 });
     sim.board.ep++;

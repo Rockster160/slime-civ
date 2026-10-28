@@ -61,6 +61,7 @@ export function smoulderAt(sim, stump) {
 /** Every 20 ticks: flames burn down (tree -> stump -> smouldering -> out), hearths burn their fuel and refresh their heat level. */
 export function fireTick(sim) {
   for (const f of flames(sim).slice()) {
+    if (sim.world.dormantAt(f.x, f.y)) continue;                     // S17: frozen until somebody comes back (dormant.js puts it out)
     f.fuel -= 20;
     if (f.fuel > 0) continue;
     const p = sim.ents.get(f.tid);
@@ -70,6 +71,7 @@ export function fireTick(sim) {
     } else sim.ents.remove(f.id);
   }
   for (const h of hearths(sim)) {
+    if (sim.world.dormantAt(h.x, h.y)) continue;
     if (h.fuel > 0) h.fuel = Math.max(0, h.fuel - 20);
     const lit = h.fuel > 0 ? 1 : 0;
     if (lit !== h.lit) { h.lit = lit; sim.cache.iv++; }

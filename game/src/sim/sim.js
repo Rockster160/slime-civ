@@ -52,6 +52,8 @@ import { newUg } from "./underground.js";
 import { ugTick, ugAuto } from "./cavein.js";
 import { newDepth } from "./depth.js";
 import { illTick, illDaily } from "./disease.js";
+import { newZones, ZONE_COMMANDS, yardTick, YARD_PERIOD } from "./yard.js";
+import { SCOUT_COMMANDS, landmarkTick } from "./scout.js";
 
 export const START_VILLAGERS = 7;
 
@@ -101,6 +103,7 @@ export class Sim {
     this.crews = newCrews();                  // S11: named selections with a default task (saved + hashed)
     this.ug = newUg();                        // S12: cracking cells (cell, first tick), cave-ins so far (saved + hashed; the rules are pure functions of the world)
     this.dp = newDepth(0);                    // S14: world depth (illness, wolves and grazers, the alternates, perturbed properties): on/off switch and the illness ledger (saved + hashed)
+    this.zones = newZones();                  // S17: extra stockpile zones the player drew (saved + hashed)
     this.bio = 1;                             // S12: 1 = the world was grown with biomes (worldgen), 0 = a pre-biome save regrown without them (saved)
     this.ironman = false;                     // S12: a UI rule (single autosave slot, no manual load), saved with the game, never read by the sim itself
     this.lastBlocker = "";                    // why the last rejected command failed (UI feedback only; not saved)
@@ -127,6 +130,8 @@ export class Sim {
     if (t % 200 === 100) autoBuild(this);
     if (t % 100 === 60) instanceTick(this);                  // S11: queued additions of a pushed revision wait for the old piece to come down
     if (t % 200 === 0) updateKeeps(this);
+    if (t % YARD_PERIOD === 120) yardTick(this);                // S17: a full main yard grows by a ring
+    if (t % 100 === 20) landmarkTick(this);                    // S17: far landmarks seen from afar
     if (t % 20 === 10) mineTick(this);
     if (t % 20 === 5) { fireTick(this); stationsTick(this); }   // flames and hearths burn down; lit kilns and mounds count down to their batch
     if (t % 50 === 25) siteTick(this);                        // running fires are phenomena: whoever sees one rolls (witness)
@@ -237,6 +242,7 @@ export class Sim {
     h.value(this.crews);
     h.value(this.ug);
     h.value(this.dp);
+    h.value(this.zones);
     return h.hex;
   }
 }
@@ -250,6 +256,8 @@ const COMMANDS = {
   ...EXP_COMMANDS,
   ...FARM_COMMANDS,
   ...CREW_COMMANDS,
+  ...ZONE_COMMANDS,
+  ...SCOUT_COMMANDS,
   /** {type:"erase", x0,y0,x1,y1,z}: take ghosts away (delivered materials come back as loose items). */
   erase(sim, c) { return eraseGhosts(sim, c); },
   /** {type:"deconstruct", x0,y0,x1,y1,z}: mark built pieces for villagers to take down (a standing job, ~75% refund, no XP). */

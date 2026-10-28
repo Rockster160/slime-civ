@@ -1,7 +1,7 @@
 // Village panel: population, food runway, season, warnings with explanations,
 // stock bars with keep-N standing orders (click a bar to set the target), and
 // the demand vector in words (GDD §09, §22).
-import { ITEMS, ITEM_KINDS, survey, zoneCapacity, JAR_HOLD, JAR_X, CELLAR_X } from "../sim/items.js";
+import { ITEMS, ITEM_KINDS, survey, stockCapacity, JAR_HOLD, JAR_X, CELLAR_X } from "../sim/items.js";
 import { CROP } from "../sim/farm.js";
 import { RECIPES } from "../sim/craft.js";
 import { can } from "../sim/knowledge.js";
@@ -51,12 +51,12 @@ export function createVillagePanel(parent, game) {
   const top = p.body.querySelector(".v-top"), stock = p.body.querySelector(".v-stock"), ed = p.body.querySelector(".keepedit"), dem = p.body.querySelector(".v-dem");
   const last = { top: "", stock: "", dem: "" };
   ed.innerHTML = `<div class="edtitle"></div><div class="edrow"><button data-d="-10">-10</button><button data-d="-1">-1</button>
-    <input type="number" min="0" max="${zoneCapacity(game.sim.stock)}" step="1"><button data-d="1">+1</button><button data-d="10">+10</button><button data-d="off" title="Remove the standing order">Off</button></div><div class="edhelp dim"></div>`;
+    <input type="number" min="0" max="${stockCapacity(game.sim)}" step="1"><button data-d="1">+1</button><button data-d="10">+10</button><button data-d="off" title="Remove the standing order">Off</button></div><div class="edhelp dim"></div>`;
   const input = ed.querySelector("input"), edTitle = ed.querySelector(".edtitle"), edHelp = ed.querySelector(".edhelp");
 
   const keepOf = (item) => game.sim.board.keeps.find(k => k.item === item);
   const setKeep = (item, n) => {
-    n = Math.max(0, Math.min(zoneCapacity(game.sim.stock), Math.floor(Number(n) || 0)));
+    n = Math.max(0, Math.min(stockCapacity(game.sim), Math.floor(Number(n) || 0)));
     if (n === 0) { if (keepOf(item)) game.sim.apply({ type: "unkeep", item }); }
     else game.sim.apply({ type: "keep", item, n });
     update();
@@ -119,7 +119,7 @@ export function createVillagePanel(parent, game) {
       if (document.activeElement !== input) input.value = n;
       edHelp.textContent = kp
         ? `Villagers start refilling when stock drops below ${Math.ceil(n * KEEP_LOW)} (80%) and stop at ${n}. ${kp.on ? "Refilling now." : "Holding."}`
-        : "With a target, idle villagers work to keep this many in the stockpile. Cap " + zoneCapacity(sim.stock) + " (the stockpile's size).";
+        : "With a target, idle villagers work to keep this many in the stockpile. Cap " + stockCapacity(sim) + " (the stockpile's size).";
     }
 
     const want = Object.keys(b.dem).filter(k => b.dem[k] > 0).sort((a, c) => b.dem[c] - b.dem[a] || (a < c ? -1 : 1));

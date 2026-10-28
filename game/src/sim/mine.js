@@ -17,7 +17,7 @@ import { DIG } from "./dig.js";
 import { diggableMarked as diggable } from "./dig.js";
 import { push, pop } from "./path.js";
 import { isOre, isSeen } from "./seen.js";
-import { inZone } from "./items.js";
+import { inZone, stockZoneAt } from "./items.js";
 import { log } from "./chronicle.js";
 import { WATER_LEVEL } from "./terrain.js";
 import { inTerritory } from "./lair.js";
@@ -117,7 +117,7 @@ export function rampCells(sim, x, y, z0, levels, dir) {
     for (const cz of [z0 - i + 1, z0 - i]) {
       const m = w.mat(cx, cy, cz);
       if (m === M.AIR) continue;
-      if (!DIG[m] || (w.flags(cx, cy, cz) & F.PLAYER) || (sim.stock && inZone(sim.stock, cx, cy) && cz >= sim.stock.z - 1)) return null;
+      if (!DIG[m] || (w.flags(cx, cy, cz) & F.PLAYER) || (sim.stock && (stockZoneAt(sim, cx, cy, cz + 1) || stockZoneAt(sim, cx, cy, cz) || stockZoneAt(sim, cx, cy, cz - 1) || stockZoneAt(sim, cx, cy, cz - 2)))) return null;
       cells.push(idx(cx, cy, cz));
     }
     if (!w.isSolid(cx, cy, z0 - i - 1)) return null;           // the foot of every step needs rock to stand on
@@ -195,7 +195,7 @@ function openCost(sim, x, y, z) {
   const w = sim.world, m = w.mat(x, y, z);
   if (m === M.AIR) return (w.flags(x, y, z) & F.OBSTACLE) ? -1 : 0;
   if (!DIG[m] || (w.flags(x, y, z) & F.PLAYER)) return -1;
-  if (sim.stock && inZone(sim.stock, x, y) && z >= sim.stock.z - 1 && z <= sim.stock.z + 1) return -1;
+  if (sim.stock && (stockZoneAt(sim, x, y, z + 1) || stockZoneAt(sim, x, y, z) || stockZoneAt(sim, x, y, z - 1))) return -1;
   if (DIG[m].needs && !toolAround(sim, DIG[m].needs)) return -1;   // S9: deep rock waits for an iron pick (nobody plans a tunnel through it)
   if (!diggable(sim, x, y, z)) return -1;                       // S8: a bed, a bench or a villager on top of it: plan the tunnel round it, not through it
   return DIG_COST + (DIG[m].hard ? HARD_COST : 0);

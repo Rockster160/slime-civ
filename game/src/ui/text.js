@@ -166,6 +166,7 @@ export const JOB = {
   fodder: { now: "Feeding the penned hoppers", noun: "Feed the pen" },
   slaughter: { now: "Slaughtering a penned hopper", noun: "Slaughter" },
   capture: { now: "Catching a hopper alive for the pen", noun: "Capture" },
+  scout: { now: "Scouting unexplored land", noun: "Scout" },
   strike: { now: "Striking", noun: "Strike" },
 };
 export const CLASS = {

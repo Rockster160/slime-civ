@@ -7,14 +7,16 @@
 //   UNLOAD      every 200 ticks an active chunk that nobody has changed (no cell written, no entity but wildlife and the plants it grew) and that is
 //               more than DEACT_CH chunks from every anchor is dropped: its plants and wild creatures go and it is regrown, identically, if anyone
 //               comes back. A changed chunk is never dropped. (Plants that merely grew or were picked from are not "changes": they start over.)
-//   SEAM FOR S17  chunk.last is the tick a chunk was last within reach of an anchor; dormancy LOD (simulating far chunks coarsely instead of not
-//               at all) and a smarter unload policy hang off it. `chunkMeta` is hashed and saved.
+//   DORMANT (S17) a CHANGED chunk (never dropped) more than DEACT_CH chunks from every anchor falls asleep (dormant.js: plants packed, herds removed, fires,
+//               spoilage and creatures frozen) and is caught up in closed form when an anchor comes within ACT_CH again. chunk.dz = the tick it fell asleep
+//               (0 = awake), chunk.pk = its packed plants. chunk.last is the tick a chunk was last within reach of an anchor. `chunkMeta` is hashed and saved.
 import { chunkKey, chunkKX, chunkKY, cellXyz } from "./cellkey.js";
 import { Rng, mix32 } from "./rng.js";
 import { activateChunk } from "./flora.js";
 import { spawnFauna } from "./fauna.js";
 import { depthOn } from "./depth.js";
 import { HIGHLAND, MARSH } from "./biome.js";
+import { sleepChunks, wakeChunks } from "./dormant.js";
 
 export const ACT_CH = 3;            // chunks round an anchor's chunk that are active (7 x 7 chunks: at least 33 cells every way)
 export const ACT_R = 48;            // (cells; the same reach for callers that think in cells: activateAround at creation)
@@ -44,10 +46,12 @@ export function anchorsOf(sim) {
   return out;
 }
 
-/** Saved and hashed: [[key, active, changed, lastNear]] of every resident chunk, ascending. */
+/** Saved and hashed: [[key, active, changed, lastNear, asleepSince, packedPlants]] of every resident chunk, ascending (the last two only when the chunk is dormant). */
 export function chunkMeta(sim) {
-  return sim.world.chunkKeys().map(k => { const c = sim.world.chunks.get(k); return [k, c.act, c.mod, c.last]; });
+  return sim.world.chunkKeys().map(k => { const c = sim.world.chunks.get(k); return c.dz ? [k, c.act, c.mod, c.last, c.dz, c.pk] : [k, c.act, c.mod, c.last]; });
 }
+
+export const SLEEP_PERIOD = 100;
 
 export function chunkTick(sim) {
   const w = sim.world, t = sim.tick, anchorChunks = new Set(), need = new Set();
@@ -58,20 +62,34 @@ export function chunkTick(sim) {
     const cx0 = x >> 4, cy0 = y >> 4;
     for (let cx = cx0 - ACT_CH; cx <= cx0 + ACT_CH; cx++) for (let cy = cy0 - ACT_CH; cy <= cy0 + ACT_CH; cy++) need.add(chunkKey(cx, cy));
   }
+  const waking = [];
   for (const k of [...need].sort((a, b) => a - b)) {
     const cx = chunkKX(k), cy = chunkKY(k);
-    if (activateChunk(w, sim.ents, sim.def, cx, cy, t) && sim.wild.init) spawnWild(sim, w.peekResident(cx, cy));
+    const was = w.peekResident(cx, cy);
+    if (was && was.dz) { waking.push(was); continue; }
+    if (activateChunk(w, sim.ents, sim.def, cx, cy, t) && sim.wild.init) spawnWild(sim, w.peekResident(cx, cy), 0);
     const c = w.peekResident(cx, cy);
     if (c) c.last = t;
   }
+  wakeChunks(sim, waking, spawnWild);
+  if (t % SLEEP_PERIOD === 47) sleepFar(sim, anchorChunks);
   if (t % UNLOAD_PERIOD === 107) unload(sim, anchorChunks);
 }
 
+/** Changed chunks farther than DEACT_CH from every anchor fall asleep. */
+function sleepFar(sim, anchorChunks) {
+  const w = sim.world, near = new Set();
+  for (const k of anchorChunks) { const ax = chunkKX(k), ay = chunkKY(k); for (let cx = ax - DEACT_CH; cx <= ax + DEACT_CH; cx++) for (let cy = ay - DEACT_CH; cy <= ay + DEACT_CH; cy++) near.add(chunkKey(cx, cy)); }
+  const cs = [];
+  for (const k of w.chunkKeys()) { const c = w.chunks.get(k); if (c.act === 1 && c.mod && !c.dz && !near.has(k)) cs.push(c); }
+  sleepChunks(sim, cs);
+}
+
 /** Wild creatures on a chunk activated far from the camp (the camp's own surroundings are stocked by fauna.js initFauna). */
-function spawnWild(sim, c) {
+function spawnWild(sim, c, salt = 0) {
   const site = sim.site, X0 = c.cx << 4, Y0 = c.cy << 4;
-  if (Math.max(Math.abs(X0 + 8 - site.x), Math.abs(Y0 + 8 - site.y)) < WILD_FROM) return;
-  const r = new Rng(mix32(sim.seed ^ 0x717d, chunkKey(c.cx, c.cy))).stream("wild"), roll = r.int(100), bm = c.bm[136], deep = depthOn(sim);
+  if (!sim.wild.init || Math.max(Math.abs(X0 + 8 - site.x), Math.abs(Y0 + 8 - site.y)) < WILD_FROM) return;
+  const r = new Rng(mix32(sim.seed ^ 0x717d, chunkKey(c.cx, c.cy))).stream(salt ? "wild" + salt : "wild"), roll = r.int(100), bm = c.bm[136], deep = depthOn(sim);
   let sp = null, n = 0;
   if (bm === HIGHLAND) { if (deep && roll < 6) { sp = "wolf"; n = 3; } else if (roll < 12) { sp = "hopper"; n = 2; } }
   else if (bm === MARSH) { if (deep && roll < 7) { sp = "grazer"; n = 3; } else if (roll < 32) { sp = "hopper"; n = 3; } }

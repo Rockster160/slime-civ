@@ -14,7 +14,7 @@
 //           | "task" {id, task} (null clears) | "hotkey" {id, hk 0..9} | "recall" {id} (members drop orders and walk back to camp)
 import { isAdult } from "./villager.js";
 import { ORDER_COMMANDS } from "./orders.js";
-import { ITEMS, zoneCapacity } from "./items.js";
+import { ITEMS, stockCapacity } from "./items.js";
 import { CAMP } from "./board.js";
 
 export const CHORES = ["farm", "pen", "mine", "build", "haul"];
@@ -130,7 +130,7 @@ export const CREW_COMMANDS = {
         if (!ITEMS[t.item]) return false;
         if (!sim.board.keeps.some(k => k.item === t.item)) {       // a crew task may start the standing order it names
           if (!(t.n > 0)) { sim.lastBlocker = "NO_TARGET"; return false; }
-          ORDER_COMMANDS.keep(sim, { item: t.item, n: Math.min(Math.floor(t.n), zoneCapacity(sim.stock)) });
+          ORDER_COMMANDS.keep(sim, { item: t.item, n: Math.min(Math.floor(t.n), stockCapacity(sim)) });
         }
         giveTask(sim, crew, { t: "keep", item: t.item }); return true;
       }

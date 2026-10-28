@@ -13,7 +13,7 @@
 // A dug cell also shows its neighbours (the digger looks into the hole), so a vein can be followed.
 import { D, M, World } from "./world.js";
 import { sightAt } from "./light.js";
-import { chunkKey } from "./cellkey.js";
+import { chunkKey, chunkKX, chunkKY } from "./cellkey.js";
 
 export const SIGHT = 3;
 export const SURFACE_SIGHT = 14;     // S16: the surface is "seen" this far (a disc) round where a villager has been; the rest of the land is drawn dim as unexplored
@@ -27,7 +27,7 @@ const CELLS = 16 * 16 * D;
  * b: Map chunkKey -> Uint8Array(16*16*D) 0/1 (a chunk's worth of cells is made the first time anything in it is seen); cs: Map chunkKey -> Uint8Array(256), the surface
  * COLUMNS revealed (cols: their cell indices at z 0, in reveal order, saved); log: cells seen by other means after generation; bbox: the explored area.
  */
-export function newSeen() { return { b: new Map(), cs: new Map(), cols: [], log: [], ver: 0, known: {}, ready: false, bbox: null }; }
+export function newSeen() { return { b: new Map(), cs: new Map(), ncols: 0, log: [], lm: [], ver: 0, known: {}, ready: false, bbox: null }; }
 
 /** 1 if the cell has been seen. */
 export function seenAt(s, x, y, z) {
@@ -79,7 +79,7 @@ export function revealDisc(sim, x, y, r) {
     const c = ((cy & 15) << 4) | (cx & 15);
     if (cs[c]) continue;
     cs[c] = 1;
-    s.cols.push(World.idx(cx, cy, 0));
+    s.ncols++;
     revealColumn(sim, cx, cy);
     const bb = s.bbox;
     if (!bb) s.bbox = { x0: cx, y0: cy, x1: cx, y1: cy };
@@ -142,22 +142,57 @@ export function look(sim, x, y, z, sight = SIGHT) {
 }
 
 // ---- save / hash ----
+// S17: compact. Revealed surface columns are per-chunk bitsets (a chunk is 256 columns): 1 = all of them, else the shorter of a 64-digit hex string and
+// a run list [start, length, ...] in chunk-local numbers. Cells seen by other means (underground) are per-chunk run lists of local cell numbers
+// (z << 8 | y << 4 | x). Both ascending by chunk key, so the form is canonical (it is also what the state hash reads).
 
-const rle = (list) => {
-  const a = Array.from(new Set(list)).sort((p, q) => p - q), out = [];
-  for (let i = 0; i < a.length;) {
-    let j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++;
-    out.push(a[i], j - i + 1); i = j + 1;
-  }
-  return out;
-};
-/** {c: revealed surface columns, l: cells seen after generation}, each as [start, length, ...] over the sorted unique indices. */
-export function seenRle(sim) { return { c: rle(sim.seen.cols), l: rle(sim.seen.log) }; }
+const runs = (a) => { const out = []; for (let i = 0; i < a.length;) { let j = i; while (j + 1 < a.length && a[j + 1] === a[j] + 1) j++; out.push(a[i], j - i + 1); i = j + 1; } return out; };
+const HEX = "0123456789abcdef";
+function colsOf(bits) {
+  const on = []; let n = 0;
+  for (let i = 0; i < 256; i++) if (bits[i]) { on.push(i); n++; }
+  if (n === 256) return 1;
+  const r = runs(on);
+  if (r.length * 3.2 < 64) return r;
+  let h = "";
+  for (let i = 0; i < 256; i += 4) h += HEX[bits[i] | (bits[i + 1] << 1) | (bits[i + 2] << 2) | (bits[i + 3] << 3)];
+  return h;
+}
+function colsTo(rep, bits) {
+  if (rep === 1) bits.fill(1);
+  else if (typeof rep === "string") for (let i = 0; i < 64; i++) { const v = parseInt(rep[i], 16); for (let b = 0; b < 4; b++) bits[i * 4 + b] = (v >> b) & 1; }
+  else for (let k = 0; k < rep.length; k += 2) for (let i = rep[k], e = rep[k] + rep[k + 1]; i < e; i++) bits[i] = 1;
+}
+/** {c: [[chunkKey, columns]], l: [[chunkKey, runs of local cells]]}. */
+export function seenRle(sim) {
+  const s = sim.seen, c = [], l = new Map();
+  for (const k of [...s.cs.keys()].sort((a, b) => a - b)) { const bits = s.cs.get(k); if (bits.some(v => v)) c.push([k, colsOf(bits)]); }
+  for (const i of s.log) { const [x, y, z] = World.xyz(i), k = chunkKey(x >> 4, y >> 4); let a = l.get(k); if (!a) l.set(k, a = []); a.push((z << 8) | ((y & 15) << 4) | (x & 15)); }
+  const lo = [...l.keys()].sort((a, b) => a - b).map(k => [k, runs(Array.from(new Set(l.get(k))).sort((p, q) => p - q))]);
+  return { c, l: lo, lm: (s.lm || []).map(m => m.slice()) };
+}
 export function loadSeen(sim, data) {
   if (Array.isArray(data)) data = { c: [], l: data };               // (a pre-S16 save: cells only)
   const s = sim.seen, was = s.ready;
   s.ready = false;                                                   // columns: replayed quietly, in index order, from the terrain as generated
-  for (let k = 0; k < data.c.length; k += 2) for (let i = data.c[k], e = data.c[k] + data.c[k + 1]; i < e; i++) { const [x, y] = World.xyz(i); revealDisc(sim, x, y, 0); }
+  if (data.c.length && typeof data.c[0] === "number") {            // the S16 form: runs of cell indices
+    for (let k = 0; k < data.c.length; k += 2) for (let i = data.c[k], e = data.c[k] + data.c[k + 1]; i < e; i++) { const [x, y] = World.xyz(i); revealDisc(sim, x, y, 0); }
+  } else {
+    const bits = new Uint8Array(256);
+    for (const [k, rep] of data.c) {
+      bits.fill(0); colsTo(rep, bits);
+      const X0 = chunkKX(k) << 4, Y0 = chunkKY(k) << 4;
+      for (let i = 0; i < 256; i++) if (bits[i]) revealDisc(sim, X0 + (i & 15), Y0 + (i >> 4), 0);
+    }
+  }
   s.ready = was;
-  for (let k = 0; k < data.l.length; k += 2) for (let i = data.l[k], e = data.l[k] + data.l[k + 1]; i < e; i++) { const [x, y, z] = World.xyz(i); markSeen(sim, x, y, z); }
+  if (data.l.length && typeof data.l[0] === "number") {
+    for (let k = 0; k < data.l.length; k += 2) for (let i = data.l[k], e = data.l[k] + data.l[k + 1]; i < e; i++) { const [x, y, z] = World.xyz(i); markSeen(sim, x, y, z); }
+  } else {
+    for (const [k, rr] of data.l) {
+      const X0 = chunkKX(k) << 4, Y0 = chunkKY(k) << 4;
+      for (let q = 0; q < rr.length; q += 2) for (let i = rr[q], e = rr[q] + rr[q + 1]; i < e; i++) markSeen(sim, X0 + (i & 15), Y0 + ((i >> 4) & 15), i >> 8);
+    }
+  }
+  s.lm = (data.lm || []).map(m => m.slice());
 }

@@ -16,7 +16,7 @@
 // built roof beside it. Above ground the span is advisory in the GDD; here it is
 // the ordering rule that makes roofs grow inward from the walls.
 import { World, M, F, MAT } from "./world.js";
-import { dropLoose, inZone, haveTotal } from "./items.js";
+import { dropLoose, inZone, haveTotal, stockZoneAt } from "./items.js";
 import { sight } from "./discovery.js";
 import { once } from "./chronicle.js";
 import { BED_COST, RACK_COST } from "./board.js";
@@ -108,7 +108,7 @@ export function checkPlace(sim, w, m, x, y, z) {
   const old = csiteAt(sim, x, y, z, w);
   if (old && old.m === m && old.w === w) return "exists";
   if (old && old.got > 0) return "blocked";              // framed already: erase it first
-  if (w !== "floor" && w !== "roof" && sim.stock && sim.stock.z === z && inZone(sim.stock, x, y)) return "stockpile";
+  if (w !== "floor" && w !== "roof" && sim.stock && stockZoneAt(sim, x, y, z)) return "stockpile";
   if (w === "floor") {
     const cm = wd.mat(cx, cy, cz);
     if (wd.mat(x, y, z) !== M.AIR) return "blocked";

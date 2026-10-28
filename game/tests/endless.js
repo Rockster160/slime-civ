@@ -109,7 +109,7 @@ const plantsIn = (sim, cx, cy) => sim.ents.ofKind("plant").filter(p => (p.x >> 4
   assert.ok(h1 < 600 && buf1 - buf0 < 120, "memory under the limit: heap " + h1.toFixed(0) + " MB, typed arrays +" + (buf1 - buf0).toFixed(1) + " MB");
   // the camp is still there, intact (not unloaded: it has people and changes), and the fog list is the length of the trip, not the world
   assert.ok(sim.world.chunks.has(chunkKey(0, 0)) || sim.world.chunks.has(chunkKey(sim.site.x >> 4, sim.site.y >> 4)), "the camp chunk stayed");
-  const r = sim.seen.cols.length;
+  const r = sim.seen.ncols;
   assert.ok(r < 400000, "revealed columns: " + r);
   console.log("    2000 cells: peak chunks " + maxChunks + " (end " + sim.world.chunks.size + "), cache " + maxGc + ", entities peak " + maxEnts + ", heap " + h1.toFixed(0) + " MB, typed arrays +" + (buf1 - buf0).toFixed(1) + " MB, explored columns " + r + ", save " + (toJSON(sim).length / 1024).toFixed(0) + " KB");
   ok("memory: walked 2000 cells east; the loaded chunks stayed under " + (maxChunks + 1) + ", the cache under 256, the heap under the limit");

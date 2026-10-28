@@ -11,7 +11,9 @@
 // A cell index (`at`) answers "what stands here?" cheaply. Positions must be
 // changed through move() so the index stays right.
 
-const key = (x, y, z) => x + 1024 * (y + 1024 * z);
+import { cellIdx } from "./cellkey.js";
+
+const key = cellIdx;       // S17: the old x + 1024 * (y + 1024 * z) collided for any |x| >= 1024 (the world is endless now)
 
 export class Entities {
   constructor() {

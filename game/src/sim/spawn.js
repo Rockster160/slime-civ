@@ -18,6 +18,7 @@ import { baseDef, colInto, dirtAt, genChunk, localIdx, WATER_LEVEL, SOFT_THICK, 
 import { activateChunk } from "./flora.js";
 
 export const REACH_R = 64;         // validator: key inputs within this many cells of the landing site (§11.10 item 3)
+export const WATER_NEAR = 13, BERRY_NEAR_R = 15, BERRY_MIN = 3;     // S17: the camp the search prefers
 export const MAX_CANDIDATES = 40;  // spawn candidates tried before the best of them is kept
 const KEEP = 255;                  // a stamp entry whose material is KEEP only touches flags
 
@@ -34,7 +35,8 @@ export function buildDef(seed, opts, at) {
   const def = baseDef(seed, opts);
   def.spawn = { x: at.x, y: at.y, z: SITE_Z, r: SITE_R };
   const g = new Rng(mix32(seed ^ 0x1a4e, mix32(at.x, at.y))).stream("lake");
-  def.lake = { r: g.range(10, 13), lx: at.x + g.range(-18, 18), ly: at.y - g.range(24, 30) };
+  const lr = g.range(10, 13), llx = g.range(-4, 4), lly = g.range(8, 10);          // S17: the lake's near shore is 8-11 cells from the camp (it was 14-22: villagers walked far to drink)
+  def.lake = { r: lr, lx: at.x + llx, ly: at.y - (lr + lly) };
   def.geo = { caves: [], malachite: [], ridge: [], tells: [] };
   def.stamps = buildStamps(def);
   return def;
@@ -246,7 +248,22 @@ export function validateSpawn(def, parts) {
   let cave = false;
   for (const cv of def.geo.caves) cave = cave || cv.floor.some(i => wd.has(i));
   if (!cave) fails.push("cave");
-  return { ok: fails.length === 0, fails, counts, cave, alt };
+  // S17 preferences (not requirements): drinkable water within WATER_NEAR cells and berry bushes within BERRY_NEAR_R, so the first days are not spent walking
+  let water = 1e9, berries = 0;
+  for (const k of world.chunkKeys()) {
+    const c = world.chunks.get(k), X0 = c.cx << 4, Y0 = c.cy << 4;
+    if (Math.abs(X0 + 8 - sp.x) > WATER_NEAR + 24 || Math.abs(Y0 + 8 - sp.y) > WATER_NEAR + 24) continue;
+    for (let i = 0; i < c.mats.length; i++) {
+      if (c.mats[i] !== M.WATER) continue;
+      const x = X0 + (i & 15), y = Y0 + ((i >> 4) & 15), z = i >> 8;
+      for (const [dx, dy] of DIRS) if (stand(x + dx, y + dy, z + 1)) { const d = Math.sqrt((x + dx - sp.x) * (x + dx - sp.x) + (y + dy - sp.y) * (y + dy - sp.y)); if (d < water) water = d; }
+    }
+  }
+  for (const p of ents.ofKind("plant")) if (p.species === "berry" && Math.max(Math.abs(p.x - sp.x), Math.abs(p.y - sp.y)) <= BERRY_NEAR_R) berries++;
+  const pref = [];
+  if (water > WATER_NEAR) pref.push("water");
+  if (berries < BERRY_MIN) pref.push("berries");
+  return { ok: fails.length === 0, fails, counts, cave, alt, water: Math.round(water), berries, pref };
 }
 
 // ---- the search ---------------------------------------------------------------------------------------------------------
@@ -278,16 +295,17 @@ export function defOf(seed, opts = {}) {
     memo.set(key, def);
     return def;
   }
-  let best = null, bestRep = null, tried = 0;
+  let best = null, bestRep = null, bestScore = 1e9, tried = 0;
   const first = opts.prefer ? 1 : 0;                      // a preferred spawn (tests that hard-code positions) is tried before the origin, and only if it is a fair start
   for (let k = -first; k < MAX_CANDIDATES; k++) {
     const at = k < 0 ? opts.prefer : candidate(seed, k);
     if (k > 0 && !landOk(seed, opts, at)) continue;
     tried++;
     const d = buildDef(seed, opts, at), rep = validateSpawn(d);
-    d.gen = { seed, attempts: tried, candidate: k, ok: rep.ok, fails: rep.fails, counts: rep.counts, spawn: { x: at.x, y: at.y } };
-    if (!best || rep.fails.length < bestRep.fails.length) { best = d; bestRep = rep; }
-    if (rep.ok) { best = d; break; }
+    d.gen = { seed, attempts: tried, candidate: k, ok: rep.ok, fails: rep.fails, counts: rep.counts, spawn: { x: at.x, y: at.y }, water: rep.water, berries: rep.berries, pref: rep.pref };
+    const score = rep.fails.length * 10 + rep.pref.length;                  // a fair start first, then the one with water and berries at the door
+    if (!best || score < bestScore) { best = d; bestRep = rep; bestScore = score; }
+    if (rep.ok && !rep.pref.length) break;
   }
   def = best;
   if (memo.size >= 48) memo.delete(memo.keys().next().value);

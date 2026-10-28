@@ -153,7 +153,7 @@ export class World extends CellReader {
       c = this.gc.get(k);
       if (c) { this.gc.delete(k); this.gc.set(k, c); }
       else {
-        c = this.gen(cx, cy); c.mod = 0; c.act = 0; c.last = 0; this.genCount++;
+        c = this.gen(cx, cy); c.mod = 0; c.act = 0; c.last = 0; c.dz = 0; c.pk = null; this.genCount++;
         this.gc.set(k, c);
         if (this.gc.size > CHUNK_CACHE) this.gc.delete(this.gc.keys().next().value);
       }
@@ -168,7 +168,7 @@ export class World extends CellReader {
     if (c) return c;
     c = this.gc.get(k);
     if (c) this.gc.delete(k);
-    else { c = this.gen(cx, cy); c.mod = 0; c.act = 0; c.last = 0; this.genCount++; }
+    else { c = this.gen(cx, cy); c.mod = 0; c.act = 0; c.last = 0; c.dz = 0; c.pk = null; this.genCount++; }
     this.chunks.set(k, c);
     this.resVer++;
     this._cx = 1e9; this._c = null;
@@ -184,7 +184,9 @@ export class World extends CellReader {
   /** Resident chunk keys, ascending. */
   chunkKeys() { return [...this.chunks.keys()].sort((a, b) => a - b); }
   /** Is the column in an activated chunk? */
-  activeAt(x, y) { const c = this.chunks.get(chunkKey(x >> 4, y >> 4)); return !!c && c.act === 1; }
+  activeAt(x, y) { const c = this.chunks.get(chunkKey(x >> 4, y >> 4)); return !!c && c.act === 1 && !c.dz; }
+  /** S17: is the column in a dormant chunk (changed, far from everyone: frozen until somebody comes back)? */
+  dormantAt(x, y) { const c = this.chunks.get(chunkKey(x >> 4, y >> 4)); return !!c && c.dz > 0; }
 
   /** Write a cell. `flags` undefined keeps the existing flags. */
   set(x, y, z, mat, flags) {

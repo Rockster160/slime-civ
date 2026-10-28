@@ -54,7 +54,7 @@ export const lifeOf = (p) => { const sp = speciesOf(p); return LIFE[sp] ? Math.f
 export const ageOf = (sim, p) => Math.max(0, Math.floor((sim.tick - (p.bt || 0)) / DAY));
 
 /** Give an old-save plant its birth tick and growth, spread so that ages are mixed. */
-function initLife(sim, p) {
+export function initLife(sim, p) {
   if (p.bt !== undefined) return;
   if (p.species === "sapling") { p.bt = sim.tick; p.gr = 0; return; }
   const life = lifeOf(p) || 1, age = Math.floor((mix32(p.id, 77) / 4294967296) * 0.7 * life);

@@ -19,7 +19,7 @@ import { Task, HERE, diggable, stockCount } from "./tasks.js";
 import { cancelAction, reserve } from "./jobstate.js";
 import { INSPIRE } from "./inspire.js";
 import { isAdult, ageDays, fitness, maxHp } from "./villager.js";
-import { inZone, ITEMS } from "./items.js";
+import { inZone, stockZoneAt, ITEMS } from "./items.js";
 import { costOf, checkPlace, placeGhosts, csiteAt } from "./build.js";
 import { log } from "./chronicle.js";
 
@@ -134,11 +134,11 @@ export function interact(sim, v, tid, verb, cell) {
   const e = tid ? sim.ents.get(tid) : null;
   const one = (k, step, res = []) => ({ task: Task(k, [step]), res });
   if (verb === "drink") return isWaterEdge(sim, v) ? one("drink", { v: "drink", ...here(v) }) : { blocker: "NO_WATER" };
-  if (verb === "drop") return v.carry && inZone(sim.stock, v.x, v.y) ? one("store", { v: "drop", ...here(v) }) : { blocker: "NO_STORAGE" };
+  if (verb === "drop") return v.carry && stockZoneAt(sim, v.x, v.y, v.z) ? one("store", { v: "drop", ...here(v) }) : { blocker: "NO_STORAGE" };
   if (verb === "eat") {
     if (v.carry && ITEMS[v.carry.item].food > 0) return one("eat", { v: "eat", src: "carry", ...HERE });
     if (e && e.kind === "plant" && e.species === "berry" && near1(v, e) && e.yield > 0) return one("eat", { v: "eat", src: "bush", tid, ...here(v) });
-    if (inZone(sim.stock, v.x, v.y)) return one("eat", { v: "eat", src: "stock", ...here(v) });
+    if (stockZoneAt(sim, v.x, v.y, v.z)) return one("eat", { v: "eat", src: "stock", ...here(v) });
     return { blocker: "NO_MATERIAL" };
   }
   if (verb === "sleep") {
@@ -148,7 +148,7 @@ export function interact(sim, v, tid, verb, cell) {
   }
   if (verb === "equip") {                       // S8: take the spear (or pick) from the stockpile in hand
     const item = stockCount(sim, "copper_spear") > 0 ? "copper_spear" : "copper_pick";
-    return inZone(sim.stock, v.x, v.y) && stockCount(sim, item) > 0 && !v.eq && !v.carry ? one("equip", { v: "equip", item, ...here(v) }) : { blocker: v.eq || v.carry ? "NO_CAPACITY" : stockCount(sim, item) > 0 ? "TOO_FAR" : "NO_MATERIAL" };
+    return stockZoneAt(sim, v.x, v.y, v.z) && stockCount(sim, item) > 0 && !v.eq && !v.carry ? one("equip", { v: "equip", item, ...here(v) }) : { blocker: v.eq || v.carry ? "NO_CAPACITY" : stockCount(sim, item) > 0 ? "TOO_FAR" : "NO_MATERIAL" };
   }
   if (verb === "dig") {
     const [cx, cy, cz] = cell;
@@ -178,7 +178,7 @@ export function interact(sim, v, tid, verb, cell) {
   }
   if (e.kind === "item") {
     if (!near1(v, e)) return { blocker: "TOO_FAR" };
-    if (!inZone(sim.stock, e.x, e.y)) return one("haul", { v: "pickup", tid, x: e.x, y: e.y, z: e.z }, [e]);
+    if (!stockZoneAt(sim, e.x, e.y, e.z)) return one("haul", { v: "pickup", tid, x: e.x, y: e.y, z: e.z }, [e]);
     return ITEMS[e.item].food > 0 ? interact(sim, v, 0, "eat", cell) : { blocker: "NO_MATERIAL" };   // stock: only food is for the taking by hand
   }
   if (e.kind === "csite") return siteTask(sim, v, e);
@@ -199,7 +199,7 @@ function siteTask(sim, v, s) {
   const holds = need === 0 || (v.carry && v.carry.item === cost.item && v.carry.n >= need);
   if (!holds) {
     if (v.carry) return { blocker: "NO_CAPACITY" };
-    if (!inZone(sim.stock, v.x, v.y) || stockCount(sim, cost.item) < need) return { blocker: "NO_MATERIAL" };
+    if (!stockZoneAt(sim, v.x, v.y, v.z) || stockCount(sim, cost.item) < need) return { blocker: "NO_MATERIAL" };
     steps.push({ v: "take", item: cost.item, n: need, ...at });
   }
   if (need > 0) steps.push({ v: "deliver", tid: s.id, item: cost.item, n: need, ...at });

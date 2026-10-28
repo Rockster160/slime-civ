@@ -1243,7 +1243,7 @@ function genDemand(ctx) {
   if (b.dem.rack > 0) buildChain(ctx, "demand", "rack", { urg: b.dem.rack, cap: 1, grp: "rack" });
 }
 
-const ORDER_SKILL = { forage: null, chop: null, gather: null, haul: null, move: null, dig: "dig", hunt: null, capture: null };
+const ORDER_SKILL = { forage: null, chop: null, gather: null, haul: null, move: null, dig: "dig", hunt: null, capture: null, scout: null };
 const ORDER_SPECIES = { forage: "berry", chop: "tree", gather: "tuft" };
 
 /** Targets of an area order: its named entity if still valid, else the nearest valid one within ORDER_AREA. */
@@ -1311,11 +1311,31 @@ function genDig(ctx, base) {
 }
 const DIG_BAD = 10000000;           // "bad target" ids for cells live above any entity id
 
+/** S17 scout: walk toward unexplored land in hops of SCOUT_HOP cells (a path to a goal 150 cells away would only read BUDGET); the order ends when they stand there. */
+const SCOUT_HOP = 20;
+function genScout(ctx, base) {
+  const { v, sim } = ctx, o = v.order, dx = o.x - v.x, dy = o.y - v.y, far = Math.max(Math.abs(dx), Math.abs(dy));
+  if (far <= 3) { if (!ctx.dry) { v.order = null; ctx.b.ep++; } return; }
+  const hop = Math.min(far, SCOUT_HOP), tx = v.x + Math.round((dx * hop) / far), ty = v.y + Math.round((dy * hop) / far);
+  const c = { ...base, kind: "scout", key: "scout:" + tx + "," + ty, d: far };
+  c.mk = () => {
+    let st = null;
+    for (let r = 0; r <= 6 && !st; r++) for (let l = -r; l <= r && !st; l++) for (const [a, b] of r === 0 ? [[0, 0]] : [[l, -r], [l, r], [-r, l], [r, l]]) {
+      const x = tx + a, y = ty + b, z = sim.world.standZ(x, y);
+      if (z >= 0 && !sim.ents.at(x, y, z).some(id => sim.ents.get(id).kind !== "item" && sim.ents.get(id).kind !== "villager") && (Math.abs(x - o.x) + Math.abs(y - o.y) < Math.abs(v.x - o.x) + Math.abs(v.y - o.y)) && reach(ctx, { x, y, z })) { st = { x, y, z }; break; }
+    }
+    if (!st) { o.fail = (o.fail || 0) + 1; if (o.fail > 6 && !ctx.dry) { v.order = null; ctx.b.ep++; } return { blocker: "NO_PATH" }; }
+    return { task: Task("scout", [{ v: "goto", ...st }]), res: [] };
+  };
+  add(ctx, c);
+}
+
 function genOrder(ctx) {
   const { v, sim, t } = ctx, o = v.order;
   if (!o) return;
   const base = { cls: "order", urg: clamp((t - o.t0) / 900, 0, 1), grp: "order", skill: ORDER_SKILL[o.verb] };
   if (o.verb === "dig") { genDig(ctx, base); return; }
+  if (o.verb === "scout") { genScout(ctx, base); return; }
   if (o.verb === "move") {
     const c = { ...base, kind: "goto", key: "goto:0", d: dist3(v.x, v.y, v.z, o.x, o.y, o.z) };
     c.mk = () => {

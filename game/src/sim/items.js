@@ -92,6 +92,7 @@ export function inZone(z, x, y) { return x >= z.x0 && x <= z.x1 && y >= z.y0 && 
 /** S10: is a cell part of the village's stores: the stockpile, or the cold cellar (food is carried there once one is designated)? */
 export function inStore(sim, x, y, z) {
   if (inZone(sim.stock, x, y)) return true;
+  if (sim.zones) for (const q of sim.zones.list) if (q.z === z && inZone(q, x, y)) return true;          // S17: the extra stockpile zones the player drew
   const c = sim.farm && sim.farm.cellar;
   if (c && z === c.z && inZone(c, x, y)) return true;
   return sim.rooms.list.size > 0 && !!storageRoomAt(sim, x, y, z);          // S15: a closed Storage room is a stockpile too
@@ -119,6 +120,18 @@ export function storageSlots(sim, item) {
   }
   return out;
 }
+/** S17: does a stockpile zone take this item? Extra zones carry a filter: "all" | "food" | "mat" (everything that is not food). The main yard takes anything. */
+export function zoneAccepts(zn, item) { const f = zn.f || "all"; return f === "all" || (f === "food") === (ITEMS[item].food > 0); }
+/** The extra zones (drawn in build mode), in id order. */
+export const extraZones = (sim) => (sim.zones ? sim.zones.list : []);
+/** The stockpile zone (main yard or an extra one) holding a cell, or null. */
+export function stockZoneAt(sim, x, y, z) {
+  if (sim.stock.z === z && inZone(sim.stock, x, y)) return sim.stock;
+  for (const q of extraZones(sim)) if (q.z === z && inZone(q, x, y)) return q;
+  return null;
+}
+/** Total stack slots in the main yard and the extra zones: what a keep-N is capped at. */
+export function stockCapacity(sim) { let n = zoneCapacity(sim.stock); for (const q of extraZones(sim)) n += zoneCapacity(q); return n; }
 export function zoneCells(z) { return (z.x1 - z.x0 + 1) * (z.y1 - z.y0 + 1); }
 export function zoneCapacity(z) { return zoneCells(z) * STACK_CAP; }
 
@@ -223,6 +236,16 @@ export function storeCell(sim, item, fx, fy) {
     const d = Math.abs(x - fx) + Math.abs(y - fy) - (has ? 0.5 : 0);     // prefer topping up an existing stack
     if (d < bd) { bd = d; best = [x, y, z.z]; }
   }
+  for (const q of extraZones(sim)) {                                        // S17: a zone the player drew; one whose filter names the item is worth a walk (STORE_PULL), an unfiltered one is just more yard
+    if (!zoneAccepts(q, item)) continue;
+    const pull = q.f && q.f !== "all" ? -STORE_PULL : 0;
+    for (let y = q.y0; y <= q.y1; y++) for (let x = q.x0; x <= q.x1; x++) {
+      const s = anyStackAt(sim, x, y, q.z);
+      if (s && (s.item !== item || s.n >= STACK_CAP)) continue;
+      const d = Math.abs(x - fx) + Math.abs(y - fy) - (s ? 0.5 : 0) + pull;
+      if (d < bd) { bd = d; best = [x, y, q.z]; }
+    }
+  }
   if (sim.rooms.list.size) {                                                // S15: a Storage room keeps food better, so food goes there first; anything else when the yard has no place
     const food = ITEMS[item].food > 0 || ITEMS[item].spoil > 0;
     for (const [x, y, sz, has] of storageSlots(sim, item)) {
@@ -272,7 +295,7 @@ export function spoilDaily(sim) {
   const sprouts = [], rq = new Map();
   for (let i = 0; i < items.length; i++) {
     const s = items[i], d = ITEMS[s.item], base = winter ? d.spoilW : d.spoil;
-    if (base === 0) continue;
+    if (base === 0 || sim.world.dormantAt(s.x, s.y)) continue;          // S17: dormant ground rots by the elapsed days when it wakes (dormant.js)
     const stored = inStore(sim, s.x, s.y, s.z), cel = stored && sim.farm.cellar && s.z === sim.farm.cellar.z;
     const room = stored && !cel && sim.rooms.list.size ? storageRoomAt(sim, s.x, s.y, s.z) : null;
     let rmul = 1;
