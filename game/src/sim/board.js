@@ -53,7 +53,7 @@ RING.sort((a, b) => (a[0] * a[0] + a[1] * a[1]) - (b[0] * b[0] + b[1] * b[1]) ||
 
 /** The simple site picker (R8): nearest free walkable cell around the stockpile, beds hugging it, racks a step further out. */
 export function findSite(sim, what) {
-  const z = sim.stock, c = CAMP(z), minR = what === "bed" ? 4 : 5;
+  const z = sim.stock, c = CAMP(z), minR = what === "bed" || what === "hearth" ? 4 : 5;
   for (const [dx, dy] of RING) {
     if (Math.max(Math.abs(dx), Math.abs(dy)) < minR) continue;
     const x = c.x + dx, y = c.y + dy, sz = sim.world.standZ(x, y);
@@ -63,11 +63,13 @@ export function findSite(sim, what) {
   return null;
 }
 
+const WATER_WINDOW = 64;           // S16: drink spots are looked for this far (Chebyshev) from the camp
 /** Cells you can stand on beside water (drink spots), cached once: terrain, not flags, decides it. */
 export function waterEdges(sim) {
   if (sim.cache.edges) return sim.cache.edges;
   const w = sim.world, out = [];
-  for (let y = 1; y < 127; y++) for (let x = 1; x < 127; x++) {
+  const cp = sim.site;                                           // S16: the drink spots round the camp (the land is endless; a villager walks no farther than this to drink)
+  for (let y = cp.y - WATER_WINDOW; y <= cp.y + WATER_WINDOW; y++) for (let x = cp.x - WATER_WINDOW; x <= cp.x + WATER_WINDOW; x++) {
     const z = w.standZ(x, y);
     if (z < 0) continue;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -86,7 +88,7 @@ export function updateBoard(sim) {
   const wa = winterAhead(t), n = vl.n;
   if (n === 0) return;
   // Effective runway: fresh food spoils, so as winter nears only part of it counts as banked.
-  const eff = (s.stock.dried + s.stock.berry * (1 - 0.6 * wa)) / Math.max(0.01, vl.need);
+  const eff = (s.stock.dried + s.stock.tuber + 2 * s.stock.hopper_meat * (1 - 0.6 * wa) + 2 * s.stock.smoked_meat + 3 * s.stock.cooked_meat + 1.5 * s.stock.baked_tuber + s.stock.berry * (1 - 0.6 * wa)) / Math.max(0.01, vl.need);
   b.runway = Math.round(Math.min(99, eff) * 100) / 100;
   const critT = CRIT_BASE + CRIT_WINTER * wa;
 

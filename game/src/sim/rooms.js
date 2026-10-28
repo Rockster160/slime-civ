@@ -120,7 +120,7 @@ function seedsFor(dirty) {
       out.add(World.idx(x, y, lev));
       for (const [dx, dy] of DIRS) {
         const nx = x + dx, ny = y + dy;
-        if (nx >= 0 && ny >= 0 && nx < 128 && ny < 128) out.add(World.idx(nx, ny, lev));
+        out.add(World.idx(nx, ny, lev));
       }
     }
   }
@@ -144,18 +144,17 @@ function flood(sim, seed, failed) {
     const c = q.pop();
     cells.push(c);
     if (cells.length > FLOOD_CAP) { open = true; break; }
-    const x = c % 128, y = Math.floor(c / 128) % 128;
+    const [x, y] = World.xyz(c);
     for (const [dx, dy] of DIRS) {
       const nx = x + dx, ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= 128 || ny >= 128) { open = true; continue; }
       const m = w.mat(nx, ny, z);
       if (m === M.AIR) {
-        if (isDoor(sim, nx, ny, z)) { touch = true; faceSum += DOOR_INS; faces++; continue; }
+        if (isDoor(sim, nx, ny, z)) { touch = true; faceSum += Math.round(DOOR_INS * 1000); faces++; continue; }
         if (!w.isSolid(nx, ny, z - 1)) { open = true; continue; }          // a drop or water beside us: not closed
         const n = World.idx(nx, ny, z);
         if (!seen.has(n)) { seen.add(n); q.push(n); }
       } else if (MAT[m].solid) {
-        faceSum += MAT[m].ins; faces++;
+        faceSum += Math.round(MAT[m].ins * 1000); faces++;
         if (w.flags(nx, ny, z) & F.PLAYER) touch = true;
       } else open = true;                                                  // water
     }
@@ -165,11 +164,11 @@ function flood(sim, seed, failed) {
   cells.sort((a, b) => a - b);
   let roofed = 0;
   for (const c of cells) {
-    const x = c % 128, y = Math.floor(c / 128) % 128;
+    const [x, y] = World.xyz(c);
     for (let k = 1; k <= ROOF_H; k++) {
       const m = w.mat(x, y, z + k);
       if (m !== M.AIR && MAT[m].solid) {
-        roofed++; faceSum += MAT[m].ins; faces++;
+        roofed++; faceSum += Math.round(MAT[m].ins * 1000); faces++;
         if (w.flags(x, y, z + k) & F.PLAYER) touch = true;
         break;
       }
@@ -177,7 +176,7 @@ function flood(sim, seed, failed) {
   }
   if (!touch) { for (const c of seen) failed.add(c); return null; }
   const enclosed = roofed === cells.length;
-  const ins = faces ? faceSum / faces : 0;
+  const ins = faces ? faceSum / faces / 1000 : 0;       // faces are summed as integer thousandths: the room's warmth must not depend on which cell the flood started from (incremental vs rebuilt rooms)
   return { id: cells[0], z, cells, n: cells.length, roofed, enclosed, ins, warm: enclosed ? ROOM_WARM * ins : 0, purpose: "none", occT: -1, occ: 0 };
 }
 

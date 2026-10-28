@@ -16,13 +16,14 @@ function hutOf(sim) {
 
 /** Deterministic command script keyed by tick. */
 export function scriptAt(tick, sim) {
-  if (tick === 500) return [{ type: "spawn", x: 66, y: 66 }];
-  if (tick === 2000) return [{ type: "place", x: 70, y: 64, z: 14, mat: M.STONE }, { type: "place", x: 70, y: 65, z: 14, mat: M.STONE }];
-  if (tick === 4000) return [{ type: "dig", x: 70, y: 64, z: 14 }];
-  if (tick === 7000) return [{ type: "dig", x: 60, y: 60, z: 13 }];   // hole under whoever walks there
+  const S = sim.site;                          // S16: the camp is where the spawn search put it (the origin for most seeds), not (64, 64)
+  if (tick === 500) return [{ type: "spawn", x: S.x + 2, y: S.y + 2 }];
+  if (tick === 2000) return [{ type: "place", x: S.x + 6, y: S.y, z: 14, mat: M.STONE }, { type: "place", x: S.x + 6, y: S.y + 1, z: 14, mat: M.STONE }];
+  if (tick === 4000) return [{ type: "dig", x: S.x + 6, y: S.y, z: 14 }];
+  if (tick === 7000) return [{ type: "dig", x: S.x - 4, y: S.y - 4, z: 13 }];   // hole under whoever walks there
   if (sim && tick === 3000) {                 // orders + a standing order, so saves cover them
     const vs = sim.ents.ofKind("villager").slice(0, 3).map(v => v.id);
-    const tree = sim.ents.ofKind("plant").filter(p => p.species === "tree").sort((a, b) => Math.abs(a.x - 64) + Math.abs(a.y - 64) - Math.abs(b.x - 64) - Math.abs(b.y - 64))[0];
+    const tree = sim.ents.ofKind("plant").filter(p => p.species === "tree").sort((a, b) => Math.abs(a.x - S.x) + Math.abs(a.y - S.y) - Math.abs(b.x - S.x) - Math.abs(b.y - S.y))[0];
     return [{ type: "order", ids: vs, verb: "chop", tid: tree.id }, { type: "keep", item: "stick", n: 20 }];
   }
   if (sim && tick === 9000) return [{ type: "cancel" }, { type: "unkeep", item: "stick" }, { type: "keep", item: "log", n: 12 }];
@@ -41,7 +42,7 @@ export function scriptAt(tick, sim) {
   }
   if (sim && tick === 60000) {
     const v = sim.ents.ofKind("villager").slice(0, 2).map(q => q.id);
-    return [{ type: "order", ids: v, verb: "dig", x: 70, y: 56, z: sim.stock.z - 1 }];
+    return [{ type: "order", ids: v, verb: "dig", x: S.x + 6, y: S.y - 8, z: sim.stock.z - 1 }];
   }
   // S4b: a possession spell (20000..29000) so saves and replays cover it: walk a square, interact with whatever is beside us.
   if (sim && tick === 20000) { const v = sim.ents.ofKind("villager").find(q => isAdult(sim, q)); if (v) return [{ type: "possess", id: v.id }]; }
@@ -55,7 +56,7 @@ export function scriptAt(tick, sim) {
     }
   }
   if (sim && tick === 29000) return [{ type: "release" }];
-  if (tick > 0 && tick % 9973 === 0) return [{ type: "spawn", x: 64 + (tick % 7), y: 64 }];
+  if (tick > 0 && tick % 9973 === 0) return [{ type: "spawn", x: S.x + (tick % 7), y: S.y }];
   return [];
 }
 

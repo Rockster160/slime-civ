@@ -28,6 +28,7 @@ export function createPanel(parent, id, title, { open = true } = {}) {
   const t = sec.querySelector(".ptitle"), h = sec.querySelector(".phint");
   const apply = () => { sec.classList.toggle("closed", !p.open); sec.querySelector(".chev").textContent = p.open ? "▾" : "▸"; };
   p.head.addEventListener("click", () => { p.open = !p.open; remember("panel." + id, p.open ? "1" : "0"); apply(); });
+  p.setOpen = (on) => { p.open = on; remember("panel." + id, on ? "1" : "0"); apply(); };
   apply();
   t.textContent = title;
   p.setTitle = (s) => { if (t.textContent !== s) t.textContent = s; };

@@ -16,12 +16,14 @@
 // built roof beside it. Above ground the span is advisory in the GDD; here it is
 // the ordering rule that makes roofs grow inward from the walls.
 import { World, M, F, MAT } from "./world.js";
-import { dropLoose, inZone } from "./items.js";
+import { dropLoose, inZone, haveTotal } from "./items.js";
+import { sight } from "./discovery.js";
 import { once } from "./chronicle.js";
 import { BED_COST, RACK_COST } from "./board.js";
+import { can } from "./knowledge.js";
 
 export const SPAN = 3;
-export const TIER = { floor: 0, wall: 1, bed: 2, rack: 2, roof: 2, door: 3 };
+export const TIER = { floor: 0, wall: 1, bed: 2, rack: 2, hearth: 2, kiln: 2, mound: 2, workbench: 2, bellows: 2, waterjar: 2, smoker: 2, forge: 2, torch: 2, lamp: 2, vent: 2, shelf: 2, roof: 2, door: 3 };
 
 /** Buildable materials. role = what they may be used as (a material class is its role); dur = ticks of work. */
 export const BMAT = {
@@ -31,15 +33,44 @@ export const BMAT = {
   dirt:    { id: M.DIRTFLOOR, role: "floor", item: "dirt",  n: 1, dur: 60,  label: "Packed-dirt floor" },
   thatch:  { id: M.THATCH,    role: "roof",  item: "grass", n: 1, dur: 80,  label: "Thatch roof" },
   logroof: { id: M.LOGROOF,   role: "roof",  item: "log",   n: 1, dur: 160, label: "Log roof" },
+  // S9, the shelter ladder (K10): the same house, redrawn in the materials at hand. `need` = a craft a living villager must know (the palette hides it until then).
+  hide:    { id: M.HIDEWALL,  role: "wall",  item: "leather", n: 1, dur: 100, label: "Hide wall", need: "HIDE_WORKING" },
+  hideroof: { id: M.HIDEROOF, role: "roof",  item: "leather", n: 1, dur: 80,  label: "Hide roof", need: "HIDE_WORKING" },
+  timber:  { id: M.TIMBERWALL, role: "wall", item: "timber", n: 1, dur: 220, label: "Timber wall", need: "FRAMING" },
+  plank:   { id: M.PLANKFLOOR, role: "floor", item: "timber", n: 1, dur: 100, label: "Plank floor", need: "FRAMING" },
+  dressed: { id: M.DRESSED,   role: "wall",  item: "block", n: 1, dur: 300, label: "Dressed-stone wall", need: "DRESS_STONE" },
+  brick:   { id: M.BRICKWALL, role: "wall",  item: "brick", n: 2, dur: 260, label: "Brick wall", need: "KILN" },
+  // S12: a post and cap of timber that holds a roof up (underground.js: a support stops a span from caving in). A wall piece, so it is built, shown and taken down like one.
+  support: { id: M.SUPPORT,   role: "wall",  item: "timber", n: 2, dur: 160, label: "Timber support", need: "FRAMING" },
 };
 export const BMAT_OF = {};                       // material id -> key
 for (const k of Object.keys(BMAT)) BMAT_OF[BMAT[k].id] = k;
 export const DEFAULT_MAT = { wall: "wattle", floor: "dirt", roof: "thatch" };
-export const PIECES = ["wall", "floor", "roof", "door", "bed", "rack"];
+export const PIECES = ["wall", "floor", "roof", "door", "bed", "rack", "hearth", "kiln", "mound", "workbench", "bellows", "waterjar", "smoker", "forge", "torch", "lamp", "vent", "shelf"];
+/** S12: light and air underground (furniture through the same ghost pipeline; plain building work, not craft). */
+export const UNDERGROUND_PIECES = ["torch", "lamp", "vent"];
+/** S7b stations (furniture made through the same ghost pipeline as the hearth). */
+export const STATIONS = ["kiln", "mound", "workbench", "bellows", "waterjar", "smoker", "forge"];
+/** Pieces that need a living knower of one of these crafts to be placed (UNKNOWN_CRAFT): the palette hides them until then. */
+export const PLACE_NEEDS = { hearth: ["FIRE_TENDING"], kiln: ["POTTERY", "KILN"], mound: ["CHARCOAL"], bellows: ["POTTERY"], waterjar: ["VESSELS"], smoker: ["FIRE_TENDING"], forge: ["KILN"], torch: ["FIRE_TENDING"], lamp: ["HAMMERING"] };
 const FURN = {
   door: { item: "stick", n: 3, dur: 120, label: "Door" },
   bed:  { item: BED_COST.item, n: BED_COST.n, dur: 240, label: "Leaf bed" },
   rack: { item: RACK_COST.item, n: RACK_COST.n, dur: 360, label: "Drying rack" },
+  hearth: { item: "stick", n: 4, dur: 240, label: "Fire ring" },       // S7a: a ring of stakes and turf round the fire; needs FIRE_TENDING known
+  // S7b (GDD §14.3, §12.4): a station is furniture whose context (heat, enclosure) the phenomena read.
+  kiln: { item: "clay", n: 4, dur: 300, label: "Clay-lined pit kiln" },         // a pit lined with wet clay: its four sides count as lined (E 1.40)
+  mound: { item: "dirt", n: 4, dur: 240, label: "Charcoal mound" },            // an earth-covered pit: sealed (D 0.5), P 1.04, a smoulder
+  workbench: { item: "log", n: 2, dur: 300, label: "Workbench" },
+  bellows: { item: "fired_clay", n: 2, dur: 240, label: "Bellows" },            // a hide bag of air pushed through a clay nozzle (the nozzle is the fired clay)
+  waterjar: { item: "jar", n: 1, dur: 120, label: "Water jar" },
+  smoker: { item: "stick", n: 6, dur: 300, label: "Covered rack" },          // S9: a rack under a cover of boughs, beside the fire (smoking food, a winter larder)
+  forge: { item: "brick", n: 6, dur: 420, label: "Brick forge" },
+  // S12: underground. A torch is a stick on a stake (needs fire known); a lamp has a copper sheet housing (needs cold hammering); a vent is a stick-lined shaft that lets air in or out.
+  torch: { item: "stick", n: 1, dur: 60, label: "Torch" },
+  lamp: { item: "sheet", n: 1, dur: 120, label: "Copper lamp" },
+  vent: { item: "stick", n: 4, dur: 200, label: "Vent shaft" },
+  shelf: { item: "stick", n: 5, dur: 200, label: "Shelf" },                 // S15: a storage room's furniture (purposes.js)            // S9: a lidded, vented, lined furnace: coal and a second draft reach the Forge level (heat 5)
 };
 
 /** {item, n, dur, label} for a piece (site or request). */
@@ -61,7 +92,7 @@ export function csiteAt(sim, x, y, z, w) {
   return null;
 }
 const FLOORABLE = new Set([M.GRASS, M.DIRT, M.SAND]);
-const blocksBuild = (e) => e.kind === "plant" || e.kind === "furniture" || e.kind === "item" || e.kind === "site";   // "site" = a leaf bed on its way
+const blocksBuild = (e) => e.kind === "plant" || e.kind === "furniture" || e.kind === "item" || e.kind === "site" || e.kind === "grave";   // "site" = a leaf bed on its way
 
 /**
  * Can this piece be placed at the stand cell? null = yes, else a short reason:
@@ -69,7 +100,9 @@ const blocksBuild = (e) => e.kind === "plant" || e.kind === "furniture" || e.kin
  */
 export function checkPlace(sim, w, m, x, y, z) {
   if (!PIECES.includes(w) || !World.inBounds(x, y, z) || z < 2 || z + 1 >= 24) return "bounds";
+  if (PLACE_NEEDS[w] && !PLACE_NEEDS[w].some(c => can(sim, c))) return "unknown";   // nobody knows how (hearth: fire; kiln: pottery; mound: charcoal ...)
   if ((w === "wall" || w === "floor" || w === "roof") && (!BMAT[m] || BMAT[m].role !== w)) return "material";
+  if ((w === "wall" || w === "floor" || w === "roof") && BMAT[m].need && !can(sim, BMAT[m].need)) return "unknown";      // S9: a hide wall wants hide working, a timber wall framing ...
   const wd = sim.world;
   const [cx, cy, cz] = cellOf(w, x, y, z);
   const old = csiteAt(sim, x, y, z, w);
@@ -96,14 +129,24 @@ export function placeGhosts(sim, cells, g) {
   let placed = 0, skipped = 0;
   for (const c of cells) {
     const m = FURN[c.w] ? "" : c.m || DEFAULT_MAT[c.w];
-    if (checkPlace(sim, c.w, m, c.x, c.y, c.z)) { skipped++; continue; }
+    const rp = c.rp ? replaceOk(sim, c.w, m, c.x, c.y, c.z) : false;       // S11: a revision swaps a built piece's material in place
+    if (c.rp ? !rp : checkPlace(sim, c.w, m, c.x, c.y, c.z)) { skipped++; continue; }
     const old = csiteAt(sim, c.x, c.y, c.z, c.w);
     if (old) sim.ents.remove(old.id);
-    sim.ents.add("csite", { w: c.w, m, x: c.x, y: c.y, z: c.z, got: 0, g, rv: 0, rt: 0 });
+    sim.ents.add("csite", rp ? { w: c.w, m, x: c.x, y: c.y, z: c.z, got: 0, g, rv: 0, rt: 0, rp: 1 } : { w: c.w, m, x: c.x, y: c.y, z: c.z, got: 0, g, rv: 0, rt: 0 });
     placed++;
   }
   if (placed) bumpSites(sim);
   return { placed, skipped };
+}
+
+/** S11 (K10): can a built wall/floor/roof here be swapped for material m in place? (Same role, another material, one the village can work.) */
+export function replaceOk(sim, w, m, x, y, z) {
+  if (w !== "wall" && w !== "floor" && w !== "roof") return false;
+  const b = BMAT[m];
+  if (!b || b.role !== w || (b.need && !can(sim, b.need))) return false;
+  const p = builtPiece(sim, w, x, y, z);
+  return !!(p && p.cell && p.key !== m);
 }
 
 export function bumpSites(sim) { sim.cache.csv = (sim.cache.csv | 0) + 1; sim.cache.iv++; }
@@ -195,22 +238,53 @@ export function finishSite(sim, v, s) {
   const w = sim.world, [cx, cy, cz] = cellOf(s.w, s.x, s.y, s.z);
   if (s.w === "wall") {
     for (const id of sim.ents.at(s.x, s.y, s.z)) { const e = sim.ents.get(id); if (e.id !== s.id && (e.kind === "villager" || blocksBuild(e))) return "BLOCKED"; }
-    if (w.mat(cx, cy, cz) !== M.AIR) return "BLOCKED";
+    if (w.mat(cx, cy, cz) !== M.AIR && !s.rp) return "BLOCKED";
   }
   if (s.w === "wall" || s.w === "floor" || s.w === "roof") {
-    w.set(cx, cy, cz, BMAT[s.m].id, w.flags(cx, cy, cz) | F.PLAYER);
+    if (s.rp) {                                            // S11: swapping a built piece for a better one - the old material comes back (as taking it down would)
+      const ob = BMAT[BMAT_OF[w.mat(cx, cy, cz)]];
+      if (ob) dropLoose(sim, ob.item, Math.max(1, Math.round(ob.n * REFUND)), s.x, s.y, s.z);
+    }
+    w.set(cx, cy, cz, BMAT[s.m].id, w.flags(cx, cy, cz) | F.PLAYER | F.USED);
+    builtWitness(sim, v, s);
   } else {
     const ids = sim.ents.at(s.x, s.y, s.z);
     for (const id of ids) { const e = sim.ents.get(id); if (e.kind === "furniture" || e.kind === "plant") return "BLOCKED"; }
-    const f = sim.ents.add("furniture", s.w === "door" ? { f: "door", x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0 } : { f: s.w, x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0 });
+    w.setFlags(s.x, s.y, s.z, w.flags(s.x, s.y, s.z) | F.USED);
+    const f = sim.ents.add("furniture", s.w === "door" ? { f: "door", x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0 }
+      : s.w === "hearth" ? { f: "hearth", x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0, fuel: 0, lit: 0, fi: "log", hl: 0 }
+      : s.w === "kiln" || s.w === "mound" || s.w === "smoker" || s.w === "forge" ? { f: s.w, x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0, lid: s.w === "forge" ? 2 : 0, inv: {}, rcp: "", bn: 0, bt: 0, lv: 0, by: 0, fq: 0 }
+      : s.w === "workbench" ? { f: s.w, x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0, inv: {}, rcp: "" }
+      : s.w === "waterjar" ? { f: s.w, x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0, fill: 0 }
+      : { f: s.w, x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0 });
     if (s.w === "door") w.markDirty(s.x, s.y, s.z);
     if (s.w === "bed") once(sim, "firstBed", "BUILT_FIRST", v.name + " made the first leaf bed.", [v.id], {}, 1);
     else if (s.w === "rack") once(sim, "firstRack", "BUILT_FIRST", v.name + " built the first drying rack.", [v.id], {}, 1);
+    else if (s.w === "hearth") once(sim, "firstFireRing", "BUILT_FIRST", v.name + " built the first fire ring.", [v.id], {}, 1);
+    else if (s.w === "kiln") once(sim, "firstKiln", "BUILT_FIRST", v.name + " lined the first pit with clay: a kiln.", [v.id], {}, 1);
+    else if (s.w === "mound") once(sim, "firstMound", "BUILT_FIRST", v.name + " heaped earth over a pit of wood: the first charcoal mound.", [v.id], {}, 1);
+    else if (s.w === "workbench") once(sim, "firstBench", "BUILT_FIRST", v.name + " built the first workbench.", [v.id], {}, 1);
+    else if (s.w === "bellows") once(sim, "firstBellows", "BUILT_FIRST", v.name + " made the first bellows.", [v.id], {}, 1);
+    else if (s.w === "smoker") once(sim, "firstSmoker", "BUILT_FIRST", v.name + " built the first covered rack.", [v.id], {}, 1);
+    else if (s.w === "forge") once(sim, "firstForge", "BUILT_FIRST", v.name + " built the first brick forge.", [v.id], {}, 1);
+    else if (s.w === "torch") once(sim, "firstTorch", "BUILT_FIRST", v.name + " set the first torch in the dark.", [v.id], {}, 1);
+    else if (s.w === "lamp") once(sim, "firstLamp", "BUILT_FIRST", v.name + " hung the first copper lamp.", [v.id], {}, 1);
+    else if (s.w === "shelf") once(sim, "firstShelf", "BUILT_FIRST", v.name + " set up the first shelf.", [v.id], {}, 1);
+    else if (s.w === "vent") once(sim, "firstVent", "BUILT_FIRST", v.name + " cut the first vent shaft: air moves in the tunnel.", [v.id], {}, 1);
     void f;
   }
   sim.ents.remove(s.id);
   bumpSites(sim);
   return null;
+}
+
+/** S9: the first wall of each new material is a chronicle first, and building is where some crafts are SEEN (witness routes; discovery.js sight). */
+function builtWitness(sim, v, s) {
+  const b = BMAT[s.m];
+  if (b.need) once(sim, "firstMat_" + s.m, "BUILT_FIRST", v.name + " raised the first " + b.label.toLowerCase() + ".", [v.id], {}, 1);
+  if (s.m === "stone") sight(sim, "DRESS_STONE", "wall", s.x, s.y, s.z, null);                                  // stones are fitted, struck to sit flat
+  if (s.m === "thatch" || s.m === "wattle") sight(sim, "CORDAGE", "bind", s.x, s.y, s.z, null);                  // grass and withies are bound
+  if (s.m === "log" && (haveTotal(sim, "stone_axe") + haveTotal(sim, "copper_axe") + haveTotal(sim, "iron_axe") > 0)) sight(sim, "FRAMING", "wall", s.x, s.y, s.z, null);      // logs squared with an axe
 }
 
 export const MAT_NAME = (m) => (MAT[m] ? MAT[m].name : "?");
@@ -221,17 +295,26 @@ export const MAT_NAME = (m) => (MAT[m] ? MAT[m].name : "?");
 // as loose items. It pays NO XP (taking down what you put up must not be a grind, R17) and never touches natural
 // terrain: only cells flagged F.PLAYER, and doors / beds / racks.
 export const REFUND = 0.75;
-export const UNBUILD_DUR = { wall: 80, floor: 40, roof: 50, door: 60, bed: 80, rack: 100 };
+export const UNBUILD_DUR = { wall: 80, floor: 40, roof: 50, door: 60, bed: 80, rack: 100, hearth: 80, kiln: 120, mound: 80, workbench: 100, bellows: 80, waterjar: 40, smoker: 100, forge: 160, torch: 30, lamp: 40, vent: 80, shelf: 60 };
 
 /** The built piece of kind w standing at stand cell (x,y,z): {cell:[x,y,z]} | {ent} | null. */
 export function builtPiece(sim, w, x, y, z) {
   const wd = sim.world;
-  if (w === "door" || w === "bed" || w === "rack") {
+  if (w === "door" || w === "bed" || w === "rack" || w === "hearth" || w === "shelf" || STATIONS.includes(w) || UNDERGROUND_PIECES.includes(w)) {
     for (const id of sim.ents.at(x, y, z)) { const e = sim.ents.get(id); if (e.kind === "furniture" && e.f === w) return { ent: e }; }
     return null;
   }
   const [cx, cy, cz] = cellOf(w, x, y, z), k = BMAT_OF[wd.mat(cx, cy, cz)];
   return k && BMAT[k].role === w && (wd.flags(cx, cy, cz) & F.PLAYER) ? { cell: [cx, cy, cz], key: k } : null;
+}
+
+/** Mark one built piece (kind w at stand cell x,y,z) for removal. False if nothing is built there or it is already marked. */
+export function markPiece(sim, w, x, y, z) {
+  if (!builtPiece(sim, w, x, y, z)) return false;
+  for (const d of sim.ents.ofKind("dsite")) if (d.w === w && d.x === x && d.y === y && d.z === z) return false;
+  sim.ents.add("dsite", { w, x, y, z, rv: 0, rt: 0 });
+  sim.cache.iv++; sim.board.ep++;
+  return true;
 }
 
 /** {type:"deconstruct", x0,y0,x1,y1,z}: mark every built piece in the rectangle (stand level z) for removal. */
@@ -256,6 +339,7 @@ export function unbuild(sim, d) {
   if (p.ent) {
     const f = FURN[d.w]; item = f.item; n = f.n;
     if (p.ent.owner) { const o = sim.ents.get(p.ent.owner); if (o && o.bed === p.ent.id) o.bed = 0; }
+    if (p.ent.inv) for (const k of Object.keys(p.ent.inv)) if (p.ent.inv[k] > 0) dropLoose(sim, k, p.ent.inv[k], d.x, d.y, d.z);    // what was loaded into a station comes back
     sim.ents.remove(p.ent.id);
     if (d.w === "door") wd.markDirty(d.x, d.y, d.z);
   } else {

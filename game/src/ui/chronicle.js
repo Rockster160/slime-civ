@@ -7,6 +7,7 @@
 // has passed, the digest summarises up to 10 entries since then.
 import { DAY, SEASON_NAMES } from "../sim/clock.js";
 import { esc, createPanel } from "./dom.js";
+import { chronicleMarkdown, chronicleFileName } from "./chronicletext.js";
 
 const AWAY_TICKS = DAY;          // one game day
 const DIGEST_MAX = 10;
@@ -24,6 +25,7 @@ export function createChroniclePanel(parent, game) {
   const p = createPanel(parent, "chron", "Chronicle");
   p.body.classList.add("chronbody");
   p.body.addEventListener("click", (e) => {
+    if (e.target.closest("[data-dl]")) { game.downloadText(chronicleFileName(game.sim), chronicleMarkdown(game.sim), "text/markdown"); game.toast("Chronicle saved as a Markdown file."); return; }
     const r = e.target.closest("[data-a]"); if (!r) return;
     const id = Number(r.dataset.a);
     if (id && game.sim.ents.get(id)) game.selectOnly(id, true);
@@ -31,9 +33,10 @@ export function createChroniclePanel(parent, game) {
   });
   p.update = () => {
     const { sim, ui } = game, es = sim.chron.entries;
-    if (!es.length) { p.html(`<p class="dim">Nothing has happened yet. Events - births, deaths, first beds, crises - will be written here.</p>`); return; }
+    const dl = `<div class="btnrow"><button data-dl="1" title="Save the whole history (eras, firsts, births and deaths, notable people, graves, heirlooms) as a readable Markdown file">Download chronicle</button></div>`;
+    if (!es.length) { p.html(dl + `<p class="dim">Nothing has happened yet. Events - births, deaths, first beds, crises - will be written here.</p>`); return; }
     p.setHint(es.length + (es.length === 1 ? " entry" : " entries"));
-    let h = "";
+    let h = dl;
     for (let i = es.length - 1; i >= 0 && i >= es.length - 80; i--) {
       const e = es[i];
       h += `<div class="ce s${e.sev}" ${e.a.length ? `data-a="${e.a[0]}"` : ""}><span class="when">${when(e)}</span> ${esc(e.text)}</div>`;

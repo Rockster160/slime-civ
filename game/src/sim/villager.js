@@ -2,25 +2,41 @@
 // slime-village slime/sim/slime.js + ai.js; numbers rescaled to the GDD clock).
 //
 // A villager is an entity {kind:"villager", ...}: all plain JSON.
-//   t      traits (multipliers around 1): strength speed intelligence hardiness appetite fertility longevity
+//   t      the nine traits (multipliers around 1, §08): strength speed stamina intelligence drive leisure fertility longevity hardiness
+//   sk     skills {dig,build,craft: {xp, wk}}; ws/wt = skill last worked and when; tch = {p, u} lesson I am giving
+//   cl     solo splits made (at most 1 per life); cg = clone generation depth (0 = born of two parents)
 //   hue    colour (0..359), lin founder lineage, par parent ids, gen generation
 //   born   tick of birth (negative for founders), prime = age in days where decline starts
 //   needs  hunger thirst energy warm mood in 0..1 (1 = fine); hp health; hard = lifelong hardship
 //   bed    id of the leaf bed I own (0 none); mate id; cd = tick I may breed again
 //   rest   0 awake / 1 on the ground / 2 in a bed (huddling or sleeping); slp 1 = asleep
+//   fam    {CRAFT: 0..1} familiarity per craft (S7a, knowledge.js); a craft is known while a living villager has f > 0
+//   g      S13 hidden genotype {trait: [allele, allele]}: the visible trait is their blend (R16); gp grandparent ids, inb the kinship of the parents, wk 1 = weak (close-kin outcome)
+//   aff mn rel  S13 bonds (bonds.js); gr grief {u, s, f}; hb hobby {xp, n}; ti titles earned; hl heirloom {n, h}
 //   carry  {item,n} | null; action; job; why; order; sk; ep (board epoch seen); bad [[targetId,untilTick]]
 import { DAY } from "./clock.js";
+import { bedroomQ, partnerBeside, BEDROOM_REST, BEDROOM_MOOD, PARTNER_MOOD } from "./purposes.js";
 import { clamp, expNeg, settle, r3 } from "./util.js";
 import { tempAt } from "./season.js";
 import { occupants } from "./rooms.js";
+import { fireBonus } from "./fire.js";
+import { airHarm, AIR_TIRE } from "./underground.js";
+import { BIOMES, biomeAt } from "./biome.js";
+import { hobbyStep } from "./hobby.js";
+import { mix32 } from "./rng.js";
+import { fnv1aStr } from "./hash.js";
 
 export const LIFE_DAYS = 400;               // a life is ~4 game years of 100 days (GDD §23 box, R1)
 export const NEED_STEP = 10;                // needs update every 10 ticks per villager (staggered by id)
-export const TRAITS = ["strength", "speed", "intelligence", "hardiness", "appetite", "fertility", "longevity"];
-export const FOUNDER_RANGE = {              // GDD §08 table; hardiness is the maxHealth/cold trait, appetite the upkeep trait
-  strength: [0.8, 1.2], speed: [0.8, 1.2], intelligence: [0.8, 1.2], hardiness: [0.85, 1.15],
-  appetite: [0.85, 1.15], fertility: [0.8, 1.2], longevity: [0.9, 1.1],
+// The nine traits carried over from slime-village (GDD §08). hardiness is its maxHealth (85-115 -> 0.85-1.15), also the cold trait.
+export const TRAITS = ["strength", "speed", "stamina", "intelligence", "drive", "leisure", "fertility", "longevity", "hardiness"];
+export const FOUNDER_RANGE = {              // GDD §08 table, founder ranges unchanged
+  strength: [0.8, 1.2], speed: [0.8, 1.2], stamina: [0.8, 1.2], intelligence: [0.8, 1.2], drive: [0.75, 1.25],
+  leisure: [0.6, 1.5], fertility: [0.8, 1.2], longevity: [0.9, 1.1], hardiness: [0.85, 1.15],
 };
+export const TRAIT_SOFT = { drive: 0.6, hardiness: 0.6 };      // settle() band: slime-village TRAIT_SOFT 0.5, drive x1.2, vitality scaled
+export const GENE_CAP = 0.25;                                  // genes move any output by at most +-25% (R16 guard 5)
+export const SPORT_P = 0.04;                                   // per trait per child (§08 mutation)
 export const THIRST_RATE = 0.35;           // per day; GDD §08 says 0.5, but water is ~25 cells away and carrying it is out of C1
 export const BED_WARMTH = 0.10;            // a leaf bed (insulation from the ground)
 export const HUDDLE_EACH = 0.04;           // each resting neighbour within 2 cells
@@ -30,6 +46,9 @@ export const ROOM_HUDDLE_MAX = 0.06;
 export const COMFORT = 0.30;                // body-temperature comfort threshold (design call, tuned)
 export const COLD_DRAIN = 0.14;             // warmth lost per day per unit of cold deficit
 export const AGE_DMG = 1.6;                 // slime-village AGE_DMG shape: health/day * frailty^2
+export const WOUND_AT = 0.85, WOUND_HEAL = 6, REST_HEAL = 12;     // S8: health/day gained by a wounded villager (on top of the 2/day), and extra at rest
+export const GRIEF_OUT = 0.05;             // S13 (D8): grief costs at most 5% of work output while it lasts
+export const GRIEF_MOOD = 0.5;            // and drains mood by up to this much a day, on top of the usual sag
 export const ELDER_DECAY = 1 / 130;         // fitness e-folding past prime (days^-1)
 
 // ---- life stages ----------------------------------------------------------
@@ -54,12 +73,23 @@ export function maxHp(v, fit) { return 100 * v.t.hardiness * (0.45 + 0.55 * fit)
 /** Rations of food this villager needs per game day (§11.17: juvenile 0.5, elder 0.8; appetite scales). */
 export function dailyNeed(sim, v) {
   const a = ageDays(sim, v);
-  return v.t.appetite * (a < maturity(v) ? 0.5 : a > v.prime ? 0.8 : 1);
+  return foodUpkeep(v) * (a < maturity(v) ? 0.5 : a > v.prime ? 0.8 : 1);
 }
+
+// ---- convex trait upkeep (R16 guard 1): above 1.0 a trait costs, so the all-1.7 villager is not free ----
+const over = (x) => (x > 1 ? (x - 1) * (x - 1) : 0);
+/** Food drain multiplier: strength k=1.2; a big engine (stamina) also eats a little more. 1.2 on one trait costs ~5%. */
+export function foodUpkeep(v) { return (1 + 1.2 * over(v.t.strength)) * (1 + 0.5 * (v.t.stamina - 1)); }
+/** Energy drain multiplier while awake: speed, stamina, intelligence all pay k=1.0 above 1; stamina then divides it (works longer). */
+export function energyUpkeep(v) { return (1 + over(v.t.speed) + over(v.t.stamina) + over(v.t.intelligence)) / v.t.stamina; }
+/** Mood sag per game day without leisure: drive burns out (§08), leisure wants more downtime. 0.15 at average. */
+export function moodSag(v) { return 0.15 * (0.5 * v.t.drive + 0.5 * v.t.leisure); }
+/** The most one gene may move an output: trait clamped to 1 +- GENE_CAP. */
+export function geneMul(x) { return clamp(x, 1 - GENE_CAP, 1 + GENE_CAP); }
 /** Ticks per cell walked: speed trait and fitness (slime-village speed formula). */
-export function stepTicks(v, fit) { return Math.max(3, Math.round(6 / (v.t.speed * (0.55 + 0.45 * fit)))); }
+export function stepTicks(v, fit) { return Math.max(3, Math.round((v.ill ? 7.8 : 6) / (v.t.speed * (0.55 + 0.45 * fit)))); }      // S14: a sick villager walks 30% slower
 /** Work-rate multiplier (before skill): fitness and mood (§08: mood < 0.30 slows work 15%). */
-export function workFactor(v, fit) { return (0.55 + 0.45 * fit) * (v.mood < 0.1 ? 0.7 : v.mood < 0.3 ? 0.85 : 1); }
+export function workFactor(v, fit) { return (v.ill ? 0.6 : 1) * (0.55 + 0.45 * fit) * (v.mood < 0.1 ? 0.7 : v.mood < 0.3 ? 0.85 : 1) * (v.gr ? 1 - GRIEF_OUT * v.gr.s : 1); }
 
 // ---- needs ----------------------------------------------------------------
 
@@ -80,12 +110,16 @@ export function updateNeeds(sim, v) {
   const asleep = v.slp === 1, resting = v.rest > 0;
   const child = age < maturity(v), elder = age > v.prime;
 
-  v.hunger = Math.max(0, v.hunger - 0.25 * v.t.appetite * (child ? 0.5 : elder ? 0.8 : 1) * (asleep ? 0.6 : 1) * dt);
+  v.hunger = Math.max(0, v.hunger - 0.25 * foodUpkeep(v) * (child ? 0.5 : elder ? 0.8 : 1) * (asleep ? 0.6 : 1) * dt);
   v.thirst = Math.max(0, v.thirst - THIRST_RATE * (asleep ? 0.6 : 1) * dt);
-  if (asleep) v.energy = Math.min(1, v.energy + (v.rest === 2 ? 2.0 : 1.3) * dt);   // bed rests better than ground (§08)
-  else v.energy = Math.max(0, v.energy - (resting ? 0.35 : 0.7) * dt);
-  const leisure = v.action && v.action.type === "Wander";
-  v.mood = clamp(v.mood + (leisure ? 4.0 : -0.15) * dt, 0, 1);
+  const bq = asleep && v.rest === 2 ? bedroomQ(sim, v) : -1;                         // S15: a bed in a closed Bedroom rests better and lifts the mood (purposes.js)
+  if (asleep) v.energy = Math.min(1, v.energy + (v.rest === 2 ? 2.0 * (bq >= 0 ? 1 + BEDROOM_REST * bq : 1) : 1.3) * dt);   // bed rests better than ground (§08)
+  else v.energy = Math.max(0, v.energy - (resting ? 0.35 : 0.7) * energyUpkeep(v) * dt);
+  const leisure = v.action && (v.action.type === "Wander" || (v.job && v.job.k === "tinker"));     // tinkering is free time too
+  const hob = v.action && v.action.type === "Wander" ? hobbyStep(v) : 1;            // S13: a hobby is followed in free time, and lifts the mood it brings back a little
+  if (v.gr && sim.tick >= v.gr.u) v.gr = null;                                      // S13: grief runs out
+  v.mood = clamp(v.mood + (leisure ? 4.0 * hob : -moodSag(v)) * dt - (v.gr ? GRIEF_MOOD * v.gr.s * dt : 0)
+    + (bq >= 0 ? (BEDROOM_MOOD * bq + (partnerBeside(sim, v) ? PARTNER_MOOD : 0)) * dt : 0), 0, 1);
 
   let bonus = 0;
   if (resting) {
@@ -100,6 +134,8 @@ export function updateNeeds(sim, v) {
   // Inside an enclosed, roofed room the walls keep the heat in: the room's insulation-scaled bonus applies awake or asleep (§11.9, S4a).
   const room = sim.rooms.at(v.x, v.y, v.z);
   if (room && room.enclosed) bonus += room.warm + Math.min(ROOM_HUDDLE_MAX, ROOM_HUDDLE * (occupants(sim, room) - 1));
+  bonus += fireBonus(sim, v);                    // a lit hearth or a burning tree close by (S7a, fire.js)
+  bonus += BIOMES[biomeAt(sim.world, v.x, v.y)].warm;       // S12: the highland is colder, the marsh a little kinder
   const comfort = COMFORT - 0.5 * (v.t.hardiness - 1) + (child || elder ? 0.05 : 0);
   const deficit = comfort - (tempAt(sim.tick) + bonus);
   if (deficit > 0) v.warm = Math.max(0, v.warm - deficit * COLD_DRAIN * dt);
@@ -111,18 +147,27 @@ export function updateNeeds(sim, v) {
   const hC = v.warm < 0.25 ? 8 * (0.25 - v.warm) / 0.25 : 0;
   const frail = Math.max(0, age - v.prime) / 150;
   const hA = AGE_DMG * frail * frail * (1 + Math.min(0.5, v.hard / 300));
-  const hurt = (hS + hT + hC) * dt;
+  const hB = airHarm(sim, v);                    // S12: bad air (underground.js) costs health and tires
+  if (hB) v.energy = Math.max(0, v.energy - AIR_TIRE * dt);
+  const hI = v.ill ? v.ill.d : 0;                // S14: sickness drains health (disease.js) and stops the usual healing while it lasts
+  const hurt = (hS + hT + hC + hB + hI) * dt;
   v.hard = r3(v.hard + hurt);
   const mh = maxHp(v, fit);
-  v.hp -= (hS + hT + hC + hA) * dt;
+  v.hp -= (hS + hT + hC + hB + hI + hA) * dt;
   // Healing offsets age damage until frailty outruns it (hA > 2/day), so old age is a slope, not a cliff.
-  if (hS + hT + hC === 0) v.hp += (v.hunger > 0.25 && v.thirst > 0.25 && v.warm > 0.4 ? 2.0 : 0.5) * dt;
+  if (hS + hT + hC + hB + hI === 0) {
+    const well = v.hunger > 0.25 && v.thirst > 0.25 && v.warm > 0.4;
+    // S8 wounds: below WOUND_AT of max health the body mends faster, and much faster at rest (the mend job, sleep, huddling): a mauled villager is back in days, not weeks
+    v.hp += ((well ? 2.0 : 0.5) + (well && v.hp < WOUND_AT * mh ? WOUND_HEAL + (v.rest > 0 ? REST_HEAL : 0) : 0)) * dt;
+  }
   if (v.hp > mh) v.hp = mh;
   if (v.hp <= 0) {
     let cause = "old age", m = hA;
     if (hS > m) { cause = "starvation"; m = hS; }
     if (hT > m) { cause = "thirst"; m = hT; }
     if (hC > m) { cause = "cold"; m = hC; }
+    if (hB > m) { cause = "bad air"; m = hB; }
+    if (hI > m) { cause = "illness"; m = hI; }
     return cause;
   }
   return null;
@@ -152,19 +197,55 @@ export function villagerProps(x, y, z, o) {
     x, y, z, name: o.name, hue: o.hue, lin: o.lin, par: o.par, gen: o.gen, t: o.t, born: o.born, prime: o.prime,
     hunger: o.hunger ?? 0.9, thirst: o.thirst ?? 0.9, energy: o.energy ?? 0.9, warm: 1, mood: 0.8, hp: 100, hard: 0,
     bed: 0, mate: 0, cd: 0, rest: 0, slp: 0, mv: 6, carry: null, action: null, job: null, why: null, order: null,
-    sk: o.sk, ep: 0, bad: [], rp: 0, rpt: 0, lf: null,
+    sk: o.sk, ep: 0, bad: [], rp: 0, rpt: 0, lf: null, ws: "", wt: 0, tch: null, cl: 0, cg: o.cg ?? 0, fam: {},
+    g: o.g ?? null, gp: o.gp ?? [], inb: o.inb ?? 0, wk: o.wk ?? 0, aff: {}, mn: {}, rel: [], gr: null, hb: { xp: 0, n: 0 }, ti: [], hl: null,
   };
 }
 
-/** Traits of a child of a and b: GDD §08 mixture inheritance + 4% sports, then settle(). */
-export function inheritTraits(r, a, b) {
-  const t = {};
+/** Hidden alleles for a visible phenotype (R16): a pair that averages to the trait, split by a stable hash of (id, trait). Used for founders, clones and saves from before S13. */
+export const ALLELE_SPREAD = 0.06;
+export function genoFrom(t, id) {
+  const g = {};
   for (const k of TRAITS) {
-    const x = a.t[k], y = b.t[k], u = r.float();
-    let v = u < 0.22 ? x : u < 0.44 ? y : u < 0.72 ? (x + y) / 2 : x + (y - x) * r.float();
-    v *= 1 + (r.float() * 2 - 1) * 0.05;
-    if (r.chance(0.04)) v *= 1 + (r.chance(0.5) ? 1 : -1) * (0.08 + 0.07 * r.float());
-    t[k] = r3(settle(v, 1, k === "hardiness" ? 0.6 : 0.5));
+    const d = (mix32(id, fnv1aStr(k)) / 4294967296 * 2 - 1) * ALLELE_SPREAD;
+    g[k] = [r3(t[k] + d), r3(t[k] - d)];
+  }
+  return g;
+}
+/** The visible trait of an allele pair: their blend, soft-capped like every trait. */
+export const blend = (k, x, y) => r3(settle((x + y) / 2, 1, TRAIT_SOFT[k] ?? 0.5));
+
+/**
+ * Traits of a child of a and b: S13 (R16) hidden genotype. Each parent hands down one of its two alleles per trait, +-5% noise
+ * (drive drifts +-5% more, so a village's character can change), a 4% sport of +-8-15% on the new pair; the visible trait is the
+ * blend of the child's two alleles, settled. (This replaces the S1 mixture-of-phenotypes draw: segregation gives the same spread.)
+ * `out.sports` (optional) collects the traits that mutated; `out.g` receives the child's alleles.
+ */
+export function inheritGeno(r, a, b, out) {
+  const ga = a.g || genoFrom(a.t, a.id || 0), gb = b.g || genoFrom(b.t, b.id || 0), t = {}, g = {};
+  for (const k of TRAITS) {
+    let x = ga[k][r.int(2)], y = gb[k][r.int(2)];
+    x *= 1 + (r.float() * 2 - 1) * 0.05; y *= 1 + (r.float() * 2 - 1) * 0.05;
+    if (k === "drive") { const d = 1 + (r.float() * 2 - 1) * 0.05; x *= d; y *= d; }
+    if (r.chance(SPORT_P)) { const m = 1 + (r.chance(0.5) ? 1 : -1) * (0.08 + 0.07 * r.float()); x *= m; y *= m; if (out && out.sports) out.sports.push(k); }
+    const soft = TRAIT_SOFT[k] ?? 0.5;
+    g[k] = [r3(settle(x, 1, soft)), r3(settle(y, 1, soft))];
+    t[k] = blend(k, g[k][0], g[k][1]);
+  }
+  if (out) out.g = g;
+  return t;
+}
+export const inheritTraits = inheritGeno;
+
+/** A solo split's traits (R16 guard 3): the parent's own, regressed 25% toward the village mean, with stacking load per clone generation. */
+export function cloneTraits(r, a, mean) {
+  const t = {}, cg = a.cg + 1;
+  for (const k of TRAITS) {
+    let v = a.t[k] + 0.25 * (mean[k] - a.t[k]);
+    v *= 1 + (r.float() * 2 - 1) * 0.03;
+    if (k === "hardiness") v *= 1 - 0.06 * cg;      // -6% maxHealth per consecutive clone generation
+    if (k === "fertility") v *= 1 - 0.10 * cg;      // -10% fertility
+    t[k] = r3(settle(v, 1, TRAIT_SOFT[k] ?? 0.5));
   }
   return t;
 }

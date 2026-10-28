@@ -4,6 +4,7 @@
 //     +10% work speed (INSPIRE.speed), and with that zeroed they are tick-identical.
 //  2. The command log replays a possession spell to the same hash; release / grace / collapse rules.
 //   node game/tests/possess.js
+import "./legacy.js";
 import assert from "node:assert/strict";
 import { Sim } from "../src/sim/sim.js";
 import { INSPIRE } from "../src/sim/inspire.js";
@@ -20,7 +21,7 @@ function world(seed) {
   for (const p of sim.ents.ofKind("plant")) {
     if (p.species !== "tree") continue;
     const d = Math.abs(p.x - v.x) + Math.abs(p.y - v.y);
-    if (d > 4 && d < bd) { bd = d; tree = p; }
+    if (d >= 3 && d < bd) { bd = d; tree = p; }         // the nearest tree that needs a walk (the planner's own chop candidate is the nearest tree, so the order and the village's wood chain agree on it; S16: was d > 4, which only held on the old map)
   }
   return { sim, v, tree };
 }
@@ -129,4 +130,64 @@ assert.ok(v.poss, "needs warnings do not release");
 v.hp = 3;
 for (let i = 0; i < 20; i++) sim.step();
 assert.ok(!v.poss, "collapse releases");
+// ---- S8: the melee verb is one Action for the AI and the player ----
+// A frozen 150-HP target stands beside a lone villager. The AI is ordered to hunt it; the player replays the AI's steps and presses the strike. With the
+// +10% buff zeroed the swings land on the same ticks (relative to the first), with the same hit/miss and damage rolls (the "melee" stream), so the target's
+// health trace is identical. (The shared stream is consumed per swing, not per controller.)
+import { spawnFauna } from "../src/sim/fauna.js";
+import { storeInZone } from "../src/sim/items.js";
+function fightWorld(seed) {
+  const { sim, v } = world(seed);
+  v.hp = 100000;                                               // this test is about the swings, not the survival
+  storeInZone(sim, "berry", 40);                               // a stocked village with beds and a rack: no village-critical job outranks the order
+  for (let i = 0; i < 3; i++) { const bx = sim.stock.x0 - 3, by = sim.stock.y0 + i * 2, bz = sim.world.standZ(bx, by); sim.ents.add("furniture", { f: i < 2 ? "bed" : "rack", x: bx, y: by, z: bz, owner: 0, rv: 0, rt: 0 }); }
+  let cell = null;
+  for (let r = 4; r < 9 && !cell; r++) for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) { const x = v.x + dx * r, y = v.y + dy * r, z = sim.world.standZ(x, y); if (z >= 0 && Math.abs(z - v.z) <= 1 && !sim.ents.at(x, y, z).length) { cell = [x, y, z]; break; } }
+  const h = spawnFauna(sim, "hopper", cell[0], cell[1], cell[2]);
+  h.hp = h.mhp = 150;
+  sim.wild.init = 1;                                           // no other creatures: nothing else draws on the shared streams
+  for (const e of sim.ents.ofKind("fauna").slice()) if (e !== h) sim.ents.remove(e.id);
+  return { sim, v, h };
+}
+const frozen = (h) => { h.cd = 1e9; };
+function aiFight(seed) {
+  const { sim, v, h } = fightWorld(seed), moves = [], trace = [];
+  sim.apply({ type: "order", ids: [v.id], verb: "hunt", tid: h.id });
+  let last = [v.x, v.y, v.z], hp = h.hp;
+  for (let i = 0; i < 900 && sim.ents.get(h.id); i++) {
+    frozen(h); sim.step();
+    if (v.x !== last[0] || v.y !== last[1] || v.z !== last[2]) { moves.push({ from: last, to: [v.x, v.y, v.z] }); last = [v.x, v.y, v.z]; }
+    if (h.hp !== hp || (sim.ents.get(h.id) === undefined)) { trace.push([sim.tick, h.hp, h.hd]); hp = h.hp; }
+  }
+  assert.ok(trace.length >= 3, "the AI landed several blows (got " + trace.length + ")");
+  return { moves, trace };
+}
+function playerFight(seed, ai) {
+  const { sim, v, h } = fightWorld(seed), trace = [];
+  sim.apply({ type: "possess", id: v.id });
+  let mi = 0, sent = false, hp = h.hp;
+  const dir = (a, b) => ({ dx: Math.sign(b[0] - a[0]), dy: Math.sign(b[1] - a[1]) });
+  for (let i = 0; i < 900 && sim.ents.get(h.id); i++) {
+    if (mi < ai.moves.length) {
+      const m = ai.moves[mi];
+      if (v.x === m.from[0] && v.y === m.from[1] && v.z === m.from[2] && !v.action) sim.apply({ type: "pinput", id: v.id, ...dir(m.from, m.to), tid: 0, verb: "" });
+    } else if (!sent && !v.action) { sim.apply({ type: "pinput", id: v.id, dx: 0, dy: 0, tid: h.id, verb: "" }); sent = true; }
+    frozen(h); sim.step();
+    const m = ai.moves[mi];
+    if (m && v.x === m.to[0] && v.y === m.to[1] && v.z === m.to[2]) mi++;
+    if (h.hp !== hp || (sim.ents.get(h.id) === undefined)) { trace.push([sim.tick, h.hp, h.hd]); hp = h.hp; }
+  }
+  return { trace };
+}
+{
+  const saved = INSPIRE.speed;
+  INSPIRE.speed = 0;
+  for (const seed of [3, 11]) {
+    const ai = aiFight(seed), pl = playerFight(seed, ai);
+    const rel = (t) => t.map(([tk, hp, hd]) => [tk - t[0][0], hp, hd]);
+    assert.deepEqual(rel(pl.trace), rel(ai.trace), "seed " + seed + ": the same blows land on the same ticks for the same damage, AI or player");
+    console.log(`seed ${seed}: melee identical for AI and player: ${ai.trace.length} blows, target ${ai.trace[0][1] + ai.trace[0][2]} -> ${ai.trace[ai.trace.length - 1][1]} HP`);
+  }
+  INSPIRE.speed = saved;
+}
 console.log("possess ok");

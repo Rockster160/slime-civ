@@ -1,6 +1,7 @@
 // Job-board unit tests (GDD §09): the "stamp during a food dip" case, personal
 // needs beating orders, blockers on rejected candidates, and the shape of v.why.
 //   node game/tests/jobs.js
+import "./legacy.js";
 import assert from "node:assert/strict";
 import { Sim } from "../src/sim/sim.js";
 import { putStack } from "../src/sim/items.js";

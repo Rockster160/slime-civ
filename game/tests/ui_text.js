@@ -2,6 +2,7 @@
 // can emit has a human sentence, every job kind and class seen in a real run has
 // a label, and explain() never leaks a raw enum or "undefined".
 //   node game/tests/ui_text.js
+import "./legacy.js";
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -10,10 +11,11 @@ import { Sim } from "../src/sim/sim.js";
 import { scriptAt } from "./script.js";
 import { anySpot, clearArea } from "./helpers.js";
 import { plan } from "../src/sim/jobs.js";
+import { PHENOMENON_IDS, CRAFT_IDS } from "../src/sim/phenomena.js";
 import { BLOCKER_TEXT, JOB, CLASS, blockerText, explain, alerts, warnings, describe } from "../src/ui/text.js";
 
 const sim_dir = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "sim");
-const NOT_BLOCKERS = new Set(["BIRTH", "DEATH", "DISASTER", "MILESTONE", "BUILT_FIRST"]);   // chronicle kinds
+const NOT_BLOCKERS = new Set(["BIRTH", "DEATH", "DISASTER", "MILESTONE", "BUILT_FIRST", "DISCOVERY", "LOSS", ...PHENOMENON_IDS, ...CRAFT_IDS]);   // chronicle kinds, phenomenon and craft ids (S7a)
 
 // 1. Static: every ALL_CAPS string literal in the sim that is not a chronicle kind is a blocker and must be translated.
 const found = new Set();
@@ -45,6 +47,7 @@ for (const seed of [1, 2, 3]) {
       const [x, y, z] = anySpot(sim, 4, 3); clearArea(sim, x, y, 4, 3, z);
       sim.apply({ type: "build", cells: [{ w: "wall", m: "stone", x, y, z }, { w: "wall", m: "stone", x: x + 1, y, z }, { w: "roof", m: "thatch", x: x + 3, y: y + 2, z }] });
     }
+    if (i === 2200) { sim.apply({ type: "mine", op: "region", x0: 70, y0: 56, x1: 73, y1: 58, z: sim.stock.z - 1, layers: 2 }); sim.apply({ type: "mine", op: "seek", item: "flint" }); }   // S6: the mining job must read cleanly too
     if (i === 3000) { const vs = sim.ents.ofKind("villager").map(v => v.id); sim.apply({ type: "order", ids: vs, verb: "chop", x: 64, y: 64 }); }
     if (i === 20000) sim.apply({ type: "order", ids: sim.ents.ofKind("villager").map(v => v.id), verb: "forage", x: 60, y: 60 });
     sim.step();
@@ -70,6 +73,7 @@ for (const seed of [1, 2, 3]) {
   }
 }
 assert.ok(seenJobs.has("build_site"), "the run should include villagers building planned pieces");
+assert.ok(seenJobs.has("mine"), "the run should include villagers digging the marked area");
 for (const k of seenJobs) assert.ok(JOB[k], "no label for job kind " + k);
 for (const k of seenCls) assert.ok(CLASS[k], "no label for class " + k);
 for (const b of seenBlockers) assert.ok(BLOCKER_TEXT[b], "observed untranslated blocker " + b);

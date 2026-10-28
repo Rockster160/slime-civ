@@ -1,6 +1,7 @@
 // Rooms (GDD §12.5): flood-fill detection, doors, roofs, natural overhead, graded oversize,
 // and the incremental update agreeing with a from-scratch rebuild after random edits.
 //   node game/tests/rooms.js
+import "./legacy.js";
 import assert from "node:assert/strict";
 import { Sim } from "../src/sim/sim.js";
 import { M, F } from "../src/sim/world.js";

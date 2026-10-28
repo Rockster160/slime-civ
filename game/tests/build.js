@@ -2,6 +2,7 @@
 // supports-first ordering, cancel refunds, partial builds, dig -> stone -> stone walls, the 70% hand cap,
 // and the dry-run Why preview changing nothing.
 //   node game/tests/build.js
+import "./legacy.js";
 import assert from "node:assert/strict";
 import { Sim } from "../src/sim/sim.js";
 import { M, F } from "../src/sim/world.js";

@@ -6,51 +6,58 @@ import { pickAt, villagersIn } from "./pick.js";
 import { issueOrder, rightClick, optionsAt, closeMenu } from "./orders.js";
 import { saveLocal, loadLocal } from "./saves.js";
 import { SPEEDS } from "./skip.js";
+import { keyId, PAN_IDS } from "./keys.js";
 
 export function setupInput(game, canvas) {
   const { ui, cam } = game;
-  const keys = game.keys = new Set();
-  const PAN_KEYS = ["a", "s", "d", "w", "arrowleft", "arrowright", "arrowup", "arrowdown", "shift"];
+  const keys = game.keys = new Set();                                  // held pan / walk actions ("panLeft" ...), not raw keys, so a remapped key works the same
+  const km = game.keymap;
 
   window.addEventListener("keydown", (e) => {
-    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+    if (ui.capturing) return;                                          // the Settings panel is waiting for a key to bind
     const k = e.key;
+    const dig = /^Digit([1-9])$/.exec(e.code || "");
+    if (dig && (e.ctrlKey || e.altKey) && !e.metaKey) {                  // S11 crews: Ctrl+1..9 assigns the key, Alt+1..9 selects (1..9 alone stay the speeds)
+      if (e.ctrlKey) game.crewAssignKey(Number(dig[1])); else game.crewKey(Number(dig[1]));
+      e.preventDefault(); return;
+    }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.shiftKey && k === "S") { saveLocal(game); e.preventDefault(); return; }
     if (e.shiftKey && k === "O") { loadLocal(game); e.preventDefault(); return; }
-    if (game.skipper.active) { game.skipper.cancel("Stopped: you pressed a key."); if (k === "Escape" || k === " ") { e.preventDefault(); return; } }
-    if (k === " ") { game.togglePause(); e.preventDefault(); return; }
-    if (k >= "1" && k <= "9") { game.setSpeed(SPEEDS[Number(k) - 1]); return; }      // 1-5: 1x-5x, 6: 10x, 7: 25x, 8: 50x, 9: MAX
-    if (ui.mode === "possess") {                    // guiding: WASD / arrows step, E and C V N G act (ui/possess.js); no follow toggle, no Tab
-      const lk = k.toLowerCase();
+    const guide = ui.mode === "possess", act = km.actionOf(keyId(e), guide ? "guide" : "map");
+    if (game.skipper.active) { game.skipper.cancel("Stopped: you pressed a key."); if (k === "Escape" || act === "pause") { e.preventDefault(); return; } }
+    if (act === "pause") { game.togglePause(); e.preventDefault(); return; }
+    if (k >= "1" && k <= "9" && k.length === 1) { game.setSpeed(SPEEDS[Number(k) - 1]); return; }      // 1-5: 1x-5x, 6: 10x, 7: 25x, 8: 50x, 9: MAX
+    if (guide) {                                    // guiding: walk keys step, the guide keys act (ui/possess.js); no follow toggle, no Tab
       if (k === "Escape") { if (ui.help) ui.help = false; else { ui.digest = null; game.release(); } return; }     // letting go always works, even with the digest up
-      if (game.possessKey(lk)) { e.preventDefault(); return; }
-      if (PAN_KEYS.includes(lk) && lk !== "shift") { keys.add(lk); if (k.startsWith("Arrow")) e.preventDefault(); return; }
-      if (lk === "q") { game.release(); return; }
-      if (lk === "tab" || lk === "f" || lk === "b") return;
+      if (act === "release") { game.release(); return; }
+      if (game.possessKey(act)) { e.preventDefault(); return; }
+      if (PAN_IDS.includes(act)) { keys.add(act); if (k.startsWith("Arrow")) e.preventDefault(); return; }
     }
-    if ((k === "q" || k === "Q") && ui.focus) { game.possess(ui.focus); return; }
+    if (act === "possess" && ui.focus) { game.possess(ui.focus); return; }
     if (k === "Escape") { escape(); return; }
-    if (k === "h" || k === "H" || k === "?") { ui.help = !ui.help; return; }
-    if (k === "Tab") { cycle(e.shiftKey ? -1 : 1); e.preventDefault(); return; }
-    if (k === "f" || k === "F") { if (ui.focus) ui.follow = ui.follow === ui.focus ? 0 : ui.focus; return; }
-    if (k === "b" || k === "B") { game.setMode(ui.mode === "build" ? "select" : "build"); return; }
-    if ((k === "r" || k === "R") && ui.mode === "build") { game.buildRotate(); return; }
-    if ((k === "e" || k === "E") && ui.mode === "build") { game.buildErase(); return; }
-    if (k === "x" || k === "X") { if (ui.sel.length) game.cancelOrders(ui.sel); return; }
-    if (k === "z" || k === "Z") { ui.overlays.zones = !ui.overlays.zones; return; }
-    if (k === "l" || k === "L") { ui.overlays.jobs = !ui.overlays.jobs; return; }
-    if (k === "t" || k === "T") { ui.overlays.temp = !ui.overlays.temp; return; }
-    if (k === "p" || k === "P") { document.body.classList.toggle("nopanels"); return; }
-    if (k === "[" || k === "PageDown") { game.renderer.setZ(game.renderer.z - 1); e.preventDefault(); return; }
-    if (k === "]" || k === "PageUp") { game.renderer.setZ(game.renderer.z + 1); e.preventDefault(); return; }
-    if (k === "0") { cam.fit(); ui.follow = 0; return; }
-    const lk = k.toLowerCase();
-    if (PAN_KEYS.includes(lk)) { keys.add(lk); if (lk !== "shift") ui.follow = 0; if (k.startsWith("Arrow")) e.preventDefault(); }
+    if (act === "help") { ui.help = !ui.help; return; }
+    if (act === "next" || act === "prev") { cycle(act === "prev" ? -1 : 1); e.preventDefault(); return; }
+    if (act === "follow") { if (ui.focus) ui.follow = ui.follow === ui.focus ? 0 : ui.focus; return; }
+    if (act === "build") { game.setMode(ui.mode === "build" ? "select" : "build"); return; }
+    if (act === "rotate" && ui.mode === "build") { game.buildRotate(); return; }
+    if (act === "erase" && ui.mode === "build") { game.buildErase(); return; }
+    if (act === "cancel") { if (ui.sel.length) game.cancelOrders(ui.sel); return; }
+    if (act === "zones") { ui.overlays.zones = !ui.overlays.zones; return; }
+    if (act === "jobs") { ui.overlays.jobs = !ui.overlays.jobs; return; }
+    if (act === "warmth") { ui.overlays.temp = !ui.overlays.temp; return; }
+    if (act === "panels") { document.body.classList.toggle("nopanels"); return; }
+    if (act === "levelDown") { game.renderer.setZ(game.renderer.z - 1); e.preventDefault(); return; }
+    if (act === "levelUp") { game.renderer.setZ(game.renderer.z + 1); e.preventDefault(); return; }
+    if (act === "fit") { const bb = game.sim.seen.bbox; cam.fit(bb ? { x0: bb.x0, y0: bb.y0, x1: bb.x1, y1: bb.y1 } : null); ui.follow = 0; return; }       // S16: key 0 frames the explored area
+    if (PAN_IDS.includes(act)) { keys.add(act); ui.follow = 0; if (k.startsWith("Arrow")) e.preventDefault(); }
   });
   window.addEventListener("mousedown", (e) => { if (game.skipper.active && !e.target.closest(".tb-skip")) game.skipper.cancel("Stopped: you clicked."); }, true);
-  window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
-  window.addEventListener("blur", () => keys.clear());
+  window.addEventListener("keyup", (e) => { const kid = keyId(e); for (const id of PAN_IDS) if (km.keysOf(id).includes(kid)) keys.delete(id); if (e.key === "Shift") keys.delete("fast"); });
+  window.addEventListener("blur", () => { keys.clear(); game.shiftDown = false; });
+  window.addEventListener("keydown", (e) => { if (e.key === "Shift") game.shiftDown = true; });
+  window.addEventListener("keyup", (e) => { if (e.key === "Shift") game.shiftDown = false; });
 
   function escape() {
     closeMenu();
@@ -118,8 +125,10 @@ export function setupInput(game, canvas) {
       else if (p.shift) { /* shift-click on empty ground keeps the selection */ }
       else if (pick.kind === "room") game.selectOther({ kind: "room", id: pick.room.id });
       else if (pick.kind === "proom") game.selectOther({ kind: "proom", x: pick.x, y: pick.y, z: pick.prov.z });
-      else if (pick.kind === "ground" || pick.kind === "none") game.clearSelection();
+      else if (pick.kind === "ground" || pick.kind === "none") { game.clearSelection(); if (pick.kind === "ground" && pick.z > 0) game.selectOther({ kind: "cell", x: pick.x, y: pick.y, z: pick.z - 1 }); }
       else if (pick.kind === "stock") game.selectOther({ kind: "stock" });
+      else if (pick.kind === "pen") game.selectOther({ kind: "pen", id: pick.pen.id });
+      else if (pick.kind === "cellar") game.selectOther({ kind: "cellar" });
       else game.selectOther({ kind: "entity", id: pick.ent.id });
     } else if (p.btn === 2 && !p.moved) {
       rightClick(game, pickAt(game, e.clientX, e.clientY), e.clientX, e.clientY);
@@ -139,16 +148,16 @@ export function setupInput(game, canvas) {
 /** Per-frame: WASD / arrow panning. */
 export function panKeys(game, dt) {
   const { cam, keys, ui } = game;
-  const v = (600 * dt) / cam.zoom * (keys.has("shift") ? 2.5 : 1);
+  const v = (600 * dt) / cam.zoom * (game.shiftDown ? 2.5 : 1);
   if (ui.mode === "possess") {                    // WASD walks the villager; the camera only follows it
     const f = game.sim.ents.get(ui.follow);
     if (f) { cam.x += (f.x + 0.5 - cam.x) * 0.2; cam.y += (f.y + 0.5 - cam.y) * 0.2; }
     return;
   }
-  if (keys.has("a") || keys.has("arrowleft")) cam.x -= v;
-  if (keys.has("d") || keys.has("arrowright")) cam.x += v;
-  if (keys.has("w") || keys.has("arrowup")) cam.y -= v;
-  if (keys.has("s") || keys.has("arrowdown")) cam.y += v;
+  if (keys.has("panLeft")) cam.x -= v;
+  if (keys.has("panRight")) cam.x += v;
+  if (keys.has("panUp")) cam.y -= v;
+  if (keys.has("panDown")) cam.y += v;
   if (ui.follow) {
     const f = game.sim.ents.get(ui.follow);
     if (!f) ui.follow = 0;

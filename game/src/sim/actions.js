@@ -10,6 +10,8 @@
 // returns RUNNING, DONE or FAILED. On FAILED set a.blocker to an enum string
 // (NO_PATH, BLOCKED, ...) so the Why panel can say why (rule 4).
 import { World } from "./world.js";
+import { restricted } from "./lair.js";
+import { wagonStep } from "./wagon.js";
 
 export const TICKS_PER_CELL = 6;              // walking speed: 3.3 cells/s at 1x (placeholder until traits)
 export const ST = { RUNNING: 0, DONE: 1, FAILED: 2 };
@@ -38,8 +40,9 @@ export const ACTIONS = {
       const [x, y, z] = World.xyz(a.path[a.i]);
       // Terrain may have changed since the path was made (a dig, a placed block).
       if (!sim.world.isWalkable(x, y, z)) { a.blocker = "BLOCKED"; return ST.FAILED; }
+      const z0 = ent.z;
       sim.ents.move(ent, x, y, z);
-      a.i++; a.cd = a.tpc;
+      a.i++; a.cd = ent.wg ? Math.max(1, Math.round(a.tpc * wagonStep(sim, ent, z0))) : a.tpc;      // S15: pushing or pulling a wagon (wagon.js) slows the walk
       return a.i >= a.path.length ? ST.DONE : ST.RUNNING;
     },
   },
@@ -55,7 +58,7 @@ export const ACTIONS = {
         for (let tries = 0; tries < 3; tries++) {
           const tx = ent.x + r.range(-20, 20), ty = ent.y + r.range(-20, 20);
           const tz = sim.world.standZ(tx, ty);
-          if (tz < 0 || (tx === ent.x && ty === ent.y)) continue;
+          if (tz < 0 || (tx === ent.x && ty === ent.y) || (!ent.poss && restricted(sim, tx, ty, tz))) continue;      // S8: idle wandering keeps out of the thornback's ground too
           const p = sim.path.find(World.idx(ent.x, ent.y, ent.z), World.idx(tx, ty, tz));
           if (!p.ok) continue;
           a.move = Move(tx, ty, tz, p.path, ent.mv || TICKS_PER_CELL);

@@ -1,13 +1,13 @@
-// Possess bot (S4b, R9 band): a scripted player possesses the village's best chopper for one game season
+// Possess bot (S4b, R9 band): a scripted player possesses the village's strongest chopper for one game season
 // (25 days) and chops by walking and pressing interact, using only possess / pinput commands. Its output
 // (logs per day) must be <= 1.25x the same villager left to the AI with a chop order. Both run alone in the
 // world (the rest of the village removed, needs kept topped up) so only the controller differs.
 //   node game/tests/bots/possess.js
+import "../legacy.js";
 import assert from "node:assert/strict";
 import { Sim } from "../../src/sim/sim.js";
 import { World } from "../../src/sim/world.js";
 import { isAdult } from "../../src/sim/villager.js";
-import { level } from "../../src/sim/skills.js";
 import { DAY } from "../../src/sim/clock.js";
 
 const SEASON = 25 * DAY;
@@ -15,7 +15,7 @@ const SEASON = 25 * DAY;
 function setup(seed) {
   const sim = Sim.create(seed);
   const adults = sim.ents.ofKind("villager").filter(v => isAdult(sim, v));
-  const best = adults.slice().sort((a, b) => level(b, "chop") - level(a, "chop") || a.id - b.id)[0];
+  const best = adults.slice().sort((a, b) => b.t.strength - a.t.strength || a.id - b.id)[0];
   for (const v of sim.ents.ofKind("villager").slice()) if (v !== best) sim.ents.remove(v.id);
   sim.cache.iv++;
   return { sim, v: best };
@@ -29,7 +29,7 @@ const nearestTree = (sim, v) => {
   }
   return t;
 };
-const saplings = (sim) => sim.ents.ofKind("plant").filter(p => p.species === "sapling").length;
+const saplings = (sim) => sim.ents.ofKind("plant").filter(p => p.species === "sapling" || (p.species === "stump" && p.fl)).length;      // felled trees: saplings and (S10) the stumps they leave
 const topUp = (sim, v) => { if (sim.tick % 100 === 0) { v.hunger = Math.max(v.hunger, 0.9); v.thirst = Math.max(v.thirst, 0.9); v.energy = Math.max(v.energy, 0.9); v.warm = 1; } };
 
 /** Felled trees over a season. mode: "ai" (chop order, re-issued when it ends) | "player" (possessed + scripted keys). */

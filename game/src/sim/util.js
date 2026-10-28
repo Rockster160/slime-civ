@@ -34,3 +34,6 @@ export const r1 = (v) => Math.round(v * 10) / 10;
 
 /** Manhattan distance with vertical steps counting double (cheap path estimate). */
 export const dist3 = (ax, ay, az, bx, by, bz) => Math.abs(ax - bx) + Math.abs(ay - by) + 2 * Math.abs(az - bz);
+
+/** 'No target' for a creature's wander cell (the land has negative coordinates now, so -1 is a place). */
+export const NO_T = -1000000000;

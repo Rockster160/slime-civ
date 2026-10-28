@@ -3,7 +3,10 @@
 // Plain DOM, built once; update() only writes text when it changed.
 import { dateOf, SEASON_NAMES } from "../sim/clock.js";
 import { SPEEDS } from "./skip.js";
-import { saveLocal, loadLocal, downloadSave, loadFile, newGame, savedInfo } from "./saves.js";
+import { remember } from "./dom.js";
+import { saveLocal, loadLocal, downloadSave, loadFile, newGame, savedInfo, autoList, continueAuto } from "./saves.js";
+import { IRON_KEY } from "./slots.js";
+import { esc } from "./dom.js";
 
 export function createTopBar(root, game) {
   const { ui, state } = game;
@@ -14,6 +17,8 @@ export function createTopBar(root, game) {
     <span class="tb-skip"><button data-skip="morning" title="Run at top speed until the next morning (stops early if something notable happens)">Next morning</button><button data-skip="season" title="Run at top speed until the next season">Next season</button><button data-skip="event" title="Run at top speed until anything happens: a birth, a death, a new chronicle entry, a finished build">Until something happens</button><span class="tb-prog"></span><button class="tb-stop" title="Stop fast-forward (Esc)" style="display:none">Stop</button></span>
     <span class="tb-spacer"></span>
     <span class="tb-ov"><span class="dim">Overlays</span></span>
+    <button class="tb-set" title="Settings: change the keys, interface size, high contrast, colour-blind marks, reduced flashing">Settings</button>
+    <button class="tb-almanac" title="The Almanac: what the village knows, who holds it, what was tried, what is nagging at it">Almanac</button>
     <button class="tb-build" title="Plan walls, floors, roofs, doors and beds (B)">Build</button>
     <span class="tb-menuwrap"><button class="tb-game">Game ▾</button>
       <div class="tb-menu" style="display:none">
@@ -23,7 +28,15 @@ export function createTopBar(root, game) {
         <button data-m="file">Load save from file...</button>
         <input type="file" accept=".json,application/json" style="display:none">
         <div class="mrow"><label>New game, seed <input class="seed" type="number" value="1" min="0"></label><button data-m="new">Start</button></div>
+        <label class="mrow" title="One autosave slot, written once a game day. No manual saving, no loading: what happens, happens."><input type="checkbox" class="iron"> Ironman (one autosave, no loading)</label>
+        <div class="dim" style="margin-top:6px">Autosaves (once a game day)</div>
+        <div class="autos"></div>
         <label class="mrow"><input type="checkbox" class="autop"> Pause when a villager dies</label>
+        <label class="mrow" title="Standing orders, blueprints and crews normally appear as the village earns them. Tick this to have every tool from the start."><input type="checkbox" class="showall"> Show all tools from the start</label>
+        <div class="dim" style="margin-top:6px">Debug: make a systemic event happen now</div>
+        <button data-m="lightning" title="Lightning strikes a tree near the camp (GDD 11.8): the burning tree is how fire is first seen">Force lightning</button>
+        <button data-m="stump" title="A stump near the camp smoulders under a mound of earth">Force smouldering stump</button>
+        <button data-m="ill" title="Debug (S14): the selected villager, or the first adult, falls ill, to see the sickness, its Concerns line and how the village nurses it">Make someone ill</button>
         <div class="dim saveinfo"></div>
       </div></span>
     <button class="tb-help" title="Help (H or ?)">? Help</button>`;
@@ -48,6 +61,8 @@ export function createTopBar(root, game) {
     b.onclick = () => { ui.overlays[k] = !ui.overlays[k]; };
     q(".tb-ov").appendChild(b); ovBtns[k] = b;
   }
+  q(".tb-almanac").onclick = () => game.openAlmanac();
+  q(".tb-set").onclick = () => { ui.settings = !ui.settings; };
   q(".tb-build").onclick = () => game.setMode(ui.mode === "build" ? "select" : "build");
   q(".tb-help").onclick = () => { ui.help = !ui.help; };
   q(".tb-game").onclick = (e) => {
@@ -56,19 +71,28 @@ export function createTopBar(root, game) {
     const i = savedInfo();
     q(".saveinfo").textContent = i ? "Browser save: " + i.label + " (seed " + i.seed + ", " + i.kb + " KB)" : "No browser save yet.";
     q(".seed").value = game.sim.seed;
+    const iron = game.sim.ironman, autos = autoList();                    // S12: autosaves on offer; an ironman game can load nothing, and its own slot only from another game
+    for (const id of ["save", "load", "dl", "file"]) { const b = menu.querySelector(`[data-m="${id}"]`); b.disabled = iron; b.title = iron ? "Ironman: no manual saving or loading" : ""; }
+    q(".autos").innerHTML = autos.length ? autos.map(a => `<button data-auto="${a.key}" ${iron ? "disabled" : ""} title="${iron ? "Ironman: no loading" : "Load this autosave"}">${a.iron ? "Ironman: " : ""}Day ${a.day}, ${a.pop} villagers (seed ${a.seed}, ${a.kb} KB)</button>`).join("") : '<span class="dim">none yet</span>';
   };
   window.addEventListener("click", (e) => { if (!menu.contains(e.target)) menu.style.display = "none"; });
   menu.addEventListener("click", (e) => {
+    const au = e.target.closest("[data-auto]");
+    if (au && !au.disabled) { continueAuto(game, au.dataset.auto); menu.style.display = "none"; return; }
     const m = e.target.closest("[data-m]"); if (!m) return;
     const a = m.dataset.m;
     if (a === "save") saveLocal(game);
     else if (a === "load") loadLocal(game);
     else if (a === "dl") downloadSave(game);
     else if (a === "file") file.click();
-    else if (a === "new") newGame(game, q(".seed").value);
+    else if (a === "new") newGame(game, q(".seed").value, { ironman: q(".iron").checked });
+    else if (a === "ill") { const id = ui.sel.find(i => game.sim.ents.get(i) && game.sim.ents.get(i).kind === "villager") || (game.sim.ents.ofKind("villager").find(v => !v.ill) || {}).id; game.toast(id && game.sim.apply({ type: "ill", id }) ? "A villager has fallen ill." : "Nobody can be made ill (this world has no sickness, or they already are)."); }
+    else if (a === "lightning" || a === "stump") game.toast(game.sim.apply({ type: "force", ev: a }) ? (a === "lightning" ? "Lightning strikes a tree near the camp." : "A stump near the camp starts to smoulder.") : "No tree to strike.");
     if (a !== "file") menu.style.display = "none";
   });
   file.addEventListener("change", () => { if (file.files[0]) loadFile(game, file.files[0]); file.value = ""; menu.style.display = "none"; });
+  q(".showall").checked = !!ui.showAll;
+  q(".showall").addEventListener("change", (e) => { ui.showAll = e.target.checked; remember("showall", ui.showAll ? "1" : "0"); });
   q(".autop").addEventListener("change", (e) => { ui.autoPause = e.target.checked; });
   q(".seed").addEventListener("keydown", (e) => e.stopPropagation());
 

@@ -9,6 +9,7 @@
 import { dateOf, DAY, LANDING, SEASON_NAMES } from "../sim/clock.js";
 import { seasonIdx, WINTER_START, dayF } from "../sim/season.js";
 import { survey } from "../sim/items.js";
+import { anyFire } from "../sim/fire.js";
 
 export const SPEEDS = [1, 2, 3, 4, 5, 10, 25, 50, Infinity];     // Infinity = MAX: as many ticks as fit in SLICE_MS of each frame; keys 1-9 pick these in order
 export const SLICE_MS = 12;              // time budget per frame for MAX and skip-to
@@ -65,7 +66,7 @@ export function createSkip(game) {
     if (sim.chron.n > a.n0) {
       const fresh = sim.chron.entries.filter(e => e.id > a.n0);
       a.n0 = sim.chron.n;
-      for (const e of fresh) if (e.kind === "DEATH" || e.kind === "DISASTER" || all) return "Stopped: " + e.text;
+      for (const e of fresh) if (e.kind === "DEATH" || e.kind === "DISASTER" || e.kind === "LOSS" || e.kind === "DISCOVERY" || all) return "Stopped: " + e.text;
     }
     const cs = sim.ents.ofKind("csite").length;
     if (a.cs > 0 && cs === 0) return "Stopped: everything you planned has been built.";
@@ -92,7 +93,7 @@ function stuck(sim, ignore) {
     if (ignore.has(v.id)) continue;
     sv = sv || survey(sim);
     if (v.hunger < 0.12 && sv.rations === 0 && !(v.carry && v.carry.item === "berry")) { ignore.add(v.id); return v.name + " is starving and the stockpile is empty."; }
-    if (v.warm < 0.28 && !rooms && v.hp < 60) { ignore.add(v.id); return v.name + " is freezing with no warm room to go to."; }
+    if (v.warm < 0.28 && !rooms && !anyFire(sim) && v.hp < 60) { ignore.add(v.id); return v.name + " is freezing with no warm room to go to."; }
   }
   return null;
 }

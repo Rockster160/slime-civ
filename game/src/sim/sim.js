@@ -6,7 +6,7 @@
 import { Rng } from "./rng.js";
 import { Entities } from "./entities.js";
 import { World, M, F } from "./world.js";
-import { generate, SITE } from "./worldgen.js";
+import { generateWorld, WORLD, activateAround } from "./worldgen.js";
 import { Pathfinder } from "./path.js";
 import { Hasher } from "./hash.js";
 import { runAction } from "./actions.js";
@@ -21,34 +21,69 @@ import { growPlants, frostBerries } from "./plants.js";
 import { updateNeeds, NEED_STEP, worstUrgency } from "./villager.js";
 import { addFounder, foundColony, breedDaily, kill, refreshDerived } from "./population.js";
 import { releaseJob, RES_EXPIRY } from "./jobstate.js";
-import { resetDay } from "./skills.js";
+import { resetDay, rustDay } from "./skills.js";
+import { socialTick, peopleDaily } from "./people.js";
 import { ORDER_COMMANDS } from "./orders.js";
 import { Rooms } from "./rooms.js";
-import { BP_COMMANDS, newBps, autoBuild } from "./blueprint.js";
+import { BP_COMMANDS, newBps, autoBuild, instanceTick } from "./blueprint.js";
 import { eraseGhosts, markDeconstruct } from "./build.js";
 import { roomMilestones } from "./roomeval.js";
+import { PURPOSES } from "./purposes.js";
+import { newSeen, initSeen, watch, seenRle } from "./seen.js";
+import { chunkTick, ACT_R, chunkMeta, hookEntities } from "./chunks.js";
+import { newMine, mineTick, MINE_COMMANDS } from "./mine.js";
+import { newDisc, updatePressure, knowledgeTick } from "./knowledge.js";
+import { packTick } from "./gear.js";
+import { shelterBlueprints } from "./shelter.js";
+import { eventsDaily } from "./events.js";
+import { fireTick } from "./fire.js";
+import { siteTick } from "./discovery.js";
+import { autoHearth } from "./hearth.js";
+import { stationsTick } from "./craft.js";
+import { DISC_COMMANDS } from "./disccmd.js";
+import { newWild, faunaTick, faunaDaily, fearStep, FEAR_AT } from "./fauna.js";
+import { newExp, expeditionTick, EXP_COMMANDS } from "./expedition.js";
+import { newFarm, FARM_COMMANDS, farmDaily, sproutDaily } from "./farm.js";
+import { floraDaily } from "./plants.js";
+import { penDaily } from "./husbandry.js";
+import { CAMP } from "./board.js";
+import { newCrews, crewTick, CREW_COMMANDS } from "./crews.js";
+import { newUg } from "./underground.js";
+import { ugTick, ugAuto } from "./cavein.js";
+import { newDepth } from "./depth.js";
+import { illTick, illDaily } from "./disease.js";
 
 export const START_VILLAGERS = 7;
 
 export class Sim {
-  /** @param {number} seed  @param {{villagers?: number}} [opts] villagers: 0 for a bare world (used by load) */
+  /** @param {number} seed  @param {{villagers?: number, biomes?: boolean, depth?: boolean, ironman?: boolean}} [opts] villagers: 0 for a bare world (used by load); biomes: false regrows a world made before S12's biome pass; ironman: one autosave slot, no manual load (UI rule, saved) */
   static create(seed, opts = {}) {
-    const s = new Sim(seed);
-    generate(s.world, s.ents, s.rng, s.seed);
+    const biomes = opts.biomes !== undefined ? opts.biomes : WORLD.biomes, depth = opts.depth !== undefined ? opts.depth : WORLD.depth, g = generateWorld(seed, { biomes, depth, spawn: opts.spawn });             // S16: endless land; the spawn search (spawn.js) moved the camp to a fair start if the origin was not one (§11.10)
+    const s = new Sim(seed, g.world, g.ents);
+    s.def = g.def; s.site = g.world.site;
+    if (!opts.restore) activateAround(s.world, s.ents, s.def, s.site.x, s.site.y, ACT_R, 0);     // the land round the camp grows its flora (a loaded save lists its own active chunks)
+    s.bio = biomes ? 1 : 0;
+    s.dp = newDepth(depth);
+    s.ironman = !!opts.ironman;
     s.world.beginLog();                       // everything from here on is a save delta
     // The starting stockpile: a 6x6 zone in the middle of the clearing (§11.16 pile at camp).
+    const SITE = s.site;
     s.stock = { x0: SITE.x - 2, y0: SITE.y - 2, x1: SITE.x + 3, y1: SITE.y + 3, z: s.world.standZ(SITE.x, SITE.y) };
-    if (opts.villagers === undefined) foundColony(s, START_VILLAGERS);
+    if (!opts.restore) initSeen(s);           // the surface round the camp is known from the start; the rock below is not
+    if (opts.restore) { /* the save brings its villagers */ }
+    else if (opts.villagers === undefined) foundColony(s, START_VILLAGERS);
     else for (let i = 0; i < opts.villagers; i++) s.spawnVillager();
     return s;
   }
 
-  constructor(seed) {
+  constructor(seed, world, ents) {
     this.seed = seed >>> 0;
     this.tick = 0;
     this.rng = new Rng(this.seed);
-    this.world = new World();
-    this.ents = new Entities();
+    this.world = world;
+    this.ents = ents;
+    this.def = world.def; this.site = world.site;     // S16: the generator's definition and the camp (world.site; not a constant any more)
+    hookEntities(this);
     this.path = new Pathfinder(this.world);
     this.cmdLog = [];                         // [{t, type, ...}] in application order
     this.stock = null;                        // stockpile zone {x0,y0,x1,y1,z}
@@ -57,13 +92,25 @@ export class Sim {
     this.cache = newCache();                  // derived data only; never saved
     this.rooms = new Rooms();                 // derived from cells; only its purpose marks are saved + hashed
     this.bps = newBps();                      // player blueprints (saved + hashed)
+    this.seen = newSeen();                    // fog of knowledge (§13.8): only the log of cells seen after generation is saved + hashed
+    this.mine = newMine();                    // area-mining designations (saved + hashed)
+    this.disc = newDisc();                    // discovery state: seen phenomena, dead ends, curiosities, pressure, trace (saved + hashed)
+    this.wild = newWild();                    // fauna bookkeeping: spawned yet?, when the thornback last died (saved + hashed; the creatures are entities)
+    this.exp = newExp();                      // expeditions: crews, intent, recall state (saved + hashed)
+    this.farm = newFarm();                    // S10: fields, pens, the cold cellar, the spoilage ledger (saved + hashed; the plots are entities)
+    this.crews = newCrews();                  // S11: named selections with a default task (saved + hashed)
+    this.ug = newUg();                        // S12: cracking cells (cell, first tick), cave-ins so far (saved + hashed; the rules are pure functions of the world)
+    this.dp = newDepth(0);                    // S14: world depth (illness, wolves and grazers, the alternates, perturbed properties): on/off switch and the illness ledger (saved + hashed)
+    this.bio = 1;                             // S12: 1 = the world was grown with biomes (worldgen), 0 = a pre-biome save regrown without them (saved)
+    this.ironman = false;                     // S12: a UI rule (single autosave slot, no manual load), saved with the game, never read by the sim itself
+    this.lastBlocker = "";                    // why the last rejected command failed (UI feedback only; not saved)
   }
 
   /** Put a founder-style villager on a free standable cell near the site (or at x,y if given). */
   spawnVillager(x, y) {
     const r = this.rng.stream("spawn");
     for (let tries = 0; tries < 200; tries++) {
-      const px = x ?? SITE.x + r.range(-5, 5), py = y ?? SITE.y + r.range(-5, 5);
+      const px = x ?? this.site.x + r.range(-5, 5), py = y ?? this.site.y + r.range(-5, 5);
       const pz = this.world.standZ(px, py);
       if (pz < 0) { if (x !== undefined) return null; continue; }
       return addFounder(this, px, py, pz, r.int(3), r.int(360), 0.25 + 0.45 * r.float());
@@ -73,18 +120,34 @@ export class Sim {
 
   step() {
     const t = this.tick;
+    if (t % 20 === 7) chunkTick(this);                       // S16: activate the land round the people, unload what is untouched and far
     this.rooms.update(this);
     if (t % 20 === 0) updateBoard(this);
     if (t % 100 === 50) roomMilestones(this);
     if (t % 200 === 100) autoBuild(this);
+    if (t % 100 === 60) instanceTick(this);                  // S11: queued additions of a pushed revision wait for the old piece to come down
     if (t % 200 === 0) updateKeeps(this);
+    if (t % 20 === 10) mineTick(this);
+    if (t % 20 === 5) { fireTick(this); stationsTick(this); }   // flames and hearths burn down; lit kilns and mounds count down to their batch
+    if (t % 50 === 25) siteTick(this);                        // running fires are phenomena: whoever sees one rolls (witness)
+    if (t % 100 === 75) { knowledgeTick(this); packTick(this); }   // watching and Teach spread familiarity; someone at the stockpile takes a basket or backpack
+    if (t % 100 === 40) socialTick(this);                     // S13: who works beside whom grows close, or clashes
+    if (t % 200 === 150) autoHearth(this);                    // the village plans a fire ring when it knows fire and the cold is coming
     if (t % 100 === 0) { growPlants(this); this.tidySites(); }
+    if (t % 20 === 3) ugTick(this);                          // S12: cracks, falls, torchlight widening the seen frontier
+    if (t % 100 === 90) ugAuto(this);                        // S12: the village shores up, lights and vents through ordinary ghosts
+    if (t % 20 === 11) crewTick(this);                       // S11: the dead leave their crews; empty crews go
+    if (t % 20 === 9) expeditionTick(this);                  // recall predicates, the crew's stall summary (before mineTick finishes a search)
+    faunaTick(this);
+    if (t % 100 === 30) illTick(this);                       // S14: contagion between the sick and the well
     if ((t + LANDING) % DAY === 0) this.daily();
 
     const vs = this.ents.ofKind("villager").slice();       // deaths/births change the live list
     for (const v of vs) {
       if (!this.ents.get(v.id)) continue;
+      watch(this, v);                                       // look around when they have moved (fog, §13.8)
       if ((t + v.id) % NEED_STEP === 0) {
+        if (fearStep(this, v) > FEAR_AT && v.job && v.job.k !== "flee" && !v.poss) v.rp = 1;     // afraid: re-plan now (jobs.js genFlee); a guided villager never flees (Steadfast)
         const cause = updateNeeds(this, v);
         if (cause) { kill(this, v, cause); continue; }
         if (v.poss) collapseCheck(this, v);
@@ -120,7 +183,17 @@ export class Sim {
   /** Once per calendar day: spoilage, skill day reset, aging refresh, births, season events. */
   daily() {
     spoilDaily(this);
-    for (const v of this.ents.ofKind("villager")) { resetDay(v); refreshDerived(this, v); }
+    sproutDaily(this);                                        // S10: rotted seed near the camp may come up (the sight that teaches farming)
+    faunaDaily(this);
+    floraDaily(this, CAMP(this.stock));                       // S10: plants age, seed and wither; the map neither fills nor empties
+    farmDaily(this);                                          // S10: crops grow by the season
+    penDaily(this);                                           // S10: fodder, breeding, starving in the pens
+    illDaily(this);                                           // S14: sources of sickness, recovery, death
+    updatePressure(this);                                     // pressure tags first: the systemic events read them
+    shelterBlueprints(this);                                  // S9: a design for each wall material the village can now work
+    eventsDaily(this);
+    for (const v of this.ents.ofKind("villager")) { resetDay(v); rustDay(this, v); refreshDerived(this, v); }
+    peopleDaily(this);                                        // S13: relationship tiers, fading, titles
     const vl = village(this);
     // Food weight: runway against what the season ahead asks for (6 days now, ~25 as winter nears).
     breedDaily(this, this.board.runway / (6 + 24 * winterAhead(this.tick)), vl.beds.length);
@@ -148,12 +221,22 @@ export class Sim {
     h.u32(this.tick);
     h.value(this.rng.counters());
     h.value(this.world.deltas());
+    h.value(chunkMeta(this));                 // S16: which chunks are active, which changed, when they were last near anyone
     h.value(this.ents.toJSON());
     h.value(this.stock);
     h.value(this.board);
     h.value(this.chron);
     h.value(this.rooms.marks);
     h.value(this.bps);
+    h.value(seenRle(this));
+    h.value(this.mine);
+    h.value(this.disc);
+    h.value(this.wild);
+    h.value(this.exp);
+    h.value(this.farm);
+    h.value(this.crews);
+    h.value(this.ug);
+    h.value(this.dp);
     return h.hex;
   }
 }
@@ -162,18 +245,23 @@ const COMMANDS = {
   ...ORDER_COMMANDS,
   ...BP_COMMANDS,
   ...POSSESS_COMMANDS,
+  ...MINE_COMMANDS,
+  ...DISC_COMMANDS,
+  ...EXP_COMMANDS,
+  ...FARM_COMMANDS,
+  ...CREW_COMMANDS,
   /** {type:"erase", x0,y0,x1,y1,z}: take ghosts away (delivered materials come back as loose items). */
   erase(sim, c) { return eraseGhosts(sim, c); },
   /** {type:"deconstruct", x0,y0,x1,y1,z}: mark built pieces for villagers to take down (a standing job, ~75% refund, no XP). */
   deconstruct(sim, c) { return markDeconstruct(sim, c); },
-  /** {type:"purpose", x,y,z, p}: assign "shelter" | "workshop" | "none" to the room containing that stand cell. */
-  purpose(sim, c) { return ["shelter", "workshop", "none"].includes(c.p) && sim.rooms.setPurpose(sim, c.x, c.y, c.z, c.p); },
+  /** {type:"purpose", x,y,z, p}: assign a purpose (purposes.js: shelter | bedroom | kitchen | storage | workshop, or "none") to the room containing that stand cell. */
+  purpose(sim, c) { return (c.p === "none" || !!PURPOSES[c.p]) && sim.rooms.setPurpose(sim, c.x, c.y, c.z, c.p); },
   /** {type:"spawn", x, y}: a villager at that column's surface. */
   spawn(sim, c) { return sim.spawnVillager(c.x, c.y) !== null; },
   /** {type:"place", x,y,z,mat}: write a player-placed solid cell. */
   place(sim, c) {
     if (!World.inBounds(c.x, c.y, c.z) || sim.ents.at(c.x, c.y, c.z).length) return false;
-    sim.world.set(c.x, c.y, c.z, c.mat, sim.world.flags(c.x, c.y, c.z) | F.PLAYER);
+    sim.world.set(c.x, c.y, c.z, c.mat, sim.world.flags(c.x, c.y, c.z) | F.PLAYER | F.USED);
     return true;
   },
   /** {type:"dig", x,y,z}: remove a cell (to air). */

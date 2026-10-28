@@ -8,9 +8,10 @@ import { maxHp, fitness, ageDays, SOFT } from "../sim/villager.js";
 import { diggable } from "../sim/tasks.js";
 import { esc, bar, needColor } from "./dom.js";
 import { pickAt } from "./pick.js";
-import { blockerText, pct } from "./text.js";
+import { blockerText, pct, itemName } from "./text.js";
+import { hazardLines } from "../sim/underground.js";
 
-const PRIORITY = { csite: 0, item: 1, plant: 2, furniture: 3 };
+const PRIORITY = { fauna: -1, csite: 0, item: 1, plant: 2, furniture: 3 };
 const NEEDS = [["hunger", "Food"], ["thirst", "Water"], ["energy", "Energy"], ["warm", "Warmth"]];
 
 export function createPossess(game) {
@@ -87,15 +88,24 @@ export function createPossess(game) {
     const v = game.possessed(); if (!v) return;
     game.sim.apply({ type: "pinput", id: v.id, dx: ui.sent.dx, dy: ui.sent.dy, tid: 0, verb: "", ...extra });
   }
-  game.possessKey = (k) => {                             // called by input.js for keys while guiding
-    const verbs = { c: "eat", v: "drink", n: "sleep", g: "drop" };
-    if (k === "e") { interactKey(); return true; }
-    if (verbs[k]) {
+  game.possessKey = (act) => {                           // called by input.js with the guide ACTION the pressed key is bound to (ui/keys.js)
+    const verbs = { eat: "eat", drink: "drink", sleep: "sleep", drop: "drop", tool: "equip" };
+    if (act === "use") { interactKey(); return true; }
+    if (act === "torch" || act === "support") {                // S12: a torch on the cell you face (else your own), a support on the cell you face
+      const v = game.possessed(); if (!v) return true;
+      const f = ui.face, fx = v.x + f.dx, fy = v.y + f.dy, w = game.sim.world;
+      let cell = [fx, fy, v.z];
+      if (!w.isWalkable(fx, fy, v.z)) { const z = [v.z + 1, v.z - 1].find(q => w.isWalkable(fx, fy, q)); cell = z !== undefined ? [fx, fy, z] : act === "torch" ? [v.x, v.y, v.z] : null; }
+      if (!cell) { game.toast("Face an open cell to put it in."); return true; }
+      send({ verb: act, x: cell[0], y: cell[1], z: cell[2] });
+      return true;
+    }
+    if (verbs[act]) {
       const v = game.possessed(); if (!v) return true;
       let tid = 0;
-      if (k === "n") for (const dz of [0, 1, -1]) for (const id of game.sim.ents.at(v.x, v.y, v.z + dz)) { const e = game.sim.ents.get(id); if (e.kind === "furniture" && e.f === "bed") tid = id; }
-      if (k === "c" && !v.carry) for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) for (const id of game.sim.ents.at(v.x + dx, v.y + dy, v.z)) { const e = game.sim.ents.get(id); if (e.kind === "plant" && e.species === "berry" && e.yield > 0) tid = id; }
-      send({ verb: verbs[k], tid });
+      if (act === "sleep") for (const dz of [0, 1, -1]) for (const id of game.sim.ents.at(v.x, v.y, v.z + dz)) { const e = game.sim.ents.get(id); if (e.kind === "furniture" && e.f === "bed") tid = id; }
+      if (act === "eat" && !v.carry) for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) for (const id of game.sim.ents.at(v.x + dx, v.y + dy, v.z)) { const e = game.sim.ents.get(id); if (e.kind === "plant" && e.species === "berry" && e.yield > 0) tid = id; }
+      send({ verb: verbs[act], tid });
       return true;
     }
     return false;
@@ -103,7 +113,7 @@ export function createPossess(game) {
 
   if (root) root.addEventListener("click", (e) => {
     const b = e.target.closest("[data-pk]"); if (!b) return;
-    if (b.dataset.pk === "release") game.release(); else game.possessKey(b.dataset.pk);
+    if (b.dataset.pk === "release") game.release(); else game.possessKey(b.dataset.pk);      // data-pk is a guide action id
   });
 
   let last = "";
@@ -115,9 +125,9 @@ export function createPossess(game) {
       if (!v) { if (ui.mode === "possess") { game.toast("The guiding spirit let go of " + (ui.pname || "the villager") + "."); ui.mode = "select"; if (ui.prevZoom) cam.zoom = ui.prevZoom; ui.prevZoom = 0; ui.follow = 0; } return; }
       if (ui.mode !== "possess") return;
       let dx = 0, dy = 0;
-      for (const k of game.keys) {                                  // insertion order: the most recently pressed wins
-        if (k === "a" || k === "arrowleft") { dx = -1; dy = 0; } else if (k === "d" || k === "arrowright") { dx = 1; dy = 0; }
-        else if (k === "w" || k === "arrowup") { dy = -1; dx = 0; } else if (k === "s" || k === "arrowdown") { dy = 1; dx = 0; }
+      for (const k of game.keys) {                                  // insertion order: the most recently pressed wins (the walk actions, whatever keys they are bound to)
+        if (k === "panLeft") { dx = -1; dy = 0; } else if (k === "panRight") { dx = 1; dy = 0; }
+        else if (k === "panUp") { dy = -1; dx = 0; } else if (k === "panDown") { dy = 1; dx = 0; }
       }
       if (dx || dy) ui.face = { dx, dy };
       if (dx !== ui.sent.dx || dy !== ui.sent.dy) {
@@ -135,13 +145,16 @@ export function createPossess(game) {
       const sim = game.sim, fb = v.poss.fb, mh = maxHp(v, fitness(v, ageDays(sim, v)));
       let h = `<div class="pb-head"><b>POSSESSING ${esc(v.name)}</b> <span class="dim">game speed capped at 2x, fast-forward off</span><button data-pk="release">Release (Esc)</button></div><div class="pb-needs">`;
       for (const [k, label] of NEEDS) h += `<span>${label}</span>` + bar(v[k], { color: needColor(v[k], SOFT[k][0], SOFT[k][1]), text: pct(v[k]) });
-      h += `<span>Health</span>` + bar(v.hp / mh, { color: needColor(v.hp / mh, 0.6, 0.3), text: Math.round(v.hp) });
-      h += `</div><div class="pb-line">${v.carry ? "Carrying " + v.carry.n + " " + esc(v.carry.item) + ". " : ""}${v.job ? "Doing: " + esc(v.job.k.replace("_", " ")) + "." : "Standing by."}`;
+      h += `<span>Health</span>` + bar(v.hp / mh, { color: needColor(v.hp / mh, 0.6, 0.3), text: Math.round(v.hp) + "/" + Math.round(mh), title: "Guidance ends below 10% of full health" });
+      h += `<span>Fear</span>` + bar(v.fear || 0, { color: (v.fear || 0) > 0.6 ? "#e5594f" : "#9a86d6", marks: [{ at: 0.6, cls: "crit" }], text: pct(v.fear || 0) + ((v.fear || 0) > 0.6 ? " - steadfast" : ""), title: "Villagers run above 60% fear. You are Steadfast: you never flee." });
+      h += `</div><div class="pb-line">${v.eq ? "Holding a " + esc(itemName(v.eq.item).replace(/s$/, "")) + ". " : "Bare-handed. "}${v.carry ? "Carrying " + v.carry.n + " " + esc(v.carry.item) + ". " : ""}${v.job ? "Doing: " + esc(v.job.k.replace("_", " ")) + "." : "Standing by."}`;
       if (sim.tick - fb[1] < 120 && fb[0]) h += ` <span class="pb-fb">${esc(blockerText(v.job ? v.job.k : "", fb[0]))}</span>`;
-      h += `</div><div class="pb-hint">WASD walk (hold) · E or click: chop / pick / gather / lift / build / dig what is next to you · <button data-pk="c">Eat</button> <button data-pk="v">Drink</button> <button data-pk="n">Sleep</button> <button data-pk="g">Put down</button> · needs drain as usual: you must feed them yourself</div>`;
+      const km = game.keymap, K = (id) => `<kbd>${esc(km.label(id))}</kbd>`;
+      for (const t of hazardLines(sim, v.x, v.y, v.z)) h += `<div class="pb-haz">${esc(t)}</div>`;      // S12: a cracking roof, bad air, the dark
+      h += `</div><div class="pb-hint">Walk (hold) ${K("panUp")}${K("panLeft")}${K("panDown")}${K("panRight")} · ${K("use")} or click: chop / pick / gather / lift / build / dig / STRIKE what is next to you · <button data-pk="tool" title="Take a copper spear (or pick) from the stockpile in hand: stand in the stockpile">Take tool (${esc(km.label("tool"))})</button> <button data-pk="eat">Eat</button> <button data-pk="drink">Drink</button> <button data-pk="sleep">Sleep</button> <button data-pk="drop">Put down</button> <button data-pk="torch" title="A torch on the cell you face (a stick in hand; fire must be known)">Torch (${esc(km.label("torch"))})</button> <button data-pk="support" title="A timber support on the cell you face (timber in hand; framing must be known)">Support (${esc(km.label("support"))})</button> · needs drain as usual: you must feed them yourself</div>`;
       for (const [k, label] of NEEDS) {                                  // nothing relieves a guided villager's needs but you: say so when one turns critical
         const crit = v[k] < SOFT[k][1];
-        if (crit && !warned[k]) game.toast(v.name + " is critically low on " + label.toLowerCase() + " - feed, water or rest them (C, V, N), or release (Esc).", 6000);
+        if (crit && !warned[k]) game.toast(v.name + " is critically low on " + label.toLowerCase() + " - feed, water or rest them (" + km.label("eat") + ", " + km.label("drink") + ", " + km.label("sleep") + "), or release (Esc).", 6000);
         warned[k] = crit;
       }
       if (h !== last) { last = h; root.innerHTML = h; }

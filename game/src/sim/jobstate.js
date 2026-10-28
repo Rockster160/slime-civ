@@ -16,6 +16,7 @@ export function releaseJob(sim, v) {
     j.res = [];
   }
   v.rest = 0; v.slp = 0;
+  if (v.wg) { const w = sim.ents.get(v.wg); if (w) w.dr = 0; delete v.wg; delete v.wgc; }       // S15: a wagon is left where it stands when the haul is cut short
 }
 
 /** Drop the current action and everything it holds. */

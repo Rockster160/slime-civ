@@ -20,7 +20,7 @@ import { cancelAction, reserve } from "./jobstate.js";
 import { INSPIRE } from "./inspire.js";
 import { isAdult, ageDays, fitness, maxHp } from "./villager.js";
 import { inZone, ITEMS } from "./items.js";
-import { costOf } from "./build.js";
+import { costOf, checkPlace, placeGhosts, csiteAt } from "./build.js";
 import { log } from "./chronicle.js";
 
 export const COLLAPSE_HP = 0.10;      // below this share of max health the body gives out and the guidance ends
@@ -31,8 +31,8 @@ export function possessed(sim) {
   return null;
 }
 /**
- * Steadfast (§07): a guided villager does not flee or panic. There is no fear system yet (no UNSAFE
- * avoidance exists in jobs.js), so this is the seam: when one arrives it must test steadfast(v).
+ * Steadfast (§07, K7): a guided villager does not flee or panic, and may go where autonomy refuses (the thornback's territory,
+ * unmapped cave: blocker UNSAFE). jobs.js tests it before it offers the flee job and before it refuses a restricted cell.
  */
 export function steadfast(v) { return !!v.poss; }
 
@@ -146,13 +146,29 @@ export function interact(sim, v, tid, verb, cell) {
     if (e && !bed) return { blocker: "TOO_FAR" };
     return one("sleep", { v: "sleep", tid: bed ? bed.id : 0, ...(bed ? { x: bed.x, y: bed.y, z: bed.z } : here(v)) });
   }
+  if (verb === "equip") {                       // S8: take the spear (or pick) from the stockpile in hand
+    const item = stockCount(sim, "copper_spear") > 0 ? "copper_spear" : "copper_pick";
+    return inZone(sim.stock, v.x, v.y) && stockCount(sim, item) > 0 && !v.eq && !v.carry ? one("equip", { v: "equip", item, ...here(v) }) : { blocker: v.eq || v.carry ? "NO_CAPACITY" : stockCount(sim, item) > 0 ? "TOO_FAR" : "NO_MATERIAL" };
+  }
   if (verb === "dig") {
     const [cx, cy, cz] = cell;
     if (!diggable(sim, cx, cy, cz)) return { blocker: "GONE" };
     const adj = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => cx + dx === v.x && cy + dy === v.y && (cz + 1 === v.z || cz === v.z));
     return adj ? one("dig", { v: "dig", cx, cy, cz, ...here(v) }) : { blocker: "TOO_FAR" };
   }
+  if (verb === "torch" || verb === "lamp" || verb === "support") {      // S12: light and timber in the dark, through the same ghost pipeline the village builds from
+    const [cx, cy, cz] = cell, w = verb === "support" ? "wall" : verb, m = verb === "support" ? "support" : "";
+    let site = csiteAt(sim, cx, cy, cz, w);
+    if (!(site && site.m === m)) {
+      const why = checkPlace(sim, w, m, cx, cy, cz);
+      if (why) return { blocker: why === "unknown" ? "UNKNOWN_CRAFT" : "BLOCKED" };
+      placeGhosts(sim, [{ w, m, x: cx, y: cy, z: cz }], ++sim.board.sg);
+      site = csiteAt(sim, cx, cy, cz, w);
+    }
+    return site ? siteTask(sim, v, site) : { blocker: "BLOCKED" };
+  }
   if (!e) return { blocker: "GONE" };
+  if (e.kind === "fauna") return near1(v, e) ? one("strike", { v: "strike", tid, ...here(v) }) : { blocker: "TOO_FAR" };     // S8: the shared melee verb
   if (e.kind === "plant") {
     if (!near1(v, e)) return { blocker: "TOO_FAR" };
     if (e.species === "tree") return one("chop", { v: "chop", tid, ...here(v) }, [e]);
@@ -187,8 +203,8 @@ function siteTask(sim, v, s) {
     steps.push({ v: "take", item: cost.item, n: need, ...at });
   }
   if (need > 0) steps.push({ v: "deliver", tid: s.id, item: cost.item, n: need, ...at });
-  steps.push({ v: "construct", tid: s.id, dur: cost.dur, ...at });
-  return { task: Task("build_site", steps), res: [s] };
+  steps.push({ v: "construct", tid: s.id, dur: cost.dur, sk: s.w === "bed" || s.w === "rack" || s.w === "hearth" ? "craft" : "build", ...at });
+  return { task: Task(s.w === "bed" || s.w === "rack" || s.w === "hearth" ? "craft_site" : "build_site", steps), res: [s] };
 }
 
 /** Called after needs update: a body that gives out ends the guidance (§07 collapse). Death removes the entity, which ends it too. */

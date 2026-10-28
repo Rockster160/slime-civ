@@ -5,8 +5,8 @@
 // needs headroom over the current cell; stepping down needs the destination's
 // air column free. Water and OBSTACLE cells are not walkable (world.isWalkable).
 //
-// Determinism: the open list is ordered by (f, then deeper g first, then cell
-// index), packed into one exact integer key, so equal-cost routes always
+// Determinism: the open list is ordered by (f, then deeper g first, then the order
+// nodes were met in), packed into one exact integer key, so equal-cost routes always
 // resolve the same way. Neighbours are tried in a fixed order.
 //
 // Cost: flat step 2, vertical step 3 (prefers level routes); heuristic is
@@ -17,21 +17,15 @@
 // right at the top of find(): reject unreachable goals without searching, and
 // hand A* coarse waypoints for long trips. The cache below is already keyed
 // on world.version, which is the invalidation signal that graph would use too.
-import { W, H, D, World } from "./world.js";
+import { World } from "./world.js";
 
-const N = W * H * D;                 // 393216 < 2^19, so a cell index fits 19 bits
-const IDX_BITS = 524288;
+const NODE_BITS = 1048576;           // heap keys carry a node number (a search's own numbering), not a cell index: cells are unbounded now (S16)
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 export const DEFAULT_BUDGET = 4000;  // expanded nodes per search
 
 export class Pathfinder {
   constructor(world) {
     this.world = world;
-    this.g = new Int32Array(N);
-    this.from = new Int32Array(N);
-    this.seen = new Int32Array(N);   // generation stamp: g/from valid
-    this.closed = new Int32Array(N); // generation stamp: expanded
-    this.gen = 0;
     this.cache = new Map();
     this.cacheVersion = -1;
     this.stats = { searches: 0, hits: 0, expanded: 0 };
@@ -46,7 +40,7 @@ export class Pathfinder {
   find(start, goal, budget = DEFAULT_BUDGET) {
     const w = this.world;
     if (this.cacheVersion !== w.version) { this.cache.clear(); this.cacheVersion = w.version; }
-    const ck = start * IDX_BITS + goal;
+    const ck = start + "|" + goal;
     const hit = this.cache.get(ck);
     if (hit) { this.stats.hits++; return hit; }
     this.stats.searches++;
@@ -58,30 +52,36 @@ export class Pathfinder {
 
   _search(start, goal, budget) {
     const w = this.world;
-    const [sx, sy, sz] = World.xyz(start);
+    const [sx, sy] = World.xyz(start);
     const [gx, gy, gz] = World.xyz(goal);
     if (!w.isWalkable(gx, gy, gz)) return { ok: false, path: null, blocker: "NO_PATH" };
     if (start === goal) return { ok: true, path: [], blocker: null };
 
-    const gen = ++this.gen;
-    const { g, from, seen, closed } = this;
+    // Unbounded coordinates: nodes are numbered as they are met (a Map from cell to node), and g / from / closed are plain arrays by node.
+    const ids = new Map(), cells = [], g = [], from = [], closed = [];
+    const node = (cell, gg, fr) => {
+      let n = ids.get(cell);
+      if (n === undefined) { n = cells.length; ids.set(cell, n); cells.push(cell); g.push(gg); from.push(fr); closed.push(0); return n; }
+      return n;
+    };
     const heap = [];
-    const key = (f, gg, idx) => (f * 4096 + (4095 - Math.min(gg, 4095))) * IDX_BITS + idx;
+    const key = (f, gg, n) => (f * 4096 + (4095 - Math.min(gg, 4095))) * NODE_BITS + n;
     const hcost = (x, y) => 2 * (Math.abs(x - gx) + Math.abs(y - gy));
 
-    g[start] = 0; seen[start] = gen; from[start] = -1;
-    push(heap, key(hcost(sx, sy), 0, start));
+    const s0 = node(start, 0, -1);
+    push(heap, key(hcost(sx, sy), 0, s0));
     let expanded = 0;
 
     while (heap.length) {
       const k = pop(heap);
-      const cur = k % IDX_BITS;
-      if (closed[cur] === gen) continue;
-      closed[cur] = gen;
-      if (cur === goal) {
+      const cur = k % NODE_BITS;
+      if (closed[cur]) continue;
+      closed[cur] = 1;
+      const curCell = cells[cur];
+      if (curCell === goal) {
         this.stats.expanded += expanded;
         const path = [];
-        for (let n = goal; n !== start; n = from[n]) path.push(n);
+        for (let n = cur; n !== s0; n = from[n]) path.push(cells[n]);
         path.reverse();
         return { ok: true, path, blocker: null };
       }
@@ -89,7 +89,7 @@ export class Pathfinder {
         this.stats.expanded += expanded;
         return { ok: false, path: null, blocker: "BUDGET" };
       }
-      const [x, y, z] = World.xyz(cur);
+      const [x, y, z] = World.xyz(curCell);
       const gc = g[cur];
       for (let d = 0; d < 4; d++) {
         const nx = x + DIRS[d][0], ny = y + DIRS[d][1];
@@ -98,11 +98,12 @@ export class Pathfinder {
         else if (w.isWalkable(nx, ny, z + 1) && !w.isSolid(x, y, z + 1)) { nz = z + 1; cost = 3; }
         else if (w.isWalkable(nx, ny, z - 1) && !w.isSolid(nx, ny, z)) { nz = z - 1; cost = 3; }
         if (nz < 0) continue;
-        const n = World.idx(nx, ny, nz);
-        if (closed[n] === gen) continue;
+        const cell = World.idx(nx, ny, nz), known = ids.get(cell);
+        if (known !== undefined && closed[known]) continue;
         const ng = gc + cost;
-        if (seen[n] !== gen || ng < g[n]) {
-          seen[n] = gen; g[n] = ng; from[n] = cur;
+        if (known === undefined || ng < g[known]) {
+          const n = known === undefined ? node(cell, ng, cur) : known;
+          g[n] = ng; from[n] = cur;
           push(heap, key(ng + hcost(nx, ny), ng, n));
         }
       }
@@ -113,7 +114,7 @@ export class Pathfinder {
 }
 
 // Binary min-heap of exact-integer keys (< 2^53).
-function push(h, v) {
+export function push(h, v) {
   let i = h.length; h.push(v);
   while (i > 0) {
     const p = (i - 1) >> 1;
@@ -122,7 +123,7 @@ function push(h, v) {
   }
   h[i] = v;
 }
-function pop(h) {
+export function pop(h) {
   const top = h[0], last = h.pop();
   if (h.length) {
     let i = 0; const n = h.length;

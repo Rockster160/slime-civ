@@ -1,5 +1,6 @@
 // Shared by the bot tests: run one seed headless and collect survival stats,
 // or fan a list of seeds out over child processes (each sim is single-threaded).
+import "../legacy.js";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { Sim } from "../../src/sim/sim.js";
@@ -43,17 +44,27 @@ export function runSeed(seed, years, onTick) {
   return out;
 }
 
-/** Run `script` (a file that prints one JSON line when given --seed N) for each seed in parallel. */
-export function fanOut(script, seeds, extra = []) {
+// Memory safety (a run of parallel bots once exhausted the machine's RAM): at most SIM_JOBS (default 2)
+// children run at once, each with a capped heap so a runaway sim dies alone instead of taking the box down.
+const JOBS = Math.max(1, Number(process.env.SIM_JOBS || 2));
+const HEAP_MB = Number(process.env.SIM_HEAP_MB || 768);
+
+/** Run `script` (a file that prints one JSON line when given --seed N) for each seed, SIM_JOBS at a time. */
+export async function fanOut(script, seeds, extra = []) {
   const file = fileURLToPath(script);
-  return Promise.all(seeds.map(seed => new Promise((resolve, reject) => {
-    const p = spawn(process.execPath, [file, "--seed", String(seed), ...extra], { stdio: ["ignore", "pipe", "inherit"] });
+  const one = seed => new Promise((resolve, reject) => {
+    const p = spawn(process.execPath, ["--max-old-space-size=" + HEAP_MB, file, "--seed", String(seed), ...extra], { stdio: ["ignore", "pipe", "inherit"] });
     let buf = "";
     p.stdout.on("data", d => { buf += d; });
     p.on("close", code => {
       try { resolve(JSON.parse(buf.trim().split("\n").pop())); } catch (e) { reject(new Error("seed " + seed + " exited " + code + ": " + buf)); }
     });
-  })));
+  });
+  const out = new Array(seeds.length);
+  let next = 0;
+  const worker = async () => { while (next < seeds.length) { const i = next++; out[i] = await one(seeds[i]); } };
+  await Promise.all(Array.from({ length: Math.min(JOBS, seeds.length) }, worker));
+  return out;
 }
 
 export function arg(name, dflt) {

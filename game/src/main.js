@@ -7,6 +7,7 @@
 // `game` is the one object the UI shares: { sim, cam, renderer, state, ui, modes, ... }.
 // The UI reads game.sim and changes it ONLY through game.sim.apply(cmd).
 import { Sim } from "./sim/sim.js";
+import { seenAt } from "./sim/seen.js";
 import { TICKS_PER_SEC } from "./sim/clock.js";
 import { D, F, M } from "./sim/world.js";
 import { Camera } from "./render/camera.js";
@@ -20,8 +21,18 @@ import { createChroniclePanel, createDigest, watch } from "./ui/chronicle.js";
 import { createNotables } from "./ui/notables.js";
 import { createOrderBar } from "./ui/orders.js";
 import { createHelp } from "./ui/help.js";
+import { createAlmanacPanel } from "./ui/almanac.js";
 import { createBuildMode } from "./ui/build.js";
 import { createBlueprintPanel } from "./ui/blueprints.js";
+import { createExpeditionPanel } from "./ui/expedition.js";
+import { createCrewsPanel } from "./ui/crews.js";
+import { createConcernsPanel } from "./ui/concernpanel.js";
+import { createReveal } from "./ui/reveal.js";
+import { remember } from "./ui/dom.js";
+import { createKeymap } from "./ui/keys.js";
+import { createAccess } from "./ui/access.js";
+import { createSettings } from "./ui/settings.js";
+import { autosaveTick } from "./ui/saves.js";
 import { setupInput, panKeys } from "./ui/input.js";
 import { createSkip, SLICE_MS } from "./ui/skip.js";
 import { createPossess } from "./ui/possess.js";
@@ -41,7 +52,7 @@ const renderer = new Renderer(canvas, cam);
 const $ = (id) => document.getElementById(id);
 
 const game = {
-  sim: Sim.create(Number(params.get("seed")) || 1),
+  sim: Sim.create(Number(params.get("seed")) || 1, params.get("spawn") ? { spawn: { x: Number(params.get("spawn").split(",")[0]), y: Number(params.get("spawn").split(",")[1]) } } : {}),     // ?spawn=64,64 pins the camp (tests that hard-code positions); the game searches for a fair start
   cam, renderer,
   state: { speed: 1, paused: false, fps: 60, msPerTick: 0 },
   // Everything the player is looking at / doing. Not part of the sim, not saved.
@@ -50,10 +61,12 @@ const game = {
     hover: null, mouse: null, press: null, box: null, markers: [], targeting: null, follow: 0,
     overlays: { zones: false, jobs: false, temp: false }, hoverStock: false,
     help: false, digest: null, attn: { tick: 0, id: 0 }, toastedId: 0, autoPause: false,
-    editKeep: null, partsOpen: false,
+    editKeep: null, partsOpen: false, showTrace: false, crewTarget: 0,
+    progression: params.get("tools") !== "all", showAll: remember("showall") === "1",     // S11: tools appear as the village earns them (ui/reveal.js); ?tools=all or the Game menu setting shows everything
     mode: "select",                           // "select" | "build" (game.setMode switches; build is registered by ui/build.js)
   },
   modes: {},
+  keymap: createKeymap(),                      // S12: remappable keys (browser storage, not the save)
 };
 
 // ---- helpers the panels call ----
@@ -68,6 +81,12 @@ game.skipTo = (kind, maxTicks = 400000) => {
   game.skipper.run(1e9, maxTicks);
   if (game.skipper.active) game.skipper.cancel("Stopped: tick limit.");
   return game.skipper.msg;
+};
+/** S15: hand the player a text file (the chronicle export). The only DOM part of it; the text comes from a pure function. A test may replace this to capture the text. */
+game.downloadText = (name, text, mime = "text/plain") => {
+  const url = URL.createObjectURL(new Blob([text], { type: mime + ";charset=utf-8" })), a = document.createElement("a");
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 };
 game.togglePause = () => { game.state.paused = !game.state.paused; };
 game.toast = (msg, ms = 3500) => {
@@ -129,14 +148,17 @@ game.setMode = (m) => {
 game.clearSelection = () => { game.ui.sel = []; game.ui.focus = 0; game.ui.other = null; game.ui.follow = 0; game.ui.targeting = null; };
 game.selectOther = (o) => { game.ui.sel = []; game.ui.focus = 0; game.ui.other = o; };
 /** Replace the whole sim (load / new game). */
+/** Has this cell been seen? (the fog; the smoke test asks) */
+game.seenAt = (x, y, z) => seenAt(game.sim.seen, x, y, z) === 1;
 game.setSim = (sim) => {
   game.setMode("select");
   game.sim = sim;
   game.clearSelection();
   game.skipper.active = null;
   const ui = game.ui, es = sim.chron.entries;
-  ui.digest = null; ui.attn = { tick: sim.tick, id: es.length ? es[es.length - 1].id : 0 }; ui.toastedId = ui.attn.id; ui.markers = []; ui.editKeep = null;
+  ui.digest = null; ui.advisor = null; ui.cnOrder = []; ui.attn = { tick: sim.tick, id: es.length ? es[es.length - 1].id : 0 }; ui.toastedId = ui.attn.id; ui.markers = []; ui.editKeep = null; ui.unlock = {}; ui.revealInit = false; ui.crewTarget = 0; if (ui.strip) ui.strip.crew = 0;
   game.state.paused = true;
+  game.lastAutoDay = -1;                  // S12: the autosave clock restarts from this game's day
   orderSeen.clear();
   possessCtl.resume();                    // a loaded save may be mid-possession
 };
@@ -145,11 +167,18 @@ createSkip(game);
 const possessCtl = createPossess(game);
 
 // ---- DOM ----
+createAccess(game);                     // S12: UI scale, contrast, colour-blind marks, reduced flashing
 const bar = createTopBar($("topbar"), game);
 const colL = $("colL"), colR = $("colR");
+const concernsP = createConcernsPanel(colL, game);
 const village = createVillagePanel(colL, game);
 const bps = createBlueprintPanel(colL, game);
+const expd = createExpeditionPanel(colL, game);
+const crewsP = createCrewsPanel(colL, game);
+const revealer = createReveal(game);
+const alm = createAlmanacPanel(colL, game);
 const chron = createChroniclePanel(colL, game);
+game.openAlmanac = () => { alm.setOpen(true); alm.root.scrollIntoView({ block: "nearest" }); alm.root.classList.add("flash"); setTimeout(() => alm.root.classList.remove("flash"), 1200); };
 const why = createWhyPanel(colR, game);
 const insp = createInspector(colR, game);
 const notables = createNotables($("notables"), game);
@@ -157,6 +186,7 @@ const orderbar = createOrderBar($("orderbar"), game);
 const buildbar = createBuildMode(game, $("buildbar"));
 const digest = createDigest($("digest"), game);
 const help = createHelp($("helpOverlay"), game);
+const settings = createSettings($("settingsOverlay"), game);
 const tip = $("tip");
 document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("button"); if (b && !(b instanceof HTMLInputElement)) b.blur(); });   // so Space pauses, not "presses" the last button
 
@@ -165,7 +195,7 @@ window.addEventListener("resize", resize);
 resize();
 // Start centred on the clearing (nudged left of the side panels), zoomed to show a village-sized patch.
 cam.zoom = Math.min(24, Math.max(8, Math.floor(Math.min(cam.vw, cam.vh) / 40)));
-cam.x = 64 + 150 / cam.zoom; cam.y = 64;
+cam.x = game.sim.site.x + 150 / cam.zoom; cam.y = game.sim.site.y;
 setupInput(game, canvas);
 
 function tooltip() {
@@ -186,7 +216,7 @@ function tooltip() {
 }
 
 // ---- loop ----
-let acc = 0, prev = performance.now(), panelT = 0, lastDraw = 0;
+let acc = 0, prev = performance.now(), panelT = 0, lastDraw = 0, fitT = 0;
 function frame(now) {
   const dtMs = Math.min(250, now - prev); prev = now;
   const { state, ui } = game;
@@ -232,14 +262,17 @@ function frame(now) {
     drawOverlays(game);
   }
 
+  if (now - fitT > 1000) { fitT = now; game.fitTopbar(); }           // S12: the top bar scales to what fits
+  if (autosaveTick(game, now) && game.lastAutoKey) game.autoToast = now;      // S12: once a game day, a ring of slots (one in an ironman game)
+
   if (now - panelT > PANEL_MS) {
     panelT = now;
     const sv = survey(sim), vs = sim.ents.ofKind("villager");
-    const popText = `Pop ${vs.length}  ·  food ${sv.rations} (${sim.board.runway >= 99 ? "-" : sim.board.runway.toFixed(1)} d)`
+    const popText = (sim.ironman ? "IRONMAN  ·  " : "") + `Pop ${vs.length}  ·  food ${sv.rations} (${sim.board.runway >= 99 ? "-" : sim.board.runway.toFixed(1)} d)`
       + (sim.board.fc ? "  ·  FOOD LOW" : "") + (sim.board.sc ? "  ·  NEEDS SHELTER" : "");
     bar.update({ tick: sim.tick, popText });
     possessCtl.update();
-    village.update(); bps.update(); buildbar.update(); chron.update(); why.update(); insp.update(); notables.update(); orderbar.update(); digest.update(); help.update();
+    revealer.update(); concernsP.update(); village.update(); bps.update(); crewsP.update(); expd.update(); alm.update(); buildbar.update(); chron.update(); why.update(); insp.update(); notables.update(); orderbar.update(); digest.update(); help.update(); settings.update();
     $("perf").textContent = `${state.fps.toFixed(0)} fps · ${state.msPerTick.toFixed(2)} ms/tick · seed ${sim.seed} · tick ${sim.tick} · z ${renderer.z}`;
     $("hint").textContent = game.possessed() ? "Guiding a villager: WASD walk · E / click use what is next to you · Esc release" : ui.mode === "build" ? "Build mode: drag to plan, R rotates a stamp, [ ] changes level, Esc leaves" : ui.targeting ? "Click the map to place the order" : ui.sel.length ? "Right-click to order · Tab next · F follow · Esc deselect" : "Click a villager to see what it is doing and why · H: help";
     document.body.classList.toggle("building", ui.mode === "build");

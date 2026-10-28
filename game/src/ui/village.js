@@ -1,7 +1,10 @@
 // Village panel: population, food runway, season, warnings with explanations,
 // stock bars with keep-N standing orders (click a bar to set the target), and
 // the demand vector in words (GDD §09, §22).
-import { ITEMS, ITEM_KINDS, survey, zoneCapacity } from "../sim/items.js";
+import { ITEMS, ITEM_KINDS, survey, zoneCapacity, JAR_HOLD, JAR_X, CELLAR_X } from "../sim/items.js";
+import { CROP } from "../sim/farm.js";
+import { RECIPES } from "../sim/craft.js";
+import { can } from "../sim/knowledge.js";
 import { village, CRIT_BASE, CRIT_WINTER, KEEP_LOW } from "../sim/board.js";
 import { dateOf, DAYS_PER_SEASON, DAYS_PER_YEAR, SEASON_NAMES } from "../sim/clock.js";
 import { dayF, WINTER_START, winterAhead } from "../sim/season.js";
@@ -16,6 +19,30 @@ export function seasonLine(sim) {
   if (t.season === 3) return `Winter, day ${inSeason} of ${DAYS_PER_SEASON} - spring in ${Math.ceil(DAYS_PER_YEAR - d)} days. Berries have frozen off.`;
   const toWinter = Math.ceil(WINTER_START - d);
   return `${SEASON_NAMES[t.season]}, day ${inSeason} of ${DAYS_PER_SEASON} - winter in ${toWinter} days`;
+}
+
+/** S10: the fields, the pens, and the food the stores lost to spoilage (what jars and the cellar kept is shown beside it). Plain text lines. */
+export function spoilText(sim) {
+  const sp = sim.farm.sp, day = Object.keys(sp.d).filter(k => sp.d[k] > 0).map(k => sp.d[k] + " " + itemName(k)), tot = Object.keys(sp.t).reduce((a, k) => a + sp.t[k], 0);
+  if (!tot) return "";
+  return "Spoiled in the last day: " + (day.length ? day.join(", ") : "nothing") + ". Lost to rot so far: " + tot + (sp.sv >= 1 ? ". Jars and the cold cellar have kept about " + Math.round(sp.sv) + " units from rotting." : ".");
+}
+function farmLines(sim, sv) {
+  const f = sim.farm, pl = sim.ents.ofKind("plot");
+  let h = "";
+  if (pl.length) {
+    const sown = pl.filter(p => p.cr).length, ripeN = pl.filter(p => p.cr && p.gr >= CROP[p.cr].days).length;
+    h += `<div class="kv"><span>Fields</span><b>${pl.length} plots: ${pl.filter(p => !p.tl).length} raw, ${pl.filter(p => p.tl && !p.cr).length} tilled, ${sown} sown${ripeN ? ", " + ripeN + " ripe" : ""}</b></div>`;
+  }
+  if (f.pens.length) {
+    const hs = sim.ents.ofKind("fauna").filter(e => e.tame);
+    h += `<div class="kv"><span>Pens</span><b>${f.pens.length} (${f.pens.filter(p => p.built).length} fenced), ${hs.length} penned hopper${hs.length === 1 ? "" : "s"}</b></div>`;
+  }
+  if (f.cellar) h += `<div class="kv"><span>Cold cellar</span><b>food is stored there (${(f.cellar.x1 - f.cellar.x0 + 1) * (f.cellar.y1 - f.cellar.y0 + 1)} cells), spoiling at ${Math.round(CELLAR_X * 100)}% of the open rate</b></div>`;
+  const st = spoilText(sim);
+  if (st) h += `<div class="dim">${esc(st)}</div>`;
+  if (sv.stock.jar) h += `<div class="dim">${sv.stock.jar} clay jar${sv.stock.jar === 1 ? "" : "s"} in the stores seal ${sv.stock.jar * JAR_HOLD} units of food at ${Math.round(JAR_X * 100)}% of the rot.</div>`;
+  return h;
 }
 
 export function createVillagePanel(parent, game) {
@@ -43,6 +70,7 @@ export function createVillagePanel(parent, game) {
   input.addEventListener("keydown", (e) => { if (e.key === "Enter") { setKeep(game.ui.editKeep, input.value); input.blur(); } e.stopPropagation(); });
   stock.addEventListener("click", (e) => {
     const r = e.target.closest("[data-item]"); if (!r) return;
+    if (!game.unlocked("standing")) { game.toast("Standing orders appear once the village has a stockpile."); return; }
     game.ui.editKeep = game.ui.editKeep === r.dataset.item ? null : r.dataset.item;
     update();
   });
@@ -66,11 +94,13 @@ export function createVillagePanel(parent, game) {
     h += `<div class="dim">Critical below ${crit.toFixed(1)} days; the village goes foraging as soon as it is reached.</div>`;
     h += `<div class="kv"><span>Beds</span><b>${vl.beds.length} for ${vl.adults} adults${vl.sites.length ? " (+" + vl.sites.filter(s => s.what === "bed").length + " being built)" : ""}</b><span>Drying racks</span><b>${vl.racks.length}</b></div>`;
     for (const w of warnings(sim)) h += `<div class="warn l${w.level}"><b>${esc(w.title)}</b> ${esc(w.text)}</div>`;
+    h += farmLines(sim, sv);
     if (h !== last.top) { last.top = h; top.innerHTML = h; }
 
     h = `<div class="sub">Stockpile <span class="dim">(click a bar to set a keep-N target)</span></div>`;
     for (const k of ITEM_KINDS) {
       const have = sv.stock[k], kp = keepOf(k), n = kp ? kp.n : 0;
+      if (ITEMS[k].made && !have && !kp && !sv.loose[k] && !sv.carried[k] && !(RECIPES[k] && can(sim, RECIPES[k].craft))) continue;          // S7b products appear in the bars once someone knows how to make them (or one exists, or a target is set)
       const scale = Math.max(n * 1.15, have, 10);
       const marks = kp ? [{ at: n * KEEP_LOW / scale, cls: "soft" }, { at: n / scale, cls: "tgt" }] : [];
       const extra = (sv.loose[k] ? ` +${sv.loose[k]} loose` : "") + (sv.carried[k] ? ` +${sv.carried[k]} carried` : "");

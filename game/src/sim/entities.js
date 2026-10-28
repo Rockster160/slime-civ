@@ -20,6 +20,7 @@ export class Entities {
     this.list = [];            // id order
     this.cells = new Map();    // key -> ascending id array
     this.kinds = new Map();    // kind -> entities of that kind, id order (derived; rebuilt on load)
+    this.hook = null;          // S16: (e, op) called after an add (1), before a remove (0) and after a move (2): chunks.js marks a chunk the people have changed
   }
 
   add(kind, props) {
@@ -28,6 +29,7 @@ export class Entities {
     this.list.push(e);         // ids only grow, so push keeps id order
     this._index(e);
     this._kind(e.kind).push(e);
+    if (this.hook) this.hook(e, 1);
     return e;
   }
 
@@ -36,6 +38,7 @@ export class Entities {
   remove(id) {
     const e = this.byId.get(id);
     if (!e) return false;
+    if (this.hook) this.hook(e, 0);
     this._unindex(e);
     this.byId.delete(id);
     let lo = 0, hi = this.list.length - 1;     // binary search by id
@@ -50,8 +53,10 @@ export class Entities {
 
   move(e, x, y, z) {
     this._unindex(e);
+    const cx = e.x >> 4, cy = e.y >> 4;
     e.x = x; e.y = y; e.z = z;
     this._index(e);
+    if (this.hook && ((x >> 4) !== cx || (y >> 4) !== cy)) this.hook(e, 2);
   }
 
   /** Entities standing in a cell, in id order (do not mutate the result). */

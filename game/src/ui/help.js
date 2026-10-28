@@ -5,32 +5,53 @@ const CONTROLS = [
   ["Click", "inspect a villager, plant, item, bed or the stockpile"],
   ["Drag a box", "select several villagers (Shift adds)"],
   ["Right-click", "order the selected villagers: tree = chop, bush = forage, grass = gather, loose items = haul, ground = move"],
-  ["Tab / Shift-Tab", "next / previous villager"],
-  ["F or double-click", "follow the selected villager"],
+  [(k) => k.label("next") + " / " + k.label("prev"), "next / previous villager"],
+  [(k) => k.label("follow") + " or double-click", "follow the selected villager"],
   ["Esc", "clear selection, stop targeting, close this"],
-  ["Space", "pause"],
+  [(k) => k.label("pause"), "pause"],
   ["1-9", "speed: 1 2 3 4 5 = 1x-5x, 6 = 10x, 7 = 25x, 8 = 50x, 9 = MAX (as fast as the page can go). Top bar has the same buttons"],
   ["Next morning / Next season / Until something happens", "top bar: fast-forward at MAX, stopping early on a death, a finished build, a villager in trouble, winter or (for the last one) any chronicle entry. Esc or a click stops it. Off while guiding a villager"],
-  ["Q or the Possess button", "guide the selected villager: WASD walk (hold), E or click uses what is next to you, C eat, V drink, N sleep, G put down, Esc release. Speed is capped at 2x"],
-  ["Middle-drag, WASD, arrows", "pan (Shift = faster); right-drag also pans"],
-  ["Wheel, 0, [ ]", "zoom, fit the map, change the viewed level"],
-  ["B", "build mode: plan walls, floors, roofs, doors, beds and racks; Deconstruct takes finished pieces down (about 75% of materials back); Erase removes plans; Dig, Capture a blueprint, stamp x N. R rotates a stamp, E erases, [ ] changes level. Click a walled and roofed space with no door to see why it is not a room yet"],
-  ["Z / L / T", "overlays: stockpile and beds / job targets of the selected / warmth"],
-  ["P", "hide or show all panels"],
+  [(k) => k.label("possess") + " or the Possess button", (k) => `guide the selected villager: ${k.label("panUp")} ${k.label("panLeft")} ${k.label("panDown")} ${k.label("panRight")} walk (hold), ${k.label("use")} or click uses what is next to you, ${k.label("eat")} eat, ${k.label("drink")} drink, ${k.label("sleep")} sleep, ${k.label("drop")} put down, ${k.label("tool")} take the spear from the stockpile, ${k.label("torch")} set a torch (a stick in hand, fire known), ${k.label("support")} post a timber support (timber in hand), ${k.label("use")} or click on an adjacent creature strikes it, Esc release. Steadfast: you never flee, and you may enter the thornback's cave, a cracking roof or foul air that villagers refuse on their own; the banner warns you. Speed is capped at 2x`],
+  ["Right-click a hopper", "hunt it with the selected villagers (the meat is hauled in). Villagers never fight the thornback on their own: they flee above 60% fear and will not enter its ground"],
+  ["Crews panel", "select villagers, type a name, Make crew. A crew can carry a default task: an order (every member is ordered, aim it with a click on the map), a chore they prefer (farming, pens, mining, building, hauling) or a standing order. The card shows one line of stall summary (\"3 of 5 working; 2 blocked: ...\"), and Recall, Rename, Disband. Ctrl+1..9 gives the selected crew a number (or makes one from the selection); Alt+1..9 selects that crew, again to look at it. Plain 1..9 stay the speeds. Crews, standing orders and blueprints appear as the village earns them (Game menu: Show all tools)"],
+  ["Sickness (S14)", "bad food, stagnant marsh water, carrion and crowded stuffy rooms make villagers ill, and it spreads between people close together. The sick lie down and work slowly; a green ring marks them. Rest, a warm bed, cooked food, a nurse and above all a herbal remedy (from marsh herb) help them mend; the weak can die. Wolves hunt the lone on winter nights: keep company and a fire. The Almanac's This world section lists what is particular about this map"],
+  ["Room purposes (S15)", "click inside a closed, roofed room and give it a purpose: Shelter (beds), Bedroom (beds rest better and lift the mood; partners share one), Kitchen (a fire ring inside; villagers cook raw meat and tubers into more food that keeps longer), Storage (shelves; food and hides kept there spoil slower), Workshop (a bench; better work). The card lists what is missing and grades the room"],
+  ["Wagons and carts (S15)", "with FRAMING known, keep a wheel / wagon / cart order and the bench makes them. A free wagon is pushed on a long haul (a pile 14 or more cells from the stockpile): it carries about five times as much but walks slower, slowest on steps. An animal cart is pulled by a penned grazer: faster, more load, but only while the pen has fodder"],
+  ["Advisory cards (S15)", "when a problem first turns alarming a card appears in the corner (Winter in 5 days and 3 villagers have no warm bed): Show, Snooze (half a day) or Dismiss. One per kind of problem, and it does not repeat until the trouble has eased"],
+  ["Concerns panel", "the village's current problems, most urgent first, one line per kind (food, cold, sickness, the thornback and wolves, a blocked crew, a craft with one holder, rotting food, hunting, idle hands); Show takes the camera there"],
+  ["Blueprints: Revise, Push", "Revise captures an edited building over a saved design as the next revision; Redraw in... changes its materials (teepee to cabin). Push revision marks every building that follows the design: villagers take down only the pieces that were removed, build the new ones and swap changed materials in place, keeping the rest"],
+  ["Expeditions panel", "select villagers, then Flint / Clay / Malachite / Anything new: they dig toward it, turn back when it is found or someone is hurt, and you can Recall them"],
+  [(k) => "Middle-drag, " + k.label("panUp") + k.label("panLeft") + k.label("panDown") + k.label("panRight"), "pan (Shift = faster); right-drag also pans"],
+  [(k) => "Wheel, " + k.label("fit") + ", " + k.label("levelDown") + ", " + k.label("levelUp"), "zoom, fit the explored area, change the viewed level"],
+  [(k) => k.label("build"), (k) => `build mode: plan walls, floors, roofs, doors, beds and racks; Deconstruct takes finished pieces down (about 75% of materials back); Erase removes plans; Dig (see below), Capture a blueprint, stamp x N. ${k.label("rotate")} rotates a stamp, ${k.label("erase")} erases, ${k.label("levelDown")} ${k.label("levelUp")} change level. Click a walled and roofed space with no door to see why it is not a room yet`],
+  ["Dig tool (B, then Dig)", "mark ground for villagers to dig as a chore: Region (drag a box, N levels down, stepped so they can climb out), Stair down (click), Follow vein (click a coloured ore cell you have uncovered), Seek (pick flint, malachite or clay, click where to start; they tunnel through unseen rock in a spiral and only know what they have seen). Orange-purple cells are marked; the level keys move down a level to watch the mine. Click any cell to see what it is"],
+  ["Stations (B)", "once the village knows the craft the palette gains the Kiln (pottery), Bellows, Charcoal mound and Water jar; the Workbench is always there. Click a kiln or mound to see its heat by fuel and why it is not hotter. Set keep-N on fired clay, charcoal, copper or copper picks (stock bars) and idle villagers fill the kiln, burn the mound, smelt and make tools. Investigate here sends villagers to try things at that fire, kiln or mound."],
+  [(k) => k.label("zones") + " / " + k.label("jobs") + " / " + k.label("warmth"), "overlays: stockpile and beds / job targets of the selected / warmth (fire warmth glows orange around a lit fire ring)"],
+  ["Underground", "a hall wider than 4 cells with nothing holding the roof (rock, a pillar, a timber support) cracks, and falls after about two thirds of a day: rubble, and whoever is under it is hurt. The Dig tool leaves pillars; villagers post timber supports (Wall tool, Timber support) on a cracking roof, and refuse cells they know are cracking or foul. Dead-end tunnels deeper than 12 steps and opened gas pockets turn to bad air (a haze with wavy marks): a Vent shaft or a bellows beside it, or a second opening to the surface, clears it. Torches (a stick; fire known) and copper lamps light about 5 and 7 cells: dark work is slower and you see less. Colours on the map: orange cracks, yellow-green haze, warm glow"],
+  ["Settings (top bar)", "every key can be changed (click Change, press a key; kept in this browser, not in the save), and: interface size, high contrast, colour-blind marks (letters and patterns beside colour) and reduced flashing. Game menu: New game has an Ironman option (one autosave slot, no loading), and every normal game autosaves once a game day into three slots"],
+  ["Almanac (top bar)", "what the village knows and who holds it, Curiosities (things seen and not understood, with a hint), failed experiments, the era, and a debug trace of every discovery roll. Investigate sends 1-3 selected villagers to try things out for three days. Game menu > Force lightning makes the first fire happen now"],
+  [(k) => k.label("panels"), "hide or show all panels"],
   ["Shift-S, Shift-O", "save to / load from this browser (Game menu: file download and upload)"],
 ];
 const HOW = [
   "You are the village's hand, not its brain: click a slime to see what it is doing and why, right-click things to give orders (chop a tree, forage a bush, haul, dig).",
   "Left alone they eat, drink, sleep, forage, gather grass and build leaf beds and drying racks. Set keep-N targets on the stock bars (Village panel) and idle hands will stockpile logs, sticks or grass.",
-  "Food: berries only grow in spring to autumn and spoil; dried berries keep. In winter the only food is the stockpile and a little root-digging, so watch the food days in the top bar from midsummer.",
+  "Food: berries only grow in spring to autumn and spoil; dried berries keep. Tubers can be dug in any season (they live under the frost). In winter the only other food is the stockpile and a little root-digging, so watch the food days in the top bar from midsummer.",
   "Shelter: the cold of winter kills. Build (B) a closed, roofed room (wattle walls, thatch roof, a DOOR, beds), click inside it and set its purpose to Shelter. Rooms only count once the door is in.",
+  "Fire is found, not researched. When it turns cold, lightning may strike a tree near the camp; whoever sees it burn may understand fire (the Almanac and chronicle say who). Then fire rings can be built and villagers feed them sticks and logs as a chore. Warmth from a fire is shown on the Warmth overlay. If the last person who knows fire dies, it is lost until someone works it out again (much faster beside a fire ring).",
+  "Under the grass is soil, then soft rock with flint nodules and a green stain of malachite (copper ore), then hard rock. Rock nobody has stood beside is dark: villagers see only what is next to them as they dig. Mark digs from the build bar and the stone, flint, clay and malachite come to the stockpile.",
   "Possess (Q) one slime to do a job yourself, or to reach what the AI will not. Everything it can do is what the AI can do; you add judgement and a small speed bonus.",
   "Speed up with 1-9 or the skip buttons (Next morning / season); Esc stops. They stop for deaths, finished builds and winter, and the chronicle tells the story.",
 ];
 
 export function createHelp(root, game) {
-  root.innerHTML = `<div class="helpcard"><button class="hclose">Close (H)</button><h2>Slime Civ</h2><h3>How to play</h3><ol>${HOW.map(t => `<li>${esc(t)}</li>`).join("")}</ol>
-    <h3>Controls</h3><table>${CONTROLS.map(([k, d]) => `<tr><td><kbd>${esc(k)}</kbd></td><td>${esc(d)}</td></tr>`).join("")}</table></div>`;
+  const km = game.keymap, text = (v) => (typeof v === "function" ? v(km) : v);
+  let last = "";
+  const render = () => {
+    const h = `<div class="helpcard"><button class="hclose">Close (${esc(km.label("help"))})</button><h2>Slime Civ</h2><h3>How to play</h3><ol>${HOW.map(t => `<li>${esc(t)}</li>`).join("")}</ol>
+      <h3>Controls</h3><div class="dim2">Keys shown are your current ones (Settings, top bar, changes them).</div><table>${CONTROLS.map(([k, d]) => `<tr><td><kbd>${esc(text(k))}</kbd></td><td>${esc(text(d))}</td></tr>`).join("")}</table></div>`;
+    if (h !== last) { last = h; root.innerHTML = h; }
+  };
   root.addEventListener("click", (e) => { if (e.target === root || e.target.closest(".hclose")) game.ui.help = false; });
-  return { update() { root.style.display = game.ui.help ? "flex" : "none"; } };
+  return { update() { const on = game.ui.help; root.style.display = on ? "flex" : "none"; if (on) render(); } };
 }

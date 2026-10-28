@@ -1,10 +1,9 @@
 // Hit-testing: what is under a screen point? Reads the renderer's per-frame
 // column tops, so it only ever finds things that are actually drawn.
-import { W, H } from "../sim/world.js";
 import { inZone } from "../sim/items.js";
 import { provisionalRoom } from "../sim/proom.js";
 
-const PRIORITY = { item: 0, furniture: 1, csite: 2, site: 2, plant: 3 };
+const PRIORITY = { fauna: -1, item: 0, furniture: 1, grave: 1, wagon: 1, csite: 2, site: 2, plant: 3, plot: 4 };
 
 /**
  * -> {x, y, z, wx, wy, villager, ents, ent, kind}
@@ -17,8 +16,7 @@ export function pickAt(game, sx, sy) {
   const [wx, wy] = cam.toWorld(sx, sy);
   const x = Math.floor(wx), y = Math.floor(wy);
   const out = { x, y, z: -1, wx, wy, villager: null, ents: [], ent: null, kind: "none", room: null };
-  if (x < 0 || y < 0 || x >= W || y >= H) return out;
-  const top = renderer.tops[y * W + x];
+  const top = renderer.topAt(x, y);
   if (top < 0) return out;
   out.z = top + 1;
 
@@ -37,10 +35,17 @@ export function pickAt(game, sx, sy) {
     const e = sim.ents.get(ids[i]);
     if (e.kind !== "villager") out.ents.push(e);
   }
+  for (const f of sim.ents.ofKind("fauna")) {          // creatures move: pick the nearest drawn one under the pointer, not only on the clicked cell
+    if (!renderer.isShown(f) || out.ents.includes(f)) continue;
+    const dx = f.x + 0.5 - wx, dy = f.y + 0.5 - wy;
+    if (dx * dx + dy * dy < reach * reach) out.ents.push(f);
+  }
   out.ents.sort((a, b) => PRIORITY[a.kind] - PRIORITY[b.kind] || a.id - b.id);
   if (!best) {
     if (out.ents.length) { out.ent = out.ents[0]; out.kind = out.ent.kind; }
     else if (sim.stock && out.z === sim.stock.z && inZone(sim.stock, x, y)) out.kind = "stock";
+    else if (sim.farm.pens.find(p => p.z === out.z && inZone(p, x, y))) { out.pen = sim.farm.pens.find(p => p.z === out.z && inZone(p, x, y)); out.kind = "pen"; }
+    else if (sim.farm.cellar && sim.farm.cellar.z === out.z && inZone(sim.farm.cellar, x, y)) out.kind = "cellar";
     else out.kind = "ground";
   }
   // A room: the stand cell under the pointer, whichever level is viewed (the roof hides the floor from above).

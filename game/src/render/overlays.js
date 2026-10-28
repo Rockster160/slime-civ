@@ -5,8 +5,9 @@ import { tempAt, warmthAt, isNight } from "../sim/season.js";
 import { COMFORT } from "../sim/villager.js";
 import { inZone } from "../sim/items.js";
 import { CLASS } from "../ui/text.js";
-import { drawSites, drawRoom, drawMarks } from "./ghosts.js";
+import { drawSites, drawRoom, drawMarks, drawMining } from "./ghosts.js";
 import { provisionalRoom } from "../sim/proom.js";
+import { litHearths, flames, FIRE_R, FIRE_WARM } from "../sim/fire.js";
 
 const TAU = 6.2832;
 
@@ -17,12 +18,15 @@ export function drawOverlays(game) {
   const sel = new Set(ui.sel);
 
   drawSites(game, ctx);
+  drawMining(game, ctx);
   drawMarks(game, ctx);
   if (ui.other && ui.other.kind === "proom") drawProom(game, ctx);
   if (ui.other && ui.other.kind === "room") { const r = sim.rooms.list.get(ui.other.id); if (r) drawRoom(game, ctx, r, "pick"); }
   if (ui.overlays.temp) warmth(game, ctx, at);
   if (ui.overlays.zones || ui.hoverStock || (ui.other && ui.other.kind === "stock")) zones(game, ctx, at, ts);
   if (ui.overlays.jobs) jobLines(game, ctx, at, sel, ts);
+
+  drawLight(game, ctx);
 
   // Hover outline: the cell, or a ring if a villager is under the cursor.
   const h = ui.hover;
@@ -125,6 +129,20 @@ function warmth(game, ctx, at) {
   ctx.fillStyle = cold ? "rgba(70,130,255," + Math.min(0.32, (COMFORT - w) * 0.9).toFixed(3) + ")" : "rgba(255,170,60," + Math.min(0.2, (w - COMFORT) * 0.35).toFixed(3) + ")";
   ctx.fillRect(0, 0, cam.vw, cam.vh);
   for (const r of sim.rooms.all()) drawRoom(game, ctx, r, "warm");
+  for (const h of litHearths(sim)) {                       // a fire warms the open air around it, fading to nothing at FIRE_R cells
+    if (!renderer.isShown(h)) continue;
+    const [fx, fy] = at(h), rad = (FIRE_R + 1) * cam.zoom, g = ctx.createRadialGradient(fx, fy, 0, fx, fy, rad);
+    g.addColorStop(0, "rgba(255,150,40,.50)"); g.addColorStop(1, "rgba(255,150,40,0)");
+    ctx.fillStyle = g; ctx.fillRect(fx - rad, fy - rad, rad * 2, rad * 2);
+    ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    label(ctx, "fire +" + FIRE_WARM[h.hl].toFixed(2), fx, fy - cam.zoom * 0.7, "#ffd9a0");
+  }
+  for (const f of flames(sim)) {
+    if (!renderer.isShown(f)) continue;
+    const [fx, fy] = at(f), rad = 4 * cam.zoom, g = ctx.createRadialGradient(fx, fy, 0, fx, fy, rad);
+    g.addColorStop(0, "rgba(255,120,40,.4)"); g.addColorStop(1, "rgba(255,120,40,0)");
+    ctx.fillStyle = g; ctx.fillRect(fx - rad, fy - rad, rad * 2, rad * 2);
+  }
   for (const v of sim.ents.ofKind("villager")) {
     if (!renderer.isShown(v)) continue;
     const [sx, sy] = at(v), t = v.warm;
@@ -151,4 +169,31 @@ function drawProom(game, ctx) {
     ctx.setLineDash([5, 4]);
   }
   ctx.setLineDash([]);
+}
+
+/**
+ * Underground light (S8, GDD §13.5; S12 generalised): while guiding a villager who stands under rock, everything beyond their own few cells
+ * of light is dark, except where a torch, a lamp or a fire shines (the radius is the light's reach). Render-side only.
+ */
+const LIGHT_R = 6.5;
+function drawLight(game, ctx) {
+  const { sim, cam, renderer } = game, v = game.possessed ? game.possessed() : null;
+  if (!v || !renderer.isShown(v)) return;
+  let under = false;
+  for (let k = 1; k <= 4 && !under; k++) under = sim.world.isSolid(v.x, v.y, v.z + k);
+  if (!under) return;
+  const ts = cam.zoom, w = cam.vw, h = cam.vh;
+  let m = renderer.darkCanvas;
+  if (!m) m = renderer.darkCanvas = document.createElement("canvas");
+  if (m.width !== w || m.height !== h) { m.width = w; m.height = h; }
+  const mc = m.getContext("2d");
+  mc.globalCompositeOperation = "source-over"; mc.clearRect(0, 0, w, h);
+  mc.fillStyle = "rgba(3,5,12,.86)"; mc.fillRect(0, 0, w, h);
+  mc.globalCompositeOperation = "destination-out";
+  const hole = (x, y, r0, r1) => { const [sx, sy] = cam.toScreen(x + 0.5, y + 0.5), g = mc.createRadialGradient(sx, sy, ts * r0, sx, sy, ts * r1); g.addColorStop(0, "rgba(0,0,0,1)"); g.addColorStop(1, "rgba(0,0,0,0)"); mc.fillStyle = g; mc.fillRect(sx - ts * r1, sy - ts * r1, ts * r1 * 2, ts * r1 * 2); };
+  hole(v.x, v.y, 2.4, LIGHT_R);
+  for (const [lx, ly, lz, lr] of renderer.lights || []) if (Math.abs(lz - v.z) <= 1) hole(lx, ly, lr * 0.45, lr + 1);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(m, 0, 0, w, h, 0, 0, w * renderer.dpr, h * renderer.dpr);
+  ctx.setTransform(renderer.dpr, 0, 0, renderer.dpr, 0, 0);
 }

@@ -3,6 +3,7 @@
 import { Sim } from "../sim/sim.js";
 import { toJSON, restore } from "../sim/save.js";
 import { dateOf, SEASON_NAMES } from "../sim/clock.js";
+import { browserStorage, autosave, listAutos, autosaveDue, loadRefusal, saveRefusal, IRON_KEY } from "./slots.js";
 
 const KEY = "slimeciv.save.1";
 
@@ -14,6 +15,7 @@ export function savedInfo() {
 }
 
 export function saveLocal(game) {
+  const no = saveRefusal(game.sim); if (no) { game.toast(no, 5000); return false; }
   const { sim } = game, json = toJSON(sim), d = dateOf(sim.tick);
   try {
     window.localStorage.setItem(KEY, json);
@@ -27,6 +29,7 @@ export function saveLocal(game) {
 }
 
 export function loadLocal(game) {
+  const no = loadRefusal(game.sim); if (no) { game.toast(no, 5000); return false; }
   let raw = null;
   try { raw = window.localStorage.getItem(KEY); } catch (e) { /* fall through */ }
   if (!raw) { game.toast("No browser save yet. Shift-S saves one."); return false; }
@@ -45,6 +48,7 @@ export function loadJSON(game, text, okMsg) {
 }
 
 export function downloadSave(game) {
+  const no = saveRefusal(game.sim); if (no) { game.toast(no, 5000); return; }
   const { sim } = game, blob = new Blob([toJSON(sim)], { type: "application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob); a.download = `slime-civ-seed${sim.seed}-tick${sim.tick}.json`;
@@ -54,14 +58,36 @@ export function downloadSave(game) {
 }
 
 export function loadFile(game, file) {
+  const no = loadRefusal(game.sim); if (no) { game.toast(no, 5000); return; }
   const r = new FileReader();
   r.onload = () => loadJSON(game, String(r.result), "Loaded " + file.name + ".");
   r.readAsText(file);
 }
 
-export function newGame(game, seed) {
+export function newGame(game, seed, { ironman = false } = {}) {
   seed = Math.floor(Number(seed));
   if (!(seed >= 0)) { game.toast("Seed must be a number."); return; }
-  game.setSim(Sim.create(seed));
-  game.toast("New world, seed " + seed + ".");
+  game.setSim(Sim.create(seed, { ironman }));
+  game.toast(ironman ? "New ironman world, seed " + seed + ": it saves itself once a day into one slot, and cannot be loaded." : "New world, seed " + seed + ". It autosaves once a day.");
+}
+
+// ---- autosave (S12): once a game day; a ring of three slots, or the single ironman slot ----
+const store = browserStorage();
+/** Called every frame: write the autosave when a game day has passed (at most one every few real seconds, so MAX speed does not thrash the browser). */
+export function autosaveTick(game, nowMs) {
+  const sim = game.sim;
+  if (game.lastAutoDay === undefined || game.lastAutoDay < 0) game.lastAutoDay = Math.floor(sim.tick / 1800);
+  if (!autosaveDue(sim, game.lastAutoDay) || nowMs - (game.lastAutoMs || 0) < 4000) return false;
+  game.lastAutoDay = Math.floor(sim.tick / 1800); game.lastAutoMs = nowMs;
+  const key = autosave(store, sim, toJSON(sim));
+  game.lastAutoKey = key;
+  return !!key;
+}
+export const autoList = () => listAutos(store);
+/** Load an autosave slot (ironman: from a game that is not itself ironman). */
+export function continueAuto(game, key) {
+  const no = loadRefusal(game.sim); if (no) { game.toast(no, 5000); return false; }
+  const raw = store.get(key);
+  if (!raw) { game.toast("That autosave is gone.", 4000); return false; }
+  return loadJSON(game, raw, key === IRON_KEY ? "Continuing the ironman game." : "Loaded the autosave.");
 }
