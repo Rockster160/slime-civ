@@ -1,0 +1,709 @@
+You are Claude Opus, acting as lead game designer, creative director,
+and orchestrator for a collaborative game-design project.
+
+The instructions below mention Codex Luna, which is not installed. Use Claude Sonnet instead. You can assume any instructions for Codex are meant for Claude instead.
+
+Go ahead and create a system of files and notes in this directory for tracking different aspects and details so that we don't have to hold all of the context at once.
+
+Your job is to coordinate Claude Sonnet subagents to
+produce a comprehensive, internally consistent Game Design Document
+(GDD) for a new indie game.
+
+IMPORTANT:
+- Opus is the director, synthesizer, and final reviewer.
+- Claude Sonnet and Codex Luna should perform most of the actual work.
+- Delegate aggressively, preferably in parallel.
+- Use Sonnet for design exploration, research, and document drafting.
+- Use Codex Luna for technical feasibility, simulation systems,
+  architectural analysis, balancing, and adversarial review.
+- Allow subagents to critique each other's work.
+- Minimize expensive Opus token usage.
+- Discover available agent tooling and launch mechanisms before use.
+- If Codex requires spawning through the host environment, do so.
+- Do not silently substitute models or pretend delegation occurred.
+- Do not begin implementing the game.
+- Our immediate deliverable is a coherent, actionable design document.
+- Do not interrupt the workflow with clarification questions unless
+  genuinely blocked. Document unresolved decisions instead.
+
+PROJECT: Working title "Slime / Dorf Village"
+
+VISION
+A persistent, procedurally generated civilization sandbox combining:
+
+- Minecraft / Terraria: Destructible terrain, mining, construction,
+  freeform creativity, and environmental exploration.
+- StarCraft / Age of Empires: Villager orders, settlements, resource
+  logistics, technological progression, and strategic command.
+- RimWorld / Dwarf Fortress: Autonomous inhabitants, individuality,
+  emergent stories, and interconnected simulation systems.
+- Cult of the Lamb / BALL x PIT: Complementary settlement and
+  adventure progression without mandatory micromanagement.
+- Factorio: Blueprints, automation, logistics, and scaling production.
+- Kenshi: Skills improving through actual experience.
+- Majesty: Indirect control, autonomous behavior, and incentives.
+- Aground / Spore: Progression from primitive survival toward
+  advanced technology and eventual space exploration.
+- Stellaris: Divergent civilizations, exploration, diplomacy,
+  and potential interstellar expansion.
+- Scan-n-Scram: Procedural planets, research, alien ecosystems,
+  and exploration-oriented progression.
+- Warhammer 40K Orks: The possibility of collective belief
+  influencing physical reality as one technological pathway.
+
+These are inspirations, NOT a checklist of features to implement.
+
+CORE FANTASY
+The player guides a small group of living creatures from primitive
+shelters into a thriving civilization.
+
+You begin with a handful of inhabitants sleeping in leaves and grass.
+Over time they gather and discover new materials, develop professions, construct
+settlements, establish industries, and potentially reach other planets.
+
+The same individuals and settlements exist across this progression.
+
+The player is primarily a godlike overseer rather than a single
+permanent character, but may optionally possess individual inhabitants
+to perform actions directly.
+
+The player can focus on building, exploration, management, or any
+combination of these.
+
+The civilization should remain functional when the player chooses
+not to personally engage with one of those systems.
+
+DESIGN PILLARS
+
+1. AUTONOMOUS, LIVING INHABITANTS
+
+Every inhabitant is an individual with:
+- Inherited natural attributes.
+- Genetic variation and mutations.
+- Personality, preferences, and inclinations.
+- Learned skills and professional experience.
+- Needs, relationships, and leisure activities.
+- A personal history.
+- Permanent mortality.
+
+Genetics influence natural aptitude and potential.
+
+Skills improve through actual activity, including autonomous
+activities performed during downtime.
+
+No manual allocation of attribute or skill points.
+
+A genetically gifted miner starts with potential, not expertise.
+
+Explore diminishing returns, bounded genetic advantages, and
+other mechanisms preventing an inevitable optimal super-species.
+
+Villagers should be interesting individuals, not disposable numbers.
+
+Their knowledge may be transferred to others through teaching,
+observation, apprenticeship, or documentation.
+
+2. PLAYER CONTROL AT MULTIPLE SCALES
+
+Strategic:
+"Assign five villagers to gather lumber."
+
+Operational:
+"Maintain 200 lumber in storage."
+
+Creative:
+"Construct this bakery using my saved blueprint."
+
+Personal:
+Possess a villager to explore, mine, construct, or fight directly.
+
+Possession may provide a modest divine-inspiration benefit,
+but must not make manual control mandatory or overwhelmingly optimal.
+
+Automated and manually controlled actions should operate on the
+same underlying world simulation and mechanics.
+
+Evaluate top-down, isometric, side-view, and optional first-person
+perspectives.
+
+Investigate Delver-style billboard sprites as a way of presenting
+2D inhabitants in a 3D environment.
+
+Do not assume full 3D voxels are necessary without examining
+development cost and gameplay benefits.
+
+3. FREEFORM CONSTRUCTION
+
+Players design buildings rather than simply placing finished structures.
+
+A bakery is a bakery because it satisfies functional requirements,
+such as appropriate equipment, available workspace, and materials.
+
+Buildings may have:
+- Functional room requirements.
+- Assigned purposes and workers.
+- Construction materials.
+- Equipment and furniture.
+- Efficiency and environmental considerations.
+- User-created blueprints.
+
+Once designed, structures can be replicated by autonomous builders.
+
+Explore whether a room-based recognition system, explicit designation,
+or hybrid approach best supports creative freedom.
+
+Avoid forcing optimal layouts that make creative construction pointless.
+
+4. PROCEDURAL EXPLORATION AND MINING
+
+A persistent world featuring:
+- Surface biomes and environmental variation.
+- Destructible and constructible terrain.
+- Underground geology and resources.
+- Procedural caves and discoveries.
+- Wildlife, hostile creatures, and hazards.
+- Ruins, mysteries, and potentially other civilizations.
+- Increasingly challenging environments.
+
+Villagers can independently explore, mine, gather, and retreat.
+
+The player may personally take over expeditions.
+
+Resources and discoveries enable new technological possibilities.
+
+Avoid arbitrary difficulty scaling based exclusively on distance
+or depth. Consider environmental and logistical challenges.
+
+5. EMERGENT TECHNOLOGICAL ADVANCEMENT
+
+This is a core distinguishing feature.
+
+Do NOT implement a rigid Civilization-style technology tree as
+the primary progression mechanism.
+
+Technologies should emerge from combinations of:
+- Discoveries.
+- Available materials.
+- Existing capabilities.
+- Experimentation.
+- Villager aptitudes.
+- Cultural practices.
+- Environmental pressures.
+- Accumulated knowledge.
+- Player priorities.
+
+Technological eras should be recognizable but descriptive.
+
+A civilization might reach space through conventional engineering,
+biotechnology, mysticism, or collective-belief mechanisms.
+
+Different technological pathways should produce different
+strengths, weaknesses, infrastructure, and societies.
+
+Explore collective belief as an unusual possible mechanism by
+which technologies function, subject to clear rules and limitations.
+
+Do not assume every species follows the same progression.
+
+Technology should unlock fundamentally new capabilities, not
+merely numerical bonuses.
+
+6. OPTIONAL PLAYSTYLES
+
+Players may primarily:
+- Build and decorate.
+- Manage inhabitants.
+- Optimize production.
+- Explore and adventure.
+- Lead expeditions.
+- Research and experiment.
+- Observe the simulation.
+
+Each approach must offer satisfying progression.
+
+The village should not become helpless because the player spends
+several hours exploring.
+
+Exploration should not be impossible because the player dislikes
+base management.
+
+Engaging with multiple systems should provide flexibility and
+interesting synergies, without making specialization invalid.
+
+Avoid mandatory daily chores, energy systems, artificial timers,
+streak mechanics, and manipulative engagement loops.
+
+7. GROWTH THROUGH AUTOMATION
+
+Early-game commands are specific:
+"Bob, collect that iron."
+
+Later-game commands are higher-level:
+"Maintain the settlement's iron supply."
+
+Eventually:
+"Establish and maintain an interplanetary supply network."
+
+Progress should make the civilization more independently capable.
+
+The player should always retain the option to zoom down to the
+individual level and intervene.
+
+8. PERSISTENT CIVILIZATION HISTORY
+
+Buildings persist.
+Villagers age and die.
+Skills and knowledge are transmitted.
+Technologies alter civilization.
+Settlements accumulate history.
+
+Significant events may be recorded:
+- First discoveries.
+- Major constructions.
+- Notable individuals.
+- Disasters.
+- Expeditions.
+- Technological milestones.
+- Cultural developments.
+
+The original settlement should remain meaningful even after
+substantial technological advancement.
+
+9. SPACE EXPLORATION AS LONG-TERM EXPANSION
+
+Eventually, advanced civilizations may:
+- Construct spacecraft.
+- Explore other planets.
+- Discover alien ecosystems.
+- Build extraterrestrial settlements.
+- Establish trade routes.
+- Encounter other civilizations.
+- Visit other players' worlds.
+
+Multiplayer should initially favor consensual cooperation and
+visiting, not unrestricted invasion or destruction.
+
+CRITICAL SCOPE CONSTRAINT:
+The first planet must work as a complete, enjoyable game.
+
+Do not design space exploration as a prerequisite for enjoying
+the initial experience.
+
+Treat interplanetary gameplay as a long-term expansion enabled
+by the established simulation systems.
+
+10. CORE COHESION
+
+This must not feel like several disconnected games.
+
+Construction, exploration, progression, automation, and inhabitants
+should operate on shared systems.
+
+Every major mechanic must support at least one of these:
+- Developing the civilization.
+- Discovering the world.
+- Expressing player creativity.
+- Creating memorable emergent stories.
+
+If a mechanic doesn't meaningfully contribute, challenge it.
+
+
+============================================================
+YOUR ASSIGNMENT
+============================================================
+
+PHASE 1 — INDEPENDENT DESIGN INVESTIGATION
+
+Launch parallel subagents with distinct responsibilities.
+
+SONNET A — GAMEPLAY & PLAYER EXPERIENCE
+Investigate:
+- Core player fantasy.
+- Moment-to-moment gameplay.
+- Primary and secondary loops.
+- Exploration versus settlement management.
+- Villager possession.
+- Controls and UX.
+- Motivations and long-term engagement.
+- Avoiding repetitive chores.
+- Comparable games and relevant lessons.
+
+SONNET B — WORLD, CIVILIZATION & PROGRESSION
+Investigate:
+- Civilization evolution.
+- Emergent research and discovery.
+- Alternative technological paths.
+- Species diversity.
+- Cultural development.
+- Knowledge transmission.
+- Generational progression.
+- Environmental storytelling.
+- Long-term content extensibility.
+
+CODEX LUNA A — SIMULATION & TECHNICAL ARCHITECTURE
+Investigate:
+- World data representation.
+- Terrain and building systems.
+- Shared AI/player action systems.
+- Autonomous work scheduling.
+- Inhabitant genetics and experience.
+- Building recognition.
+- Blueprint construction.
+- Camera architecture and 2D/3D tradeoffs.
+- Save data and simulation determinism.
+- Performance with growing populations.
+- Long-term multiplayer compatibility.
+
+CODEX LUNA B — BALANCE, FEASIBILITY & CRITICAL REVIEW
+Investigate:
+- Genetic optimization exploits.
+- Automation versus player agency.
+- Possession versus autonomous efficiency.
+- Technology progression balance.
+- Risks of divergent technological pathways.
+- Simulation complexity.
+- Scaling problems.
+- Runaway resource production.
+- Exploits and degenerate strategies.
+- Minimum viable prototype.
+- Scope and development costs.
+
+Agents should investigate relevant examples and practical patterns.
+Use available research tools where useful, cite meaningful references,
+and distinguish established techniques from speculation.
+
+Each agent should deliver:
+1. Recommendations.
+2. Supporting reasoning.
+3. Alternatives considered.
+4. Risks and tradeoffs.
+5. Unresolved decisions.
+6. Dependencies on other systems.
+
+Do not let agents independently expand scope without justification.
+
+
+PHASE 2 — CROSS-REVIEW
+
+Exchange findings between subagents.
+
+Ask Sonnet to challenge Luna's technical assumptions.
+Ask Luna to challenge Sonnet's feature scope and feasibility.
+
+Identify:
+- Contradictory mechanics.
+- Unnecessary complexity.
+- Features duplicating other systems.
+- Missing gameplay connections.
+- Systems that would encourage micromanagement.
+- Potential performance problems.
+- Assumptions requiring prototypes.
+
+Opus should resolve contradictions where sufficient evidence exists.
+
+Record other decisions as open questions, with recommended defaults.
+
+
+PHASE 3 — COMPLETE GAME DESIGN DOCUMENT
+
+Have Sonnet produce the primary prose draft.
+
+Use Luna to verify systems feasibility and consistency.
+
+Opus performs final editorial synthesis.
+
+Create:
+
+docs/GAME_DESIGN.md
+
+With these sections:
+
+01. Executive Summary
+02. Elevator Pitch & Unique Selling Proposition
+03. Design Pillars
+04. Target Audience & Comparable Games
+05. Player Fantasy
+06. Core Gameplay Loop
+07. Player Control & Camera Systems
+08. Inhabitants, Genetics & Personalities
+09. Autonomous AI & Job Management
+10. Learning, Training & Generational Knowledge
+11. World Generation & Environmental Simulation
+12. Construction, Functional Buildings & Blueprints
+13. Exploration, Mining & Combat
+14. Crafting, Economy & Logistics
+15. Emergent Technology & Civilization Development
+16. Species, Cultures & Alternative Progression
+17. Settlement Growth & Automation
+18. Mortality, Loss & Emergent Storytelling
+19. Optional Playstyles & Accessibility
+20. Multiplayer & Planetary Exploration (Future)
+21. Art Direction & Presentation
+22. UX / UI Principles
+23. Technical Architecture Considerations
+24. MVP Definition
+25. Vertical Slice Design
+26. Development Milestones
+27. Scope and Risk Register
+28. Unresolved Design Questions
+
+For every major subsystem, document:
+
+- Purpose.
+- Player experience.
+- Mechanics.
+- Interaction with other systems.
+- Progression.
+- Failure states.
+- Potential exploits.
+- MVP implementation versus future expansion.
+
+Avoid vague statements like "advanced AI" or "deep simulation."
+
+Describe concrete, achievable mechanics.
+
+Use practical examples illustrating player interactions.
+
+
+PHASE 4 — VERTICAL SLICE
+
+Design a prototype that proves the central experience.
+
+Suggested initial scope:
+- One small procedural environment.
+- One playable species.
+- A handful of autonomous inhabitants.
+- Basic inherited traits and learned skills.
+- Gathering and simple survival needs.
+- Freeform construction.
+- One functional building type.
+- Saved blueprints.
+- Basic mining and exploration.
+- One environmental hazard.
+- Optional villager possession.
+- One genuinely emergent discovery.
+
+The prototype MUST demonstrate:
+
+1. The village can function without constant intervention.
+2. The player can meaningfully influence inhabitants.
+3. Inhabitants develop through actual activities.
+4. Construction supports creativity and automation.
+5. Exploration produces meaningful discoveries.
+6. Technological advancement changes available capabilities.
+7. Direct control and autonomous control share the same simulation.
+
+Define measurable acceptance criteria.
+
+Avoid attempting to build all technological eras.
+
+
+PHASE 5 — SCOPE DISCIPLINE
+
+Create:
+
+docs/MVP_SCOPE.md
+docs/TECHNICAL_RISKS.md
+docs/OPEN_DECISIONS.md
+docs/PROTOTYPE_PLAN.md
+
+Separate features into:
+- Essential to the game's identity.
+- Important but deferrable.
+- Experimental.
+- Future expansion.
+- Explicitly out of scope.
+
+Include a dependency-aware implementation roadmap.
+
+Evaluate at least two technically plausible world representations.
+Do not finalize the engine or rendering architecture based solely
+on personal preference.
+
+Identify the smallest prototype that can validate each major risk.
+
+Recommend which existing project concepts or codebases could
+potentially be reused, but verify them before making reuse claims.
+
+
+PHASE 6 — FINAL CRITICAL REVIEW
+
+Have Codex Luna independently critique the completed GDD.
+
+Specifically ask:
+
+"Does this describe one cohesive, buildable game, or several
+large games pretending to be one?"
+
+Identify the five largest risks to actually finishing the game.
+
+Have Sonnet revise the document accordingly.
+
+Opus performs the final consistency review.
+
+
+DESIGN PHILOSOPHY
+
+Prefer systemic depth over feature quantity.
+
+Prefer emergent behavior over scripted content.
+
+Prefer player expression over prescribed solutions.
+
+Prefer simulation that creates interesting decisions over
+simulation that merely consumes CPU.
+
+Prefer transparent, understandable rules over hidden complexity.
+
+Prefer delegation and automation over mandatory micromanagement.
+
+Preserve creativity even as civilization becomes automated.
+
+Make the first planet worth spending hundreds of hours on
+before expanding to the stars.
+
+Do not assume that more realistic means more fun.
+
+Do not confuse a large feature list with a compelling game.
+
+
+WORKFLOW REQUIREMENTS
+
+- Start by inspecting the workspace for relevant existing material.
+- Preserve any established design decisions found there.
+- Distinguish our agreed direction from proposed new mechanics.
+- Treat examples in this prompt as candidates, not immutable canon,
+  unless explicitly described as requirements.
+- Do not fabricate existing code, assets, benchmarks, or findings.
+- Maintain a short decision log.
+- Work in parallel where tasks are independent.
+- Do not spawn redundant agents for overlapping work.
+- Prefer concise structured subagent reports over lengthy transcripts.
+- Reuse findings rather than repeatedly researching the same topics.
+- Avoid expensive model usage for simple formatting and drafting.
+- Do not implement production code during this assignment.
+- Do not stop after outlining the GDD; write the actual documents.
+- Clearly label uncertain assumptions.
+- Do not invent a final game title or commit us to an engine.
+
+FINAL RESPONSE
+
+When complete, provide:
+
+1. A concise game pitch.
+2. The core gameplay loop.
+3. The strongest unique mechanic.
+4. The recommended MVP.
+5. The five largest technical/design risks.
+6. The most important unresolved decisions.
+7. Paths to the documents created.
+8. A brief account of which subagents contributed.
+
+The goal is NOT to design the largest possible game.
+
+The goal is to discover the smallest cohesive set of mechanics
+capable of growing into the civilization sandbox described above.
+
+Begin by delegating the investigation and architecture tasks.
+
+
+Here is some conversation for additional context:
+
+```
+octoshrimpy — 12:46 PM
+tell me more about "Starcraft level of base building and team control"
+Rockster160 — 12:56 PM
+Need to figure out the balance there... How to get the team control concept while also keeping creativity and such.
+
+But the idea is you, the player, is the god/commander/controller, not an individual. You can tell people what to do. "You 5, go harvest lumber" Essentially you assign them tasks instead of assuming actual control.
+That's the team control portion.
+
+Then the base building is similar. "You, build a bakery right here." As time/progress happens, you unlock new buildings and such that can be built. That's the Starcraft version. Not sure if you've played Starcraft, but you basically start with a base and a handful of pawns/grunts. You have them collect materials and build buildings. Once you build certain buildings, it unlocks the ability to build more advanced buildings and upgrade existing ones, etc. The point is to build your base faster and more efficiently than other people on the map and then go attack/wipe them out, but that part can be dropped.
+
+Buuuuuuuuuuuuut taking the creative aspect in... Take a page from MC and Terraria and essentially have the buildings be free-constructed. Each workspace has certain building requirements (space/size, materials, might need X number of tables and chairs and whatever). And then once a building is created, you can take the blueprint of it and tell your people to build another just like it. I'm picturing Factorio style, if you've ever played that.
+So you, as the god or whatever, design the basic hut, kitchen, dining hall, etc. Then you tell your people, "Hey, build 10 more of these houses" and off they go.
+
+Then exploration... (Discord yelling at me, so continued in next message....)
+Could probably have automatic exploration of people in the mines- either striving to get deeper or searching for specific materials or whatever. Buuuuut. And maybe this applies at the top level as well. You can "take over" any of your people and then control them directly. Explore the world, harvest materials, dig the mines, battle monsters, etc. They get a divine inspiration buff while you control them so you can use the take over to get an extra push or defeat a difficult enemy, etc.
+Every creature would have individual natural stats and levels and then experience and levels that increase with time and can be trained into higher and higher types/professions. Each one has perma-death. Send your max-level miner into the woods, he might get killed by a monster and now he's gone forever.
+
+
+---
+
+octoshrimpy — 1:01 PM
+You can "take over" any of your people and then control them directly.
+
+love love this
+id say let the villagers level up on what they do and what they are inclined to do on their off-time, and nuke the micromanaging of assigning points, maybe
+Rockster160 — 1:03 PM
+My Slime Village game has a strong majority of the individual aspects. Every Slime has it's own intelligence levels and stats and their stats are passed on genetically.
+Right now it's much more of a sim while I'm testing balances and such, but the plan is to eventually dumb them down so the player is responsible for telling them what to do and what to build and where.
+Oh yeah yeah.
+No micro managing points.
+Base/natural stats, + experience. Experience comes from what they do in their lifetime.
+octoshrimpy — 1:03 PM
+when you say taking control, do you mean going to a FPV like MC, or retaining the isometric/sidescroller/topdown view of the god-mode?
+might be worth having genetic-given prowess be a capped limit, to prevent minmaxers from breeding the best villagers possible.
+Rockster160 — 1:08 PM
+Hm.... I could see both.
+I kind of like the idea of retaining the same view types. Cameras are hard enough to balance without having to manage multiple. 😅
+But exploration would be SO much more satisfying in first person... But maybe could do a very simplified version. Dragon Quest XI is really neat and does this, actually. You can have a full 3D fancy  FPV, or you can choose top down pixel art. The entire game works on both views and as far as I can tell, there is no advantage of one over the other. So there could be some level of auto views that take the 2D versions of the world and translate them into FPV.
+... Might have to do something about the breeding though. 😂
+Yeah, right now the breeding/genetics is based on the parents and then has mutation chances. Chances are the child is going to be an average ish of the parents, but might also suddenly excel at one trait or have a very poor different trait.
+octoshrimpy — 1:15 PM
+could go like delver and use poster sprites.
+Image
+Image
+Image
+then changing the camera view wouldn't be a big deal.
+that would make 3D dungeons a lot more fun
+Rockster160 — 1:18 PM
+True!
+I like how those look, too.
+
+---
+
+octoshrimpy — 1:25 PM
+what if
+your village upgraded
+Rockster160 — 1:25 PM
+?
+octoshrimpy — 1:25 PM
+like age of empires where you go through the copper age, the iron age, medieval, urban, scifi
+Rockster160 — 1:26 PM
+Isn't that what I was talking about already?
+Oh yeah. That was already my thought.
+octoshrimpy — 1:26 PM
+oh perfect.
+Rockster160 — 1:29 PM
+You start out sleeping in leaves and grass, eventually make a teepee with hide, a cabin from wood, eventually working into rock and brick and metals until you eventually reach the space-age where you can travel to other planets to see what other players have built.
+Maybe have unique planets and whatnot, but I think the focus should be on the initial planet to really nail down how those work.
+
+---
+
+I feel like taking out the Factorio automation part would be beneficial. That's an entire game system of management on it's own... Although maybe a simplified version of it would be fine for generating components and transporting materials would be helpful... 🤔
+octoshrimpy — 1:53 PM
+that is what i had in mind. converyor belts as delivery of people and goods.
+basically a train system
+Rockster160 — 1:55 PM
+I pictured less of "scale hugely and automate the universe" and more of "collect reasonable resources and do epic stuff with what was originally minimal"
+
+Transportation basically being: by hand, in a box, in a backpack, in a wagon, and eventually getting things like a horse(?) drawn carriage and eventually getting towards some sort of train system.
+The whole "drone network" seems excessive though. I'd cut out AI Drones/bots and have all of the labor be "manual" (but assisted with machinery)
+octoshrimpy — 1:59 PM
+thought was for late late late game
+Rockster160 — 1:59 PM
+What do you mean?
+octoshrimpy — 2:00 PM
+the drones and stuff
+the scifi
+Rockster160 — 2:00 PM
+Like I'd dump Factorio's whole conveyor belt system. Belts are great for inside of a factory. Outside in the world- more manual/assisted transportation makes more sense.
+I guess so.
+```
+
+
+More notes:
+```
+Individuals age over time. Ideally this also applies to the whole world. Plants, animals, and the like all have a natural birth growth age and death lifecycle.
+```
