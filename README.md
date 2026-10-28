@@ -18,6 +18,8 @@ Working title only. No engine chosen. No production code here.
 - `notes/phase2/` — cross-reviews and Opus resolution
 - `notes/gdd_parts/` — the four original section drafts (superseded by docs/GAME_DESIGN.md; kept for provenance)
 - `notes/phase3_consistency_log.md` — consistency-pass change log
+- `notes/impl/BUILD_PLAN.md` — prototype build plan
+- `game/` — the playable prototype (open `game/slime-civ.html`; see `game/README.md`)
 - `notes/phase6/` — independent critique, director rulings K1–K11, revision logs
 
 `initial_prompt.txt` is the original brief, verbatim.

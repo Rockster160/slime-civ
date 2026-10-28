@@ -1,0 +1,132 @@
+// Possession (S4b): the player drives the SAME pipeline as the AI.
+//  1. Same-sim proof: an AI villager ordered to chop a tree and a possessed villager fed the equivalent
+//     pinput walk the same cells and chop for the same number of ticks - except for the documented
+//     +10% work speed (INSPIRE.speed), and with that zeroed they are tick-identical.
+//  2. The command log replays a possession spell to the same hash; release / grace / collapse rules.
+//   node game/tests/possess.js
+import assert from "node:assert/strict";
+import { Sim } from "../src/sim/sim.js";
+import { INSPIRE } from "../src/sim/inspire.js";
+import { rate } from "../src/sim/tasks.js";
+import { possessed } from "../src/sim/possess.js";
+import { toJSON, restore } from "../src/sim/save.js";
+
+/** One lone adult and a tree in reach. */
+function world(seed) {
+  const sim = Sim.create(seed, { villagers: 0 });
+  const v = sim.spawnVillager();
+  v.born = -Math.round(0.35 * 400 * 1800); v.hunger = v.thirst = v.energy = 1;
+  let tree = null, bd = 1e9;
+  for (const p of sim.ents.ofKind("plant")) {
+    if (p.species !== "tree") continue;
+    const d = Math.abs(p.x - v.x) + Math.abs(p.y - v.y);
+    if (d > 4 && d < bd) { bd = d; tree = p; }
+  }
+  return { sim, v, tree };
+}
+const treeGone = (sim, id) => sim.ents.get(id).species !== "tree";
+
+/** AI run: order chop at tick 0. Records each move (tick, cell) and when the chop finished. */
+function aiRun(seed) {
+  const { sim, v, tree } = world(seed), moves = [];
+  sim.apply({ type: "order", ids: [v.id], verb: "chop", tid: tree.id });
+  let last = [v.x, v.y, v.z], arrived = -1, done = -1;
+  for (let i = 0; i < 3000 && done < 0; i++) {
+    sim.step();
+    if (v.x !== last[0] || v.y !== last[1] || v.z !== last[2]) { moves.push({ t: sim.tick - 1, from: last, to: [v.x, v.y, v.z] }); last = [v.x, v.y, v.z]; arrived = sim.tick - 1; }
+    if (treeGone(sim, tree.id)) done = sim.tick - 1;
+  }
+  assert.ok(done > 0, "AI never felled the tree");
+  return { moves, arrived, done, n: done - arrived + 1, rate: rate(sim, v, "chop"), start: [moves[0].from] };
+}
+
+/** Possessed run: replay the AI's cells as direction presses, then press interact. */
+function playerRun(seed, ai) {
+  const { sim, v, tree } = world(seed);
+  sim.apply({ type: "possess", id: v.id });
+  let mi = 0, arrived = -1, done = -1, sent = false;
+  const dir = (a, b) => ({ dx: Math.sign(b[0] - a[0]), dy: Math.sign(b[1] - a[1]) });
+  for (let i = 0; i < 3000 && done < 0; i++) {
+    if (mi < ai.moves.length) {
+      const m = ai.moves[mi];
+      if (v.x === m.from[0] && v.y === m.from[1] && v.z === m.from[2] && !(v.action)) sim.apply({ type: "pinput", id: v.id, ...dir(m.from, m.to), tid: 0, verb: "" });
+    } else if (!sent && !v.action) { sim.apply({ type: "pinput", id: v.id, dx: 0, dy: 0, tid: tree.id, verb: "" }); sent = true; }
+    sim.step();
+    const m = ai.moves[mi];
+    if (m && v.x === m.to[0] && v.y === m.to[1] && v.z === m.to[2]) { mi++; arrived = sim.tick - 1; }
+    if (treeGone(sim, tree.id)) done = sim.tick - 1;
+  }
+  assert.ok(done > 0, "possessed villager never felled the tree");
+  return { arrived, done, n: done - arrived };       // the chop starts the tick after the last step (a fresh Task), the AI's the same tick
+}
+
+for (const seed of [3, 11]) {
+  const ai = aiRun(seed);
+  // modifier zeroed: tick-identical (walk and work)
+  const saved = INSPIRE.speed;
+  INSPIRE.speed = 0;
+  const z = playerRun(seed, ai);
+  assert.equal(z.arrived, ai.arrived, "seed " + seed + ": same walk, same arrival tick");
+  assert.equal(z.n, ai.n, "seed " + seed + ": with the buff zeroed the chop takes " + z.n + " ticks vs AI " + ai.n);
+  assert.equal(z.done, ai.done + 1, "completion differs by exactly the one-tick decision gap");
+  // documented +10%
+  INSPIRE.speed = saved;
+  const p = playerRun(seed, ai);
+  const want = ai.n / (1 + saved);               // mood drifts a hair over the ~300 ticks, so allow 2 ticks
+  assert.ok(Math.abs(p.n - want) <= 2, "possessed chop should take ~" + want.toFixed(1) + " ticks (AI " + ai.n + " / 1.1), got " + p.n);
+  assert.ok(p.n < ai.n, "inspiration makes it faster");
+  console.log(`seed ${seed}: walk ${ai.moves.length} steps, arrival tick ${ai.arrived} both; chop AI ${ai.n} ticks, possessed (buff zeroed) ${z.n}, possessed (+${saved * 100}%) ${p.n}`);
+}
+
+// ---- replay + rules ----
+// A spell driven only by commands (the shared script also edits the world directly, which a log cannot replay).
+function spell(sim) {
+  const t = sim.tick;
+  if (t === 3000) { const v = sim.ents.ofKind("villager").find(q => q.born < -100000); sim.apply({ type: "possess", id: v.id }); }
+  const v = possessed(sim);
+  if (v && t > 3000 && t % 40 === 0) {
+    const d = [[1, 0], [0, 1], [-1, 0], [0, -1]][Math.floor(t / 400) % 4];
+    let tid = 0;
+    if (t % 400 === 0) for (const dz of [0, 1, -1]) for (const id of sim.ents.at(v.x + d[0], v.y + d[1], v.z + dz)) if (sim.ents.get(id).kind === "plant") tid = id;
+    sim.apply({ type: "pinput", id: v.id, dx: tid ? 0 : d[0], dy: tid ? 0 : d[1], tid, verb: "" });
+  }
+}
+const a = Sim.create(5);
+while (a.tick < 6000) { spell(a); a.step(); }
+assert.ok(possessed(a), "mid-possession at tick 6000");
+const b = Sim.create(5);
+const cmds = a.cmdLog.slice();
+let ci = 0;
+while (b.tick < a.tick) { while (ci < cmds.length && cmds[ci].t === b.tick) { const { t, ...c } = cmds[ci++]; b.apply(c); } b.step(); }
+assert.equal(b.hash(), a.hash(), "replaying the command log (with possession) reproduces the hash");
+assert.ok(cmds.some(c => c.type === "pinput") && cmds.some(c => c.type === "possess"), "possession went through the command log");
+const c = restore(toJSON(a));
+assert.ok(possessed(c) && c.hash() === a.hash(), "save mid-possession restores it");
+for (let i = 0; i < 1500; i++) { spell(a); spell(c); a.step(); c.step(); }
+assert.equal(a.hash(), c.hash(), "a loaded mid-possession sim continues identically");
+
+// release, one at a time, reservations back after the grace
+const { sim, v, tree } = world(9);
+sim.apply({ type: "order", ids: [v.id], verb: "chop", tid: tree.id });
+for (let i = 0; i < 40; i++) sim.step();
+assert.equal(tree.rv, v.id, "AI holds a reservation on its tree");
+sim.apply({ type: "possess", id: v.id });
+assert.equal(tree.rv, v.id, "kept through the grace period");
+for (let i = 0; i < INSPIRE.grace - 20; i++) sim.step();
+assert.equal(tree.rv, v.id, "still held before 600 ticks");
+for (let i = 0; i < 40; i++) sim.step();
+assert.equal(tree.rv, 0, "released after 600 ticks");
+const w2 = sim.spawnVillager(); w2.born = v.born;
+sim.apply({ type: "possess", id: w2.id });
+assert.ok(!v.poss && w2.poss, "one villager at a time");
+sim.apply({ type: "release" });
+assert.ok(!w2.poss && !possessed(sim), "release clears it");
+// need warnings never release it
+sim.apply({ type: "possess", id: v.id });
+v.hunger = 0.05; v.thirst = 0.1; v.warm = 0.2;
+for (let i = 0; i < 100; i++) sim.step();
+assert.ok(v.poss, "needs warnings do not release");
+v.hp = 3;
+for (let i = 0; i < 20; i++) sim.step();
+assert.ok(!v.poss, "collapse releases");
+console.log("possess ok");

@@ -1,0 +1,154 @@
+// Everything drawn ON TOP of the world for the player: selection rings, hover
+// outline, drag box, order markers, and the optional overlays (zones, job
+// lines, warmth). Reads sim + ui state, never writes the sim.
+import { tempAt, warmthAt, isNight } from "../sim/season.js";
+import { COMFORT } from "../sim/villager.js";
+import { inZone } from "../sim/items.js";
+import { CLASS } from "../ui/text.js";
+import { drawSites, drawRoom, drawMarks } from "./ghosts.js";
+import { provisionalRoom } from "../sim/proom.js";
+
+const TAU = 6.2832;
+
+export function drawOverlays(game) {
+  const { sim, cam, renderer, ui } = game, ctx = renderer.ctx, ts = cam.zoom;
+  ctx.setTransform(renderer.dpr, 0, 0, renderer.dpr, 0, 0);
+  const at = (e) => cam.toScreen(e.x + 0.5, e.y + 0.5);
+  const sel = new Set(ui.sel);
+
+  drawSites(game, ctx);
+  drawMarks(game, ctx);
+  if (ui.other && ui.other.kind === "proom") drawProom(game, ctx);
+  if (ui.other && ui.other.kind === "room") { const r = sim.rooms.list.get(ui.other.id); if (r) drawRoom(game, ctx, r, "pick"); }
+  if (ui.overlays.temp) warmth(game, ctx, at);
+  if (ui.overlays.zones || ui.hoverStock || (ui.other && ui.other.kind === "stock")) zones(game, ctx, at, ts);
+  if (ui.overlays.jobs) jobLines(game, ctx, at, sel, ts);
+
+  // Hover outline: the cell, or a ring if a villager is under the cursor.
+  const h = ui.hover;
+  if (h && h.kind !== "none" && !ui.press) {
+    ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,255,.65)";
+    if (h.villager) { const [sx, sy] = at(h.villager); ring(ctx, sx, sy, ts * 0.55); }
+    else { const [sx, sy] = cam.toScreen(h.x, h.y); ctx.strokeRect(sx + .5, sy + .5, ts - 1, ts - 1); }
+  }
+
+  // A selected non-villager thing.
+  const o = ui.other && ui.other.kind === "entity" ? sim.ents.get(ui.other.id) : null;
+  if (o) { const [sx, sy] = cam.toScreen(o.x, o.y); ctx.lineWidth = 2; ctx.strokeStyle = "#ffd166"; ctx.strokeRect(sx + 1, sy + 1, ts - 2, ts - 2); }
+
+  // Selected villagers: bright ring (thicker on the focused one) and their standing order's target.
+  for (const id of ui.sel) {
+    const v = sim.ents.get(id); if (!v || !renderer.isShown(v)) continue;
+    const [sx, sy] = at(v), r = Math.max(6, ts * 0.58);
+    ctx.lineWidth = id === ui.focus ? 3 : 2; ctx.strokeStyle = id === ui.focus ? "#ffe27a" : "#fff";
+    ring(ctx, sx, sy, r);
+    if (id === ui.focus) { ctx.lineWidth = 1; ctx.strokeStyle = "rgba(255,226,122,.35)"; ring(ctx, sx, sy, r + 4); }
+    if (v.order) orderFlag(ctx, cam, v.order, ts);
+  }
+
+  // Transient markers where orders were given.
+  const now = performance.now();
+  ui.markers = ui.markers.filter(m => now - m.t < 1500);
+  for (const m of ui.markers) {
+    const k = (now - m.t) / 1500, [sx, sy] = cam.toScreen(m.x + 0.5, m.y + 0.5);
+    ctx.globalAlpha = 1 - k; ctx.strokeStyle = "#7cc4ff"; ctx.lineWidth = 2;
+    ring(ctx, sx, sy, ts * (0.4 + 0.8 * k) + 3);
+    ctx.font = "bold 13px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    label(ctx, m.label, sx, sy - ts * 0.6 - k * 14 - 4, "#cfeaff");
+    ctx.globalAlpha = 1;
+  }
+
+  if (ui.box) {
+    const b = ui.box;
+    ctx.fillStyle = "rgba(255,226,122,.10)"; ctx.strokeStyle = "rgba(255,226,122,.9)"; ctx.lineWidth = 1;
+    ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0); ctx.strokeRect(b.x0 + .5, b.y0 + .5, b.x1 - b.x0, b.y1 - b.y0);
+  }
+  if (ui.mode !== "select" && game.modes[ui.mode] && game.modes[ui.mode].draw) game.modes[ui.mode].draw(game, ctx);   // S4: build-mode ghosts etc.
+}
+
+function ring(ctx, x, y, r) { ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.stroke(); }
+function label(ctx, text, x, y, color) {
+  ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.strokeText(text, x, y);
+  ctx.fillStyle = color; ctx.fillText(text, x, y);
+}
+
+function orderFlag(ctx, cam, o, ts) {
+  const [sx, sy] = cam.toScreen(o.x + 0.5, o.y + 0.5);
+  ctx.strokeStyle = "rgba(124,196,255,.8)"; ctx.lineWidth = 1.5;
+  if (o.verb !== "move") { ctx.setLineDash([4, 3]); ring(ctx, sx, sy, 10 * ts); ctx.setLineDash([]); }   // the area the order covers (radius 10)
+  ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx, sy - ts * 0.9); ctx.lineTo(sx + ts * 0.6, sy - ts * 0.7); ctx.lineTo(sx, sy - ts * 0.5); ctx.stroke();
+}
+
+function zones(game, ctx, at, ts) {
+  const { sim, cam } = game, z = sim.stock;
+  if (z) {
+    const [ax, ay] = cam.toScreen(z.x0, z.y0), [bx, by] = cam.toScreen(z.x1 + 1, z.y1 + 1);
+    ctx.fillStyle = "rgba(240,220,150,.14)"; ctx.fillRect(ax, ay, bx - ax, by - ay);
+    ctx.strokeStyle = "rgba(240,220,150,.7)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(ax, ay, bx - ax, by - ay); ctx.setLineDash([]);
+    ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "bottom";
+    label(ctx, "STOCKPILE", ax + 3, ay - 2, "#f0dc96");
+  }
+  // beds -> owners, so "who sleeps where" is visible
+  ctx.lineWidth = 1; ctx.strokeStyle = "rgba(143,208,106,.55)";
+  for (const f of sim.ents.ofKind("furniture")) {
+    if (f.f !== "bed" || !f.owner) continue;
+    const o = sim.ents.get(f.owner); if (!o) continue;
+    const [bx, by] = at(f), [ox, oy] = at(o);
+    ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ox, oy); ctx.stroke();
+  }
+}
+
+/** Lines from each selected villager to what their job targets and holds reserved. */
+function jobLines(game, ctx, at, sel, ts) {
+  const { sim, cam } = game;
+  for (const id of sel) {
+    const v = sim.ents.get(id); if (!v || !v.job) continue;
+    const [vx, vy] = at(v), col = (CLASS[v.job.c] || CLASS.leisure).color;
+    const targets = new Set(v.job.res || []); if (v.job.tid) targets.add(v.job.tid);
+    ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.setLineDash([6, 3]);
+    for (const tid of targets) {
+      const e = sim.ents.get(tid); if (!e) continue;
+      const [ex, ey] = at(e);
+      ctx.beginPath(); ctx.moveTo(vx, vy); ctx.lineTo(ex, ey); ctx.stroke();
+      ctx.setLineDash([]); ctx.strokeRect(ex - ts * 0.45, ey - ts * 0.45, ts * 0.9, ts * 0.9); ctx.setLineDash([6, 3]);
+    }
+    ctx.setLineDash([]);
+    const a = v.action; // walking destination
+    if (a && a.type === "Move" && a.tx !== undefined) { const [gx, gy] = cam.toScreen(a.tx + 0.5, a.ty + 0.5); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(gx, gy, 3, 0, TAU); ctx.fill(); }
+  }
+}
+
+/** Air temperature is the same outdoors; enclosed roofed rooms add their own warmth bonus (shaded, labelled). Each villager's ring shows how warm they are. */
+function warmth(game, ctx, at) {
+  const { sim, cam, renderer } = game, w = tempAt(sim.tick);
+  const cold = w < COMFORT;
+  ctx.fillStyle = cold ? "rgba(70,130,255," + Math.min(0.32, (COMFORT - w) * 0.9).toFixed(3) + ")" : "rgba(255,170,60," + Math.min(0.2, (w - COMFORT) * 0.35).toFixed(3) + ")";
+  ctx.fillRect(0, 0, cam.vw, cam.vh);
+  for (const r of sim.rooms.all()) drawRoom(game, ctx, r, "warm");
+  for (const v of sim.ents.ofKind("villager")) {
+    if (!renderer.isShown(v)) continue;
+    const [sx, sy] = at(v), t = v.warm;
+    ctx.beginPath(); ctx.arc(sx, sy, Math.max(7, cam.zoom * 0.7), 0, TAU);
+    ctx.strokeStyle = t < 0.3 ? "#6fe0ff" : t < 0.55 ? "#b9ecff" : "#ffcf70"; ctx.lineWidth = 3; ctx.stroke();
+  }
+  ctx.font = "bold 13px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "top";
+  label(ctx, "Warmth overlay: air " + w.toFixed(2) + (isNight(sim.tick) ? " (night)" : "") + ", comfort " + COMFORT.toFixed(2) + " - ring = how warm each villager is (cyan cold, gold warm); shaded rooms keep the heat in", 340, cam.vh - 58, "#dff3ff");
+}
+
+/** The provisional room: dashed amber outline, the gap marked with "door?". */
+function drawProom(game, ctx) {
+  const { cam, ui, sim } = game, pr = provisionalRoom(sim, ui.other.x, ui.other.y, ui.other.z);
+  if (!pr) return;
+  const ts = cam.zoom;
+  ctx.fillStyle = "rgba(255,200,90,.16)";
+  for (const [x, y] of pr.cells) { const [sx, sy] = cam.toScreen(x, y); ctx.fillRect(sx, sy, ts, ts); }
+  ctx.strokeStyle = "#ffb259"; ctx.lineWidth = 2; ctx.setLineDash([5, 4]);
+  for (const [x, y] of pr.gaps) {
+    const [sx, sy] = cam.toScreen(x, y); ctx.strokeRect(sx + 1, sy + 1, ts - 2, ts - 2);
+    ctx.setLineDash([]); ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "bottom";
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.strokeText(pr.planned ? "door planned" : "needs a door", sx + ts / 2, sy - 2);
+    ctx.fillStyle = "#ffe0a8"; ctx.fillText(pr.planned ? "door planned" : "needs a door", sx + ts / 2, sy - 2);
+    ctx.setLineDash([5, 4]);
+  }
+  ctx.setLineDash([]);
+}

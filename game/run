@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Build the standalone page, then serve this folder (no-cache) on 5714.
+# slime-civ.html is self-contained, so double-clicking it works too.
+set -e
+cd "$(dirname "$0")"
+node tools/build.js
+echo "Slime Civ -> http://localhost:5714/slime-civ.html"
+python3 -c "
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+
+class NoCacheHandler(SimpleHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+        super().end_headers()
+
+HTTPServer(('', 5714), NoCacheHandler).serve_forever()
+"
