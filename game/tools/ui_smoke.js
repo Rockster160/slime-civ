@@ -391,6 +391,7 @@ await G(() => { const g = __game; g.setSim(g.sim); const sim = g.sim; while (sim
 await page.keyboard.press("1"); await page.keyboard.press("Space");
 await page.waitForTimeout(500);
 assert.ok(await page.locator("[data-test=digest]").isVisible(), "digest appears after a long stretch"); ok("while-you-were-away digest appears");
+{ const t = await page.locator("[data-test=digest]").innerText(); assert.ok(/While you were away/.test(t) && (await page.locator("[data-test=digest-row]").count()) > 0 && (await page.locator(".dg-t").first().innerText()).length > 3, "digest has a title and labelled rows: " + t); ok("digest rows are labelled"); }
 await shot(page, "ui-c-digest");
 await page.locator("[data-test=digest-close]").click();
 const target2 = await G(() => { const g = __game; const v = g.sim.ents.ofKind("villager")[0]; g.selectOnly(v.id, true); return v.id; });
