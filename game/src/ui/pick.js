@@ -70,11 +70,12 @@ export function villagersIn(game, x0, y0, x1, y1) {
     for (const d of renderer.drawn) { if (d.pri !== "villager") continue; if (d.r >= ax && d.l <= bx && d.b >= ay && d.t <= by && renderer.isShown(d.e) && !out.includes(d.e)) out.push(d.e); }
     return out;
   }
-  const [ax, ay] = cam.toWorld(Math.min(x0, x1), Math.min(y0, y1)), [bx, by] = cam.toWorld(Math.max(x0, x1), Math.max(y0, y1));
+  const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);   // the flat view: the same rule in screen space, on the DRAWN disc (its glided position when the renderer has one), any overlap counts
+  const rad = Math.max(2, cam.zoom * 0.38);
   for (const v of sim.ents.ofKind("villager")) {
     if (!renderer.isShown(v)) continue;
-    const cx = v.x + 0.5, cy = v.y + 0.5;
-    if (cx >= ax && cx <= bx && cy >= ay && cy <= by) out.push(v);
+    const p = renderer.drawPos ? renderer.drawPos(v) : [v.x + 0.5, v.y + 0.5], [sx, sy] = cam.toScreen(p[0], p[1], v.z);
+    if (sx + rad >= ax && sx - rad <= bx && sy + rad >= ay && sy - rad <= by) out.push(v);
   }
   return out;
 }

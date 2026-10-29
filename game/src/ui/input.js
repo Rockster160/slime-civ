@@ -97,7 +97,15 @@ export function setupInput(game, canvas) {
     if (mode() && mode().down && mode().down(game, e)) ui.press = null;
   };
   canvas.addEventListener("mousedown", press);
-  window.addEventListener("mousedown", (e) => { if (e.target !== canvas && e.target instanceof Element && PASS.has(e.target.id) && !ui.press && !(game.fpv && game.fpv.on)) press(e); });
+  /** A press that lands on the map's own overlays: a pass-through layer or ANY child of one (nameplates, notable chips, pointer chips, labels, floating text). Form controls keep their press. */
+  const LAYERS = "#notables,#plate,#guide,#gauge,#pointers,#whisper,#dock,#fpvhud,#fadecv,#glview";
+  const onMapOverlay = (t) => t instanceof Element && t !== canvas && (PASS.has(t.id) || (!!t.closest(LAYERS) && !t.closest("input,select,textarea,[contenteditable]")));
+  window.addEventListener("mousedown", (e) => {
+    if (!onMapOverlay(e.target) || ui.press || (game.fpv && game.fpv.on)) return;
+    if (ui.mode !== "select" && e.target.id !== "hud" && !PASS.has(e.target.id)) return;          // other modes: a chip is just a chip
+    press(e);
+    if (ui.press && e.target.id !== "hud" && !PASS.has(e.target.id)) ui.press.fromEl = true;      // started on a chip: a plain click stays the chip's, a drag is the map's
+  }, true);
   window.addEventListener("mousemove", (e) => {
     ui.mouse = { x: e.clientX, y: e.clientY, over: e.target === canvas };
     let p = ui.press;
@@ -117,6 +125,11 @@ export function setupInput(game, canvas) {
   window.addEventListener("mouseup", (e) => {
     const p = ui.press; ui.press = null; canvas.classList.remove("dragging");
     if (!p || p.btn !== e.button) { ui.box = null; return; }
+    if (p.fromEl) {
+      if (!p.moved) return;                                                        // a click on a chip: the chip's own handler does the rest
+      const eat = (c) => { c.stopPropagation(); c.preventDefault(); };                                // a drag that began on a chip is not a click on it
+      window.addEventListener("click", eat, true); setTimeout(() => window.removeEventListener("click", eat, true), 0);
+    }
     if (mode() && mode().up && mode().up(game, e, p)) { ui.box = null; return; }
     if (p.btn === 0) {
       if (ui.box) {
