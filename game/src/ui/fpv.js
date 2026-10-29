@@ -13,6 +13,8 @@ import { pickTarget } from "./fpvpick.js";
 import { esc, remember } from "./dom.js";
 import { svg as iconSvg } from "./icons.js";
 import { ring as kitRing, meter } from "./kit.js";
+import { TICKS_PER_SEC } from "../sim/clock.js";
+import { stepNeed } from "../sim/tasks.js";
 import { describe, blockerText, itemName, shortBlocker, JOB } from "./text.js";
 import { doingWord, faunaWord } from "./labels.js";
 
@@ -160,16 +162,45 @@ export function createFpv(game) {
   function ring(label, v, soft, crit, ic, extra = "") {
     return `<span class="rc">` + kitRing({ icon: IC[ic] || ic, v, soft, crit, px: 30, tip: `${label} ${Math.round(v * 100)}%`, cls: extra }) + `<span class="cap">${RING_CAP[label] || label}</span></span>`;
   }
-  // ---- 6.19c: a real progress ring. The sim keeps a step's work done (`action.p`) but not its length, so the length per verb is learned from the largest value seen before it resets (a step's own `dur` is used when it has one); until then the ring spins ----
-  const durs = new Map(); let wk = { a: null, si: -1, peak: 0 };
-  function workFrac(v) {
-    const a = v.action; if (!a || a.type !== "Task" || a.ph !== 1) { wk = { a: null, si: -1, peak: 0 }; return -1; }
-    const s = a.steps[a.si]; if (!s) return -1;
-    if (wk.a === a && wk.si === a.si) { if (a.p < wk.peak * 0.5) { durs.set(s.v, Math.max(durs.get(s.v) || 0, wk.peak)); wk.peak = 0; } wk.peak = Math.max(wk.peak, a.p); }
-    else { if (wk.a && wk.peak > 0 && wk.stepV) durs.set(wk.stepV, Math.max(durs.get(wk.stepV) || 0, wk.peak)); wk = { a, si: a.si, peak: a.p, stepV: s.v }; }
-    wk.stepV = s.v;
-    const dur = s.dur || durs.get(s.v) || 0;
-    return dur > 0 ? Math.max(0, Math.min(1, a.p / dur)) : -1;
+  // ---- 6.19c/6.20: a true countdown per resource. The sim names a step's real length (tasks.js stepNeed: work needed per unit and work per tick, skill, tool and inspiration included), so the ring fills to the next unit,
+  // the seconds left follow the game speed, a count shows units landed out of the total, and a "+n item" pops when one lands. The spinner is only the fallback when a step has no known length ----
+  let wk = null, lastWork = { verb: "", tick: -999 };
+  function workState(sim, v) {
+    const a = v.action;
+    if (!a || a.type !== "Task" || a.ph !== 1) { const old = wk; wk = null; return old && old.frac > 0.8 ? { landed: old } : null; }
+    const st = stepNeed(sim, v);
+    if (st) lastWork = { verb: st.verb, tick: sim.tick };
+    if (!st || !(st.need > 0) || !(st.rate > 0)) { wk = null; return { frac: -1 }; }
+    let landed = null;
+    if (!wk || wk.a !== a || wk.si !== a.si) { landed = wk && wk.frac > 0.8 ? wk : null; wk = { a, si: a.si, done: 0, last: 0, frac: 0 }; }
+    else if (a.p < wk.last - 1e-6) { wk.done++; landed = { ...wk, item: wk.st.item, n: wk.st.n }; }
+    wk.last = a.p; wk.st = st; wk.frac = Math.max(0, Math.min(1, a.p / st.need));
+    wk.total = wk.done + st.left;
+    wk.ticks = Math.max(0, (st.need - a.p) / st.rate);
+    return { ...wk, landed, item: st.item, n: st.n, verb: st.verb };
+  }
+  function workIcon(cv, w) {
+    const key = w.item || w.verb || "";
+    if (cv.dataset.k === key) return; cv.dataset.k = key;
+    const c = cv.getContext("2d"); c.clearRect(0, 0, 32, 32);
+    if (w.item) { c.save(); c.setTransform(2, 0, 0, 2, -16, -37); paintItem(c, w.item, { n: 1 }); c.restore(); }
+  }
+  function workHud(sim, v, px, py) {
+    const w = workState(sim, v);
+    if (w && w.landed && w.landed.st) { const l = w.landed, nm = itemName(l.st.item || ""); if (l.st.item) pop("+" + (l.st.n || 1) + " " + nm, "", "good", px, py - 64); }
+    const box = chip.querySelector(".fv-work"); if (!box || !w || w.frac === undefined) return;
+    const fg = box.querySelector(".fg"), C = 47.12, sec = chip.querySelector(".wsec"), cnt = chip.querySelector(".wcnt"), cv = box.querySelector(".wic"), vi = chip.querySelector(".wvi");
+    const known = w.frac >= 0;
+    box.classList.toggle("ind", !known);
+    if (!known) { fg.style.strokeDasharray = "14 " + C; sec.textContent = ""; cnt.textContent = ""; return; }
+    fg.style.strokeDasharray = (w.frac * C).toFixed(1) + " " + C;
+    workIcon(cv, w); cv.style.display = w.item ? "" : "none";
+    const vk = w.item ? "" : w.verb; if (vi.dataset.k !== vk) { vi.dataset.k = vk; vi.innerHTML = vk ? svg(({ dig: "dig", chop: "chop", harvest: "forage", pick: "forage" })[vk] || "take") : ""; }
+    const paused = game.state.paused, sp = game.effectiveSpeed();
+    const secs = w.ticks / (TICKS_PER_SEC * (sp > 0 && isFinite(sp) ? sp : 1));
+    box.classList.toggle("hold", !!paused);
+    sec.textContent = sp > 8 && !paused ? "" : paused ? "II" : secs < 9.5 ? Math.ceil(secs - 1e-6) + "s" : Math.round(secs) + "s";
+    const ct = w.total > 1 ? w.done + "/" + w.total : ""; if (cnt.textContent !== ct) cnt.textContent = ct;
   }
   // ---- 6.19c: what the others nearby are doing, as small floating labels (UI_SPEC §12.2): slimes and creatures within 6 cells, in front of the eye ----
   const TAG_R = 6, tagEls = new Map();
@@ -209,7 +240,7 @@ export function createFpv(game) {
     if (prev.hunger !== null && v.hunger > prev.hunger + 0.02) pop("+food", "food", "good", 70, H - 110);
     prev.hunger = v.hunger;
     const ck = v.carry ? v.carry.item + ":" + v.carry.n : "";
-    if (ck !== prev.carry) { const was = prev.carry.split(":"); if (v.carry && (was[0] !== v.carry.item || Number(was[1]) < v.carry.n)) pop("+" + (was[0] === v.carry.item ? v.carry.n - Number(was[1]) : v.carry.n) + " " + itemName(v.carry.item), "haul", "good", W / 2, H - 100); prev.carry = ck; }
+    if (ck !== prev.carry) { const was = prev.carry.split(":"); if (v.carry && !(sim.tick - lastWork.tick < 30 && /^(pick|harvest|cut|root)$/.test(lastWork.verb)) && (was[0] !== v.carry.item || Number(was[1]) < v.carry.n)) pop("+" + (was[0] === v.carry.item ? v.carry.n - Number(was[1]) : v.carry.n) + " " + itemName(v.carry.item), "haul", "good", W / 2, H - 100); prev.carry = ck; }
     const fb = v.poss ? v.poss.fb : null;
     if (fb && fb[1] !== prev.fb && sim.tick - fb[1] < 40 && fb[0]) { prev.fb = fb[1]; pop(shortBlocker(fb[0]), "blocked", "bad", W / 2, H / 2 + 40); }
     for (const e of sim.ents.ofKind("fauna")) {                    // hits and misses on creatures near the guided villager: a number or "miss", a flash on the chip, a nudge of the view
@@ -238,13 +269,19 @@ export function createFpv(game) {
       const what = T.ent ? describe(sim, T.ent).replace(/ - .*$/, "") : (MAT[T.mat] ? MAT[T.mat].name : "rock");
       const key = game.keymap.label("use").split(" / ")[0];
       const nm = what.split(" ").slice(0, 2).join(" "), fa = T.ent && T.ent.kind === "fauna" ? T.ent : null;      // §12.2: the verb plus the target's name, and a health bar on a creature
-      const html = `${svg(far ? "fear" : ic)}<kbd>${esc(key)}</kbd><b>${esc(label)}</b><span>${esc(nm)}</span>${fa ? meter(fa.hp / fa.mhp, { color: "var(--danger)", tip: `${Math.max(0, Math.round(fa.hp))}/${fa.mhp}` }) : ""}${v.action && v.action.type === "Task" && v.action.ph === 1 ? `<svg class="fv-prog" viewBox="0 0 20 20" width="20" height="20" aria-hidden="true"><circle class="bg" cx="10" cy="10" r="7.5"/><circle class="fg" cx="10" cy="10" r="7.5" transform="rotate(-90 10 10)"/></svg>` : ""}<span class="sr">${esc(what)}</span>`;
+      const html = `${svg(far ? "fear" : ic)}<kbd>${esc(key)}</kbd><b>${esc(label)}</b><span>${esc(nm)}</span>${fa ? meter(fa.hp / fa.mhp, { color: "var(--danger)", tip: `${Math.max(0, Math.round(fa.hp))}/${fa.mhp}` }) : ""}${v.action && v.action.type === "Task" && v.action.ph === 1 ? `<span class="fv-work"><svg class="fv-prog" viewBox="0 0 20 20" width="42" height="42" aria-hidden="true"><circle class="bg" cx="10" cy="10" r="8"/><circle class="fg" cx="10" cy="10" r="8" transform="rotate(-90 10 10)"/></svg><canvas class="wic" width="32" height="32"></canvas><span class="wvi"></span></span><span class="wcnt"></span><span class="wsec"></span>` : ""}<span class="sr">${esc(what)}</span>`;
       if (chip.dataset.h !== html) { chip.dataset.h = html; chip.innerHTML = html; }
       chip.classList.toggle("far", far);
-      const fg = chip.querySelector(".fv-prog .fg");
-      if (fg) { const f = workFrac(v), C = 47.12; fg.parentNode.classList.toggle("ind", f < 0); if (f >= 0) fg.style.strokeDasharray = (f * C).toFixed(1) + " " + C; else fg.style.strokeDasharray = "14 " + C; }
       const px = p ? Math.max(70, Math.min(cam.vw - 70, p[0])) : cam.vw / 2, py = p ? Math.max(60, Math.min(cam.vh * 0.6, p[1] - 26)) : cam.vh / 2 + 40;      // (kept above the toasts at the foot of the screen)
       chip.style.display = ""; chip.style.transform = `translate(${px.toFixed(0)}px,${py.toFixed(0)}px) translate(-50%,-100%)`;
+      workHud(sim, v, px, py);
+    } else if (v.action && v.action.type === "Task" && v.action.ph === 1 && !ui.help) {                  // no target on screen: the countdown stays, pinned below the crosshair
+      const html = `<span class="fv-work"><svg class="fv-prog" viewBox="0 0 20 20" width="42" height="42" aria-hidden="true"><circle class="bg" cx="10" cy="10" r="8"/><circle class="fg" cx="10" cy="10" r="8" transform="rotate(-90 10 10)"/></svg><canvas class="wic" width="32" height="32"></canvas><span class="wvi"></span></span><span class="wcnt"></span><span class="wsec"></span>`;
+      if (chip.dataset.h !== html) { chip.dataset.h = html; chip.innerHTML = html; }
+      chip.classList.remove("far");
+      const px = cam.vw / 2, py = cam.vh / 2 + 90;
+      chip.style.display = ""; chip.style.transform = `translate(${px.toFixed(0)}px,${py.toFixed(0)}px) translate(-50%,-100%)`;
+      workHud(sim, v, px, py);
     } else chip.style.display = "none";
     feedback(sim, v, now);
     tags(sim, v);

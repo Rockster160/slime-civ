@@ -295,6 +295,40 @@ try {
     ok("the inspector's Memories sub: " + text.split("\n").filter(Boolean).join(" | "));
     await mp.close();
   }
+  // ---- drag-select under real play: the game RUNNING at 3x, slimes walking, real mouse drags round a group, one starting over a child of a pass-through overlay; both map renderers ----
+  for (const flat of [false, true]) {
+    const dp = await mk("?tools=all&seed=1&spawn=64,64" + (flat ? "&flat=1" : ""));
+    await dp.evaluate(() => { const g = __game; g.setSpeed(3); g.cam.zoom = 26; g.ui.follow = 0; g.closeBook && g.closeBook(); g.ui.digest = null;
+      window.__scr = (e) => { const r = g.renderer; if (!g.cam.oblique || !r.drawn) { const p = r.drawPos ? r.drawPos(e) : [e.x + .5, e.y + .5], [sx, sy] = g.cam.toScreen(p[0], p[1], e.z), rad = Math.max(2, g.cam.zoom * .38); return { l: sx - rad, r: sx + rad, t: sy - rad, b: sy + rad }; } const d = r.drawn.find(d => d.pri === "villager" && d.e === e); return d && { l: d.l, r: d.r, t: d.t, b: d.b }; };
+      window.addEventListener("mouseup", (ev) => { const b = g.ui.box; window.__exp = null; if (!b) return; const x0 = Math.min(b.x0, ev.clientX), x1 = Math.max(b.x0, ev.clientX), y0 = Math.min(b.y0, ev.clientY), y1 = Math.max(b.y0, ev.clientY); window.__exp = g.sim.ents.ofKind("villager").filter(v => { const s = g.renderer.isShown(v) && __scr(v); return s && s.r >= x0 && s.l <= x1 && s.b >= y0 && s.t <= y1; }).map(v => v.id); }, true); });
+    await dp.waitForTimeout(600);
+    let good = 0, valid = 0, overGood = 0, overValid = 0;
+    for (let i = 0; i < 12; i++) {
+      const over = i % 2 === 1;
+      const info = await dp.evaluate((over) => { const g = __game; g.clearSelection(); return new Promise(res => setTimeout(() => {
+        const rs = g.sim.ents.ofKind("villager").filter(v => g.renderer.isShown(v)).map(v => __scr(v)).filter(s => s && s.l > 320 && s.r < 940 && s.t > 110 && s.b < 620);
+        if (!rs.length) return res(null);
+        const c = rs[0], grp = rs.slice().sort((a, b) => Math.hypot(a.l - c.l, a.t - c.t) - Math.hypot(b.l - c.l, b.t - c.t)).slice(0, 3);
+        const l = Math.min(...grp.map(o => o.l)) - 8, r = Math.max(...grp.map(o => o.r)) + 8, t = Math.min(...grp.map(o => o.t)) - 8, b = Math.max(...grp.map(o => o.b)) + 8;
+        if (over) { const d = document.createElement("span"); d.className = "probe-ov"; d.style.cssText = `position:fixed;left:${l - 40}px;top:${t - 40}px;width:60px;height:60px;pointer-events:auto;z-index:9`; document.getElementById("notables").appendChild(d); }
+        res({ l, r, t, b });
+      }, 50)); }, over);
+      if (!info) continue;
+      const x0 = info.l - (over ? 20 : 0), y0 = info.t - (over ? 20 : 0);
+      await dp.mouse.move(x0, y0); await dp.mouse.down();
+      for (let k = 1; k <= 6; k++) { await dp.mouse.move(x0 + (info.r - x0) * k / 6, y0 + (info.b - y0) * k / 6); await dp.waitForTimeout(25); }
+      await dp.mouse.up();
+      const res = await dp.evaluate(() => { document.querySelectorAll(".probe-ov").forEach(e => e.remove()); return { exp: window.__exp, sel: __game.ui.sel.slice(), paused: __game.state.paused }; });
+      assert.equal(res.paused, false, "the game kept running through the drag");
+      if (!res.exp || !res.exp.length) continue;                                   // (the group walked out of the box before the button came up: nothing to judge)
+      valid++; const hit = res.exp.every(id => res.sel.includes(id)); if (hit) good++;
+      if (over) { overValid++; if (hit) overGood++; }
+    }
+    assert.ok(valid >= 6 && good === valid, (flat ? "flat" : "angled") + " view: every drag at 3x with the game running selects every slime its box covers: " + good + "/" + valid);
+    assert.ok(overValid >= 3 && overGood === overValid, (flat ? "flat" : "angled") + " view: a drag that starts over a child of a pass-through overlay works: " + overGood + "/" + overValid);
+    ok((flat ? "flat" : "angled") + " view: live drag-select " + good + "/" + valid + " (" + overGood + "/" + overValid + " starting over an overlay child)");
+    await dp.close();
+  }
 } finally { await browser.close(); }
 if (errors.length) { console.log("ERRORS:\n" + errors.join("\n")); process.exit(1); }
 console.log("phase 7 smoke passed (" + n + " checks), no console errors; screenshots in game/tmp/ui-mem-inspector.png ui-720-*.png ui-721-*.png ui-722-*.png ui-723-*.png");

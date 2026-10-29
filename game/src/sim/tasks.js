@@ -598,6 +598,26 @@ function foodSource(sim, v, s) {
   return best ? { t: "stock", e: best } : null;
 }
 
+/**
+ * The real length of the current Task step (pure, read-only; the first-person HUD's countdown). -> null when the step is not working, else
+ * {verb, need, rate, left, item, n}: work needed per unit (`need`, compared with action.p), work per tick (`rate`, with skill, tool, mood and inspiration),
+ * units still to come in this step (`left`: berries on the bush, ripe crop in the plot; 1 for a one-shot) and what a unit gives (`item`, `n`; item "" if none).
+ */
+export function stepNeed(sim, v, step) {
+  const a = v.action, s = step || (a && a.steps && a.steps[a.si]);
+  if (!s) return null;
+  const vb = VERBS[s.v]; if (!vb) return null;
+  const out = { verb: s.v, need: s.dur || vb.dur, rate: rate(sim, v, s.v, s.sk || vb.skill), left: 1, item: "", n: 0 };
+  const p = s.tid ? sim.ents.get(s.tid) : null;
+  if (s.v === "pick" && p) { out.left = Math.max(1, Math.min(p.yield, carryRoom(v, "berry"))); out.item = "berry"; out.n = 1; }
+  else if (s.v === "harvest" && p && p.cr) { out.left = Math.max(1, Math.min(p.yl, carryRoom(v, p.cr))); out.item = p.cr; out.n = 1; }
+  else if (s.v === "chop") { out.item = "log"; out.n = 2; }
+  else if (s.v === "cut") { out.item = "grass"; out.n = 1; }
+  else if (s.v === "root") { out.item = "berry"; out.n = 3; }
+  else if (s.v === "dig" && s.cx !== undefined) { const info = DIG[sim.world.mat(s.cx, s.cy, s.cz)]; if (info) { out.item = info.item; out.n = info.n; } }
+  return out;
+}
+
 // ---- the runner ------------------------------------------------------------
 
 ACTIONS.Task = {

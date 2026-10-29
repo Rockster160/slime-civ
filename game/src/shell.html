@@ -322,6 +322,9 @@
   .fv-rings { bottom:34px; }
   .fv-chip { font-size:14px; padding:4px 11px 4px 9px; background:rgba(14,18,25,.92); border:1px solid var(--line-hi, #44556a); } .fv-chip b { font-weight:600; } .fv-chip span { color:var(--tx); }
   .fv-chip .fv-prog { width:20px; height:20px; border:0; border-radius:0; animation:none; flex:none; } .fv-chip .fv-prog circle { fill:none; stroke-width:3; } .fv-chip .fv-prog .bg { stroke:var(--s3, #242c37); } .fv-chip .fv-prog .fg { stroke:var(--sel); stroke-linecap:round; stroke-dasharray:0 47.12; transition:stroke-dasharray .12s linear; }
+  .fv-chip .fv-work { position:relative; width:42px; height:42px; flex:none; margin:-12px 0; } .fv-chip .fv-work .fv-prog { width:42px; height:42px; } .fv-chip .fv-work .wic { position:absolute; left:7px; top:7px; width:28px; height:28px; } .fv-chip .fv-work .wvi { position:absolute; left:13px; top:13px; } .fv-chip .fv-work.hold .fg { stroke:var(--tx3); }
+  .fv-chip .wcnt { color:var(--tx); font-weight:600; font-variant-numeric:tabular-nums; } .fv-chip .wsec { color:var(--tx2); min-width:2.2em; font-variant-numeric:tabular-nums; }
+  .fv-chip .fv-work.ind .fv-prog { animation:spin .9s linear infinite; }
   .fv-chip .fv-prog.ind { animation:spin .9s linear infinite; } body.calm .fv-chip .fv-prog.ind { animation:none; }
   .fv-pop { padding:2px 9px 2px 7px; background:rgba(10,14,20,.72); border-radius:12px; font-size:17px; } .fv-pop.hit { font-size:24px; border:1px solid var(--danger); } .fv-pop.miss { color:var(--tx); font-size:18px; } .fv-pop.good { border:1px solid var(--ok); } .fv-pop.bad { border:1px solid var(--warm); }
   .fv-tags { position:absolute; inset:0; overflow:hidden; } .fv-tag { position:absolute; left:0; top:0; padding:1px 7px; font-size:12px; font-weight:600; background:rgba(10,14,20,.66); border-radius:9px; white-space:nowrap; color:var(--tx); } .fv-tag.foe { color:var(--danger); border:1px solid var(--danger); } .fv-tag.beast { color:var(--food); }
