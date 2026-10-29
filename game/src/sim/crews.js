@@ -22,7 +22,7 @@ export const CHORE_LABEL = { farm: "farming", pen: "tending the pens", mine: "mi
 export const CREW_PREF = 20;           // points of preference for a candidate that matches the crew's task (a skill preference is 10; the within-class clamp is 45)
 export const MAX_CREWS = 24;
 export const NAME_MAX = 24;
-const ORDER_VERBS = ["forage", "chop", "gather", "haul", "move", "dig", "hunt", "capture"];
+const ORDER_VERBS = ["forage", "chop", "gather", "haul", "move", "dig", "hunt", "clear", "capture"];
 
 export function newCrews() { return { n: 0, list: [] }; }
 export const crewOf = (sim, v) => (v.cr ? sim.crews.list.find(c => c.id === v.cr) || null : null);

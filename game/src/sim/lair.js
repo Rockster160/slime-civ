@@ -2,11 +2,12 @@
 //
 // Restricted cells are what a possessed villager reaches and a delegated one will not (blocker UNSAFE):
 //   territory  the lair chamber and its patrol ground (a box round the cave centre, a few levels tall)
+//   dungeon    7.21: the air of a labyrinth (dungeon.js; F.DUNGEON). Delving is a decision: possession, or an order the player gives (a disarm order is let in by jobs.js)
 //   unmapped   a cave cell nobody has seen yet (an unseen hall is a risk nobody has judged)
 //   unstable   S12: a cell under a cracking roof (underground.js)
 //   badair     S12: a seen cell of foul air
 // Derived from the cave in world.geo (a pure function of the seed) and the fog, so nothing here is saved.
-import { World } from "./world.js";
+import { World, F } from "./world.js";
 import { isSeen } from "./seen.js";
 import { hazardAt } from "./underground.js";
 
@@ -45,6 +46,7 @@ function caveSet(sim) {
 /** "" if a villager may go there on their own, else why not: "territory" | "unmapped" | "unstable" | "badair". */
 export function restricted(sim, x, y, z) {
   if (inTerritory(sim, x, y, z)) return "territory";
+  if (sim.world.flags(x, y, z) & F.DUNGEON) return "dungeon";               // 7.21: a labyrinth is for the player to send people into (possession, an order), never for the village to wander into
   if (caveSet(sim).has(World.idx(x, y, z)) && !isSeen(sim, x, y, z)) return "unmapped";
   return hazardAt(sim, x, y, z);
 }

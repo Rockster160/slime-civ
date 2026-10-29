@@ -39,8 +39,10 @@ import { hearths, fireWanted, FUEL_LOW, FUEL_ITEMS } from "./fire.js";
 import { can, pressure } from "./knowledge.js";
 import { steadfast } from "./possess.js";
 import { restricted, unsafeTask } from "./lair.js";
+import { seenTrapNear } from "./traps.js";
 import { FAUNA, FEAR_AT, FEAR_STOP, threatOf, faunaOf, near1 } from "./fauna.js";
 import { expOf, looseTarget } from "./expedition.js";
+import { delving } from "./delve.js";
 import { crewOf, crewBonus } from "./crews.js";
 import { maxHp, fitness, ageDays } from "./villager.js";
 import { genFarm, genPens, captureMk } from "./farmjobs.js";
@@ -1244,7 +1246,7 @@ function genDemand(ctx) {
   if (b.dem.rack > 0) buildChain(ctx, "demand", "rack", { urg: b.dem.rack, cap: 1, grp: "rack" });
 }
 
-const ORDER_SKILL = { forage: null, chop: null, gather: null, haul: null, move: null, dig: "dig", hunt: null, capture: null, scout: null };
+const ORDER_SKILL = { forage: null, chop: null, gather: null, haul: null, move: null, dig: "dig", hunt: null, clear: null, capture: null, scout: null, disarm: "craft" };
 const ORDER_SPECIES = { forage: "berry", chop: "tree", gather: "tuft" };
 
 /** Targets of an area order: its named entity if still valid, else the nearest valid one within ORDER_AREA. */
@@ -1265,6 +1267,8 @@ function orderTarget(ctx, o) {
   };
   if (o.verb === "hunt") {
     for (const f of faunaOf(sim)) if (FAUNA[f.sp].huntable && !f.tame && f.st !== "held") consider(f);
+  } else if (o.verb === "clear") {                                 // 7.22: spear crews clear a den of its monsters (never the core guardian: that fight is for a guided villager)
+    for (const f of faunaOf(sim)) if (FAUNA[f.sp].mon && !FAUNA[f.sp].boss) consider(f);
   } else if (o.verb === "capture") {
     for (const f of faunaOf(sim)) if (FAUNA[f.sp].tamable && !f.tame && (f.st !== "held" || f.by === v.id)) consider(f);     // (the one I am carrying stays my target until it is let go in the pen)
   } else if (o.verb === "haul") {
@@ -1312,6 +1316,26 @@ function genDig(ctx, base) {
 }
 const DIG_BAD = 10000000;           // "bad target" ids for cells live above any entity id
 
+/** 7.21 disarm order: stand beside the spotted trap at the ordered cell and defuse it (a craft job). The order ends when the trap is gone. */
+function genDisarm(ctx, base) {
+  const { sim, v } = ctx, o = v.order, w = sim.world;
+  const tr = seenTrapNear(sim, o.x, o.y, o.z);
+  if (!tr) { if (!ctx.dry) { v.order = null; ctx.b.ep++; } return; }
+  const c = { ...base, kind: "disarm", key: "disarm:" + World.idx(tr.x, tr.y, tr.z), d: dist3(v.x, v.y, v.z, tr.x, tr.y, tr.z) };
+  c.mk = () => {
+    let stand = null, sd = 1e9;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const x = tr.x + dx, y = tr.y + dy;
+      if (!w.isWalkable(x, y, tr.z)) continue;
+      const d = dist3(v.x, v.y, v.z, x, y, tr.z);
+      if (d < sd) { sd = d; stand = { x, y, z: tr.z }; }
+    }
+    if (!stand || !reach(ctx, stand)) return { blocker: "NO_PATH" };
+    return { task: Task("disarm", [{ v: "disarm", tx: tr.x, ty: tr.y, tz: tr.z, ...stand }]), res: [] };
+  };
+  add(ctx, c);
+}
+
 /** S17 scout: walk toward unexplored land in hops of SCOUT_HOP cells (a path to a goal 150 cells away would only read BUDGET); the order ends when they stand there. */
 const SCOUT_HOP = 20;
 function genScout(ctx, base) {
@@ -1337,6 +1361,7 @@ function genOrder(ctx) {
   const base = { cls: "order", urg: clamp((t - o.t0) / 900, 0, 1), grp: "order", skill: ORDER_SKILL[o.verb] };
   if (o.verb === "dig") { genDig(ctx, base); return; }
   if (o.verb === "scout") { genScout(ctx, base); return; }
+  if (o.verb === "disarm") { genDisarm(ctx, base); return; }
   if (o.verb === "move") {
     const c = { ...base, kind: "goto", key: "goto:0", d: dist3(v.x, v.y, v.z, o.x, o.y, o.z) };
     c.mk = () => {
@@ -1347,10 +1372,10 @@ function genOrder(ctx) {
     add(ctx, c);
     return;
   }
-  const kind = o.verb === "forage" ? "forage" : o.verb === "chop" ? "chop" : o.verb === "gather" ? "cut" : o.verb === "hunt" ? "hunt" : o.verb === "capture" ? "capture" : "haul";
+  const kind = o.verb === "forage" ? "forage" : o.verb === "chop" ? "chop" : o.verb === "gather" ? "cut" : o.verb === "hunt" || o.verb === "clear" ? "hunt" : o.verb === "capture" ? "capture" : "haul";
   const { e, any, rsv } = orderTarget(ctx, o);
   const c = { ...base, kind };
-  const carryOk = o.verb === "chop" ? !v.carry : o.verb === "haul" || o.verb === "hunt" || o.verb === "capture" ? true : carryRoom(v, ORDER_SPECIES[o.verb] === "berry" ? "berry" : "grass") > 0;
+  const carryOk = o.verb === "chop" ? !v.carry : o.verb === "haul" || o.verb === "hunt" || o.verb === "clear" || o.verb === "capture" ? true : carryRoom(v, ORDER_SPECIES[o.verb] === "berry" ? "berry" : "grass") > 0;
   if (!e) {
     if (!any && (o.verb !== "forage" || berrySeason(t))) { v.order = null; ctx.b.ep++; return; }     // area exhausted: order complete
     c.blocker = o.verb === "forage" && !berrySeason(t) ? "NO_SEASON" : rsv ? "RESERVED" : "NO_TARGET";
@@ -1359,7 +1384,11 @@ function genOrder(ctx) {
   else {
     c.tid = e.id; c.d = dTo(ctx, e);
     if (o.verb === "hunt") c.mk = huntMk(ctx, e);
-    else if (o.verb === "capture") c.mk = captureMk(ctx, HELP, e);
+    else if (o.verb === "clear") {
+      c.clr = 1;
+      const hm = huntMk(ctx, e);
+      c.mk = () => ctx.v.eq && ctx.v.eq.item === "copper_spear" || ctx.sv.stock.copper_spear > 0 ? hm() : { blocker: "NO_MATERIAL" };      // a den is cleared with spears, never bare-handed
+    } else if (o.verb === "capture") c.mk = captureMk(ctx, HELP, e);
     else c.mk = oneStep(kind, o.verb === "forage" ? "pick" : o.verb === "chop" ? "chop" : o.verb === "gather" ? "cut" : "pickup", e);
   }
   add(ctx, c);
@@ -1428,6 +1457,7 @@ export function plan(sim, v, replan, probe, dry) {
     let r = c.mk(ctx);
     if (r.task && !steadfast(v)) {                                   // S8: autonomy refuses the thornback's ground and unmapped cave (a guided villager does not, K7)
       let why = unsafeTask(sim, r.task);
+      if ((c.kind === "disarm" || c.clr || delving(sim, v)) && why === "dungeon") why = "";             // 7.21: the one job the player can send into a labyrinth by order; 7.23: and a delve party goes where its orders say
       if (c.kind === "build_site") {                                    // S12: shoring a cracking roof and fitting a vent in foul air are the only jobs allowed there
         const st = sim.ents.get(c.tid);
         if (st && ((why === "unstable" && st.w === "wall" && st.m === "support") || (why === "badair" && st.w === "vent"))) why = "";

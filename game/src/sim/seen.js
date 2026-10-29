@@ -19,7 +19,7 @@ export const SIGHT = 3;
 export const SURFACE_SIGHT = 14;     // S16: the surface is "seen" this far (a disc) round where a villager has been; the rest of the land is drawn dim as unexplored
 export const SPAWN_SIGHT = 40;       // ... and round the spawn from the start
 const ORE = new Uint8Array(256);
-for (const m of [M.FLINT, M.MALACHITE, M.CLAY, M.IRONORE, M.COAL, M.SALT, M.PEAT, M.HERB]) ORE[m] = 1;
+for (const m of [M.FLINT, M.MALACHITE, M.CLAY, M.IRONORE, M.COAL, M.SALT, M.PEAT, M.HERB, M.GEM, M.CRYSTAL, M.COREORE, M.CORE]) ORE[m] = 1;
 export const isOre = (m) => ORE[m] === 1;
 const CELLS = 16 * 16 * D;
 
@@ -117,7 +117,7 @@ export function watch(sim, v) {
   const old = v.lk === undefined || v.lk === null ? null : World.xyz(v.lk);
   v.lk = i;
   if (!old || (old[0] >> 2) !== (v.x >> 2) || (old[1] >> 2) !== (v.y >> 2)) revealDisc(sim, v.x, v.y, SURFACE_SIGHT);     // S16: the land round where they have been becomes known
-  look(sim, v.x, v.y, v.z, sightAt(sim, v.x, v.y, v.z, SIGHT));         // S12: in torchlight a tunnel is seen further
+  look(sim, v.x, v.y, v.z, sightAt(sim, v.x, v.y, v.z, SIGHT, v));         // S12: in torchlight a tunnel is seen further
 }
 
 /** The edge of what is known (S8's "restricted cells"): an unseen cell with a seen 4-neighbour at the same level. */

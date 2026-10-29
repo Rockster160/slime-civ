@@ -26,7 +26,11 @@ export const M = { AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5,
   // S12: a timber support post (built) and rubble (what a cave-in leaves; digs to stone) (append-only)
   SUPPORT: 25, RUBBLE: 26,
   // S14: world depth. Salt crust (highland and marsh licks), peat (the marsh surface), marsh herb (append-only)
-  SALT: 27, PEAT: 28, HERB: 29 };
+  SALT: 27, PEAT: 28, HERB: 29,
+  // 7.20: magic cores. Valuables that grow with mana (gem, crystal, core-touched ore) and the core itself (append-only)
+  GEM: 30, CRYSTAL: 31, COREORE: 32, CORE: 33,
+  // 7.21: dungeons. Ancient stonework (walls, floors and ceilings of a labyrinth: iron tools only, slowly) and a sealed treasure cache (append-only)
+  DWALL: 34, CACHE: 35 };
 // ins = insulation for the warmth model (GDD §11.9: wood 0.4-0.6, dry stone and soil 0.6; thatch is a good roof).
 export const MAT = [
   { name: "air",   solid: false, color: [0, 0, 0], ins: 0 },
@@ -60,6 +64,12 @@ export const MAT = [
   { name: "salt crust",  solid: true, color: [232, 232, 226], ins: 0.5 },        // S14: a salt lick or deposit (highland and marsh)
   { name: "peat",        solid: true, color: [92, 66, 46], ins: 0.5 },           // S14: dark wet marsh turf that dries into fuel
   { name: "marsh herb",  solid: true, color: [112, 150, 62], ins: 0.5 },         // S14: a bed of bitter marsh herb
+  { name: "gemstone",    solid: true, color: [226, 76, 150], ins: 0.6 },         // 7.20: bright pink gems in the rock near a core
+  { name: "crystal",     solid: true, color: [150, 196, 255], ins: 0.6 },        // 7.20: pale blue crystal clusters (and the outcrops over shallow cores)
+  { name: "core-touched ore", solid: true, color: [128, 84, 214], ins: 0.6 },     // 7.20: violet-veined ore, only deep in a core's field
+  { name: "magic core",  solid: true, color: [214, 140, 255], ins: 0.6 },        // 7.20: the heart of a core field; not diggable until 7.23
+  { name: "ancient stonework", solid: true, color: [118, 108, 100], ins: 0.7 },   // 7.21: the walls of a labyrinth; resists digging (iron tools only, 1/6 speed)
+  { name: "sealed cache", solid: true, color: [224, 178, 60], ins: 0.6 },          // 7.21: a treasure cache set in a vault; digging it open spills its loot
 ];
 const SOLID = new Uint8Array(256);
 MAT.forEach((m, i) => { SOLID[i] = m.solid ? 1 : 0; });
@@ -74,6 +84,7 @@ export const F = {
   NATURAL: 16,   // S16: air of a natural cave (its own rock vault holds; cave-in and bad air treat it as the cave)
   GAS: 32,       // S16: rock that releases gas when dug into (a bad-air pocket)
   NOGROW: 64,    // S16: nothing grows here (the cave mouth, a ridge cell, a stain): terrain.js sets it, flora skips it
+  DUNGEON: 128,  // 7.21: air inside a labyrinth (dungeon.js): autonomous villagers keep out (lair.js restricted), traps live here
 };
 
 /** Reads cells through a chunk source. World reads its resident chunks then its regrowable cache; the renderer's view reads the same resident chunks then ITS OWN bounded cache, so drawing never touches the sim. */
@@ -119,6 +130,8 @@ export class CellReader {
   /** Surface height at generation (the topmost solid cell before anything was built or dug) and the biome of a column. */
   hsAt(x, y) { return this._get(x >> 4, y >> 4).hs[((y & 15) << 4) | (x & 15)]; }
   biomeAt(x, y) { return this._get(x >> 4, y >> 4).bm[((y & 15) << 4) | (x & 15)]; }
+  /** 7.20: the mana band (0..4) over a cell as the map tints it: at the surface (z >= the ground) or about 8 under it. (ui/text.js cellInfo asks core.js for the exact band at a cell.) */
+  manaBand(x, y, z) { const c = this._get(x >> 4, y >> 4), i = ((y & 15) << 4) | (x & 15); return c.mb ? (z >= c.hs[i] ? c.mb[i] : c.md[i]) : 0; }
 }
 
 export class World extends CellReader {

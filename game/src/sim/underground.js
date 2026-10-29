@@ -16,6 +16,7 @@
 import { World, M, F } from "./world.js";
 import { isSeen } from "./seen.js";
 import { isNatural, underground, inLight, lightSources } from "./light.js";
+import { chunkKey } from "./cellkey.js";
 
 export const SPAN_R = 2;                  // a support must stand within this many cells: halls wider than 4 cave in
 export const CRACK_TICKS = 1200;          // from the first crack to the fall (two thirds of a game day; a best guess)
@@ -53,13 +54,18 @@ function flagged(c, flag, key) {
   }
   return c[key];
 }
-/** The natural caves' cells in the resident chunks (derived from the seed; rebuilt when the resident set changes). */
+/** 7.20: land the sim is running (active and awake). A sleeping chunk is frozen, and the cave networks are large, so air and falls are judged on the live land only. */
+export const live = (c) => c.act === 1 && !c.dz;
+/** The natural caves' cells in the live chunks (derived from the seed; rebuilt when the set of live chunks changes). */
 export function caveSet(sim) {
   const k = sim.cache, w = sim.world;
-  if (!k.ugc || k.ugcv !== w.resVer) {
+  let n = 0;
+  for (const c of w.chunks.values()) if (live(c)) n++;
+  const sig = w.resVer + ":" + n;
+  if (!k.ugc || k.ugcv !== sig) {
     const s = new Set();
-    for (const key of w.chunkKeys()) for (const i of flagged(w.chunks.get(key), F.NATURAL, "nat")) s.add(i);
-    k.ugc = s; k.ugcv = w.resVer;
+    for (const key of w.chunkKeys()) { const c = w.chunks.get(key); if (live(c)) for (const i of flagged(c, F.NATURAL, "nat")) s.add(i); }
+    k.ugc = s; k.ugcv = sig;
   }
   return k.ugc;
 }
@@ -118,16 +124,14 @@ function isU(sim, x, y, z) {
   const w = sim.world;
   return w.isWalkable(x, y, z) && (roofedAt(w, x, y, z, null) || isCave(w, x, y, z));
 }
-/** Every cell that could be in the network: the cave, and every cell that has ever been changed (append-only superset; derived from the delta log). */
+/** Every cell that could be in the network: the cave cells of the live land, and every cell that has ever been changed (the delta log is append-only; 7.20: the cave part no longer is, so the cost follows the land in play, not the land ever visited). */
 function candidates(sim) {
-  const k = sim.cache, log = sim.world.log;
-  if (!k.ucl) k.ucl = { arr: [], seen: new Set(), n: 0, rv: -1 };
+  const k = sim.cache, log = sim.world.log, cs = caveSet(sim);
+  if (!k.ucl) k.ucl = { arr: [], logSeen: new Set(), n: 0, cv: null };
   const c = k.ucl;
-  if (c.rv !== sim.world.resVer) { for (const i of caveSet(sim)) if (!c.seen.has(i)) { c.seen.add(i); c.arr.push(i); } c.rv = sim.world.resVer; }
-  if (log && log.size !== c.n) {
-    for (const i of log) if (!c.seen.has(i)) { c.seen.add(i); c.arr.push(i); }
-    c.n = log.size;
-  }
+  let dirty = c.cv !== cs;
+  if (log && log.size !== c.n) { for (const i of log) c.logSeen.add(i); c.n = log.size; dirty = true; }
+  if (dirty) { const all = new Set(cs); for (const i of c.logSeen) all.add(i); c.arr = [...all]; c.cv = cs; }
   return c.arr;
 }
 function ventSig(sim) {
@@ -139,7 +143,8 @@ function ventSig(sim) {
 /** {bad:Set, d:Map cell -> steps, cells:[U cells]}: recomputed only when the open network or the vents changed. */
 export function airMap(sim) {
   const k = sim.cache, w = sim.world;
-  const key = w.version + "|" + ventSig(sim) + "|" + w.resVer;
+  caveSet(sim);
+  const key = w.version + "|" + ventSig(sim) + "|" + k.ugcv;
   if (k.air && k.air.key === key) return k.air;
   // the network
   const cells = [];
@@ -151,10 +156,16 @@ export function airMap(sim) {
   const gen = 1, d = new Map(), stm = new Map(), queue = [];                // S16: cells are unbounded, so the scratch is a Map (the network is small)
   const st = { get: (i) => stm.get(i) || 0 }, dget = (i) => d.get(i);
   const open = (i) => { stm.set(i, gen); d.set(i, 0); queue.push(i); };
+  // 7.20: the network is judged inside the live chunks only. The cave networks are huge (thousands of connected cells), so a flood that followed them into land nobody
+  // holds would regrow chunks without end; a natural cave cell on the edge of the loaded land simply counts as breathing (the cave goes on and is open somewhere), which is
+  // what the old small caves did through their mouths.
+  const res = (x, y) => { const c = w.chunks.get(chunkKey(x >> 4, y >> 4)); return !!c && live(c); };
   for (const i of cells) {                                     // sources: touching the open air
     const [x, y, z] = World.xyz(i);
     for (const [dx, dy] of DIRS) {
-      const nx = x + dx, ny = y + dy, nz = stepZ(w, x, y, z, nx, ny);
+      const nx = x + dx, ny = y + dy;
+      if (!res(nx, ny)) { if (isCave(w, x, y, z)) { if (stm.get(i) !== gen) open(i); break; } continue; }
+      const nz = stepZ(w, x, y, z, nx, ny);
       if (nz >= 0 && !isU(sim, nx, ny, nz)) { if (stm.get(i) !== gen) open(i); break; }
     }
   }
@@ -166,7 +177,9 @@ export function airMap(sim) {
   for (let h = 0; h < queue.length; h++) {
     const i = queue[h], [x, y, z] = World.xyz(i);
     for (const [dx, dy] of DIRS) {
-      const nx = x + dx, ny = y + dy, nz = stepZ(w, x, y, z, nx, ny);
+      const nx = x + dx, ny = y + dy;
+      if (!res(nx, ny)) continue;
+      const nz = stepZ(w, x, y, z, nx, ny);
       if (nz < 0) continue;
       const n = idx(nx, ny, nz);
       if (stm.get(n) === gen || !isU(sim, nx, ny, nz)) continue;
@@ -197,7 +210,16 @@ export function gasCells(sim) {
   return k.gasl;
 }
 
-export function badAt(sim, x, y, z) { return airMap(sim).bad.has(idx(x, y, z)); }
+export function badAt(sim, x, y, z) {
+  if (airMap(sim).bad.has(idx(x, y, z))) return true;
+  const g = sim.trp && sim.trp.gas;                                           // 7.21: a gas trap's cloud (traps.js): foul air round the plate for a while
+  if (g && g.length) for (let i = 0; i < g.length; i++) {
+    if (sim.tick >= g[i][1]) continue;
+    const [gx, gy, gz] = World.xyz(g[i][0]);
+    if (Math.abs(gx - x) <= 2 && Math.abs(gy - y) <= 2 && Math.abs(gz - z) <= 1) return true;
+  }
+  return false;
+}
 
 /** Health (per game day) and energy lost by a villager standing in bad air (villager.js updateNeeds). */
 export function airHarm(sim, v) { return badAt(sim, v.x, v.y, v.z) ? AIR_DMG : 0; }

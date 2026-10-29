@@ -158,13 +158,18 @@ export class Renderer {
           if (bad && bad.has(ci) && seenAt(seen, x, y, z)) this.foul(px, py, sz, ts);
           if (cracked.has(ci)) this.cracks(px, py, ts, ci);
         }
-        if (ts >= 5 && (m === M.FLINT || m === M.MALACHITE || m === M.CLAY || m === M.IRONORE || m === M.COAL || m === M.SALT || m === M.PEAT || m === M.HERB)) {           // ore flecks, so a seam reads against plain rock
-          ctx.fillStyle = m === M.MALACHITE ? "rgba(214,255,226,.55)" : m === M.FLINT ? "rgba(196,206,228,.5)" : m === M.IRONORE ? "rgba(255,170,130,.6)" : m === M.COAL ? "rgba(120,120,140,.6)" : m === M.SALT ? "rgba(255,255,255,.7)" : m === M.PEAT ? "rgba(40,24,14,.55)" : m === M.HERB ? "rgba(200,240,120,.6)" : "rgba(255,214,170,.4)";
+        const mn = world.manaBand(x, y, top);                                  // 7.20: a faint violet over land where a core's field reaches (bands 1-4)
+        if (mn) { ctx.fillStyle = `rgba(150,96,255,${0.05 + 0.045 * mn})`; ctx.fillRect(px, py, sz, sz); }
+        if (ts >= 5 && (m === M.FLINT || m === M.MALACHITE || m === M.CLAY || m === M.IRONORE || m === M.COAL || m === M.SALT || m === M.PEAT || m === M.HERB || m === M.GEM || m === M.CRYSTAL || m === M.COREORE || m === M.CORE || m === M.CACHE)) {           // ore flecks, so a seam reads against plain rock
+          ctx.fillStyle = m === M.MALACHITE ? "rgba(214,255,226,.55)" : m === M.FLINT ? "rgba(196,206,228,.5)" : m === M.IRONORE ? "rgba(255,170,130,.6)" : m === M.COAL ? "rgba(120,120,140,.6)" : m === M.SALT ? "rgba(255,255,255,.7)" : m === M.PEAT ? "rgba(40,24,14,.55)" : m === M.HERB ? "rgba(200,240,120,.6)" : m === M.GEM ? "rgba(255,200,230,.8)" : m === M.CRYSTAL ? "rgba(225,240,255,.8)" : m === M.COREORE ? "rgba(214,190,255,.75)" : m === M.CORE ? "rgba(255,240,255,.9)" : m === M.CACHE ? "rgba(255,236,150,.95)" : "rgba(255,214,170,.4)";
           ctx.fillRect(px + ts * 0.3, py + ts * 0.3, ts * 0.4, ts * 0.4);
           if (A.cb && ts >= 9) {                               // a letter beside the colour: F flint, M malachite, c clay, I iron, K coal
             ctx.font = `bold ${Math.floor(ts * 0.55)}px system-ui, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
             ctx.fillStyle = "rgba(0,0,0,.9)"; ctx.fillText(ORE_LETTER[m], px + ts / 2 + 1, py + ts / 2 + 1); ctx.fillStyle = "#fff"; ctx.fillText(ORE_LETTER[m], px + ts / 2, py + ts / 2);
           }
+        } else if (ts >= 6 && m === M.DWALL) {                                        // 7.21: ancient stonework: a course of blocks
+          ctx.strokeStyle = "rgba(20,14,10,.4)"; ctx.lineWidth = 1; ctx.beginPath();
+          ctx.moveTo(px, py + sz * 0.5); ctx.lineTo(px + sz, py + sz * 0.5); ctx.moveTo(px + sz * 0.5, py); ctx.lineTo(px + sz * 0.5, py + sz * 0.5); ctx.moveTo(px + sz * 0.25, py + sz * 0.5); ctx.lineTo(px + sz * 0.25, py + sz); ctx.stroke();
         } else if (ts >= 7 && (m === M.SUPPORT || m === M.RUBBLE)) {             // S12: a post and cap; a heap of broken stone
           ctx.strokeStyle = m === M.SUPPORT ? "#f0d0a0" : "rgba(30,24,18,.7)"; ctx.lineWidth = Math.max(1, ts * 0.1); ctx.beginPath();
           if (m === M.SUPPORT) { ctx.moveTo(px + ts * 0.5, py + ts * 0.15); ctx.lineTo(px + ts * 0.5, py + ts * 0.85); ctx.moveTo(px + ts * 0.15, py + ts * 0.25); ctx.lineTo(px + ts * 0.85, py + ts * 0.25); }
@@ -502,6 +507,14 @@ export class Renderer {
       ctx.strokeStyle = e.st === "turn" ? "#ff5d5d" : "#3b2916"; ctx.lineWidth = Math.max(1.5, ts * 0.07); ctx.stroke();
       ctx.strokeStyle = "#e9dcc0"; ctx.lineWidth = Math.max(1.5, ts * 0.1); ctx.beginPath(); ctx.moveTo(sx + r * 0.6, sy - r * 0.4); ctx.lineTo(sx + r * 0.95, sy - r * 0.85); ctx.moveTo(sx + r * 0.6, sy + r * 0.4); ctx.lineTo(sx + r * 0.95, sy + r * 0.85); ctx.stroke();
       if (e.tame) { ctx.strokeStyle = "#e5594f"; ctx.lineWidth = Math.max(1.5, ts * 0.08); ctx.beginPath(); ctx.moveTo(sx - r * 0.4, sy - r * 0.1); ctx.lineTo(sx + r * 0.4, sy - r * 0.1); ctx.stroke(); }
+    } else if (e.sp === "crawler" || e.sp === "spitter" || e.sp === "coreback" || e.sp === "guardian") {       // 7.22: the flat fallback draws monsters as plain coloured shapes (the billboards are in sprites.js)
+      const hot = e.st === "attack" || e.st === "hunt" || e.st === "raid", big = e.sp === "guardian" ? 1.0 : e.sp === "coreback" ? 0.66 : e.sp === "spitter" ? 0.42 : 0.34;
+      const r = Math.max(3, ts * big), col = { crawler: "#d8d0b8", spitter: "#6f8f3a", coreback: "#3a2a4a", guardian: "#7d7a86" }[e.sp];
+      ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(sx, sy, r, r * (e.sp === "guardian" ? 0.95 : 0.7), 0, 0, 6.2832); ctx.fill();
+      ctx.strokeStyle = hot ? "#ff5d5d" : "#1a1420"; ctx.lineWidth = Math.max(1.5, ts * 0.08); ctx.stroke();
+      ctx.fillStyle = e.sp === "crawler" ? "#ff3b3b" : "#d68cff"; ctx.beginPath(); ctx.arc(sx + r * 0.35, sy - r * 0.1, Math.max(1.4, r * (e.sp === "guardian" ? 0.32 : 0.16)), 0, 6.2832); ctx.fill();
+      if (e.sp === "coreback") { ctx.fillStyle = "#b070ff"; for (let i = -2; i <= 2; i++) { ctx.beginPath(); ctx.moveTo(sx + i * r * 0.32 - r * 0.12, sy - r * 0.55); ctx.lineTo(sx + i * r * 0.32, sy - r * 0.95); ctx.lineTo(sx + i * r * 0.32 + r * 0.12, sy - r * 0.55); ctx.fill(); } }
+      if (e.sp === "crawler" && ts >= 8) { ctx.strokeStyle = "#4a4332"; ctx.lineWidth = 1; ctx.beginPath(); for (const o of [-0.7, -0.2, 0.3, 0.8]) { ctx.moveTo(sx + o * r, sy + r * 0.5); ctx.lineTo(sx + o * r * 1.3, sy + r * 0.95); } ctx.stroke(); }
     } else {
       const r = Math.max(3, ts * 0.62);
       ctx.fillStyle = "#4a2f22"; ctx.beginPath(); ctx.ellipse(sx, sy, r, r * 0.78, 0, 0, 6.2832); ctx.fill();
@@ -569,7 +582,7 @@ export class Renderer {
   }
 }
 
-const ORE_LETTER = { [M.FLINT]: "F", [M.MALACHITE]: "M", [M.CLAY]: "c", [M.IRONORE]: "I", [M.COAL]: "K", [M.SALT]: "s", [M.PEAT]: "p", [M.HERB]: "h" };
+const ORE_LETTER = { [M.FLINT]: "F", [M.MALACHITE]: "M", [M.CLAY]: "c", [M.IRONORE]: "I", [M.COAL]: "K", [M.SALT]: "s", [M.PEAT]: "p", [M.HERB]: "h", [M.GEM]: "g", [M.CRYSTAL]: "y", [M.COREORE]: "o", [M.CORE]: "*", [M.CACHE]: "$" };
 // One letter per job kind (the S3 Why panel gives the full text).
 const GLYPH = {
   forage: "f", cut: "g", chop: "c", haul: "h", store: "h", eat: "e", drink: "w", sleep: "z", huddle: "z",

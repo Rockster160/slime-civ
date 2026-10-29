@@ -10,6 +10,9 @@ import { TOKENS } from "../ui/kit.js";
 import { CLASS, alerts } from "../ui/text.js";
 import { doingWord, faunaWord } from "../ui/labels.js";
 import { JOB_ICON } from "../ui/inspector.js";
+import { seenTraps, gasClouds, TRAP_LABEL } from "../sim/traps.js";
+import { dungeonsIn, isAir } from "../sim/dungeon.js";
+import { isSeen } from "../sim/seen.js";
 
 const TAU = Math.PI * 2;
 const ALERT_ICON = { hungry: "food", thirsty: "water", cold: "cold", tired: "energy", sick: "sick", hurt: "hurt", stuck: "blocked" };
@@ -18,6 +21,65 @@ function tag(ctx, text, x, y, color = "#fff") {
   const w = ctx.measureText(text).width + 12;
   ctx.fillStyle = "rgba(10,14,20,.78)"; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x - w / 2, y - 14, w, 18, 9) : ctx.rect(x - w / 2, y - 14, w, 18); ctx.fill();
   ctx.fillStyle = color; ctx.fillText(text, x, y);
+}
+
+/** 7.21: spotted traps as a warning glyph and a one-to-three word label, and live gas clouds, on the level being looked at. Drawn in both views (the flat fallback calls it from overlays). */
+export function drawTraps(game, ctx) {
+  const { sim, cam, renderer } = game, ts = cam.zoom, view = cam.visible();
+  if (renderer.z >= D - 1) return;
+  drawDungeonOutline(game, ctx);
+  const COL = { dart: "#ff7a4a", pit: "#ffc23a", collapse: "#e5594f", gas: "#9bd83a" };
+  for (const g of gasClouds(sim)) {
+    if (g.x < view.x0 - 3 || g.x > view.x1 + 3 || g.y < view.y0 - 3 || g.y > view.y1 + 3 || renderer.topAt(g.x, g.y) !== g.z - 1) continue;
+    const [sx, sy, cw, th] = cam.rect(g.x - 2, g.y - 2, g.x + 3, g.y + 3, g.z);
+    ctx.fillStyle = "rgba(160,200,40,.28)"; ctx.fillRect(sx, sy, cw, th);
+  }
+  for (const t of seenTraps(sim)) {
+    if (t.x < view.x0 - 2 || t.x > view.x1 + 2 || t.y < view.y0 - 2 || t.y > view.y1 + 2 || renderer.topAt(t.x, t.y) !== t.z - 1) continue;
+    const [sx, sy, cw, th] = cam.rect(t.x, t.y, t.x + 1, t.y + 1, t.z), cx = sx + cw / 2, cy = sy + th / 2, r = Math.max(4, Math.min(cw, th) * 0.42);
+    ctx.fillStyle = COL[t.k]; ctx.strokeStyle = "rgba(20,10,4,.9)"; ctx.lineWidth = Math.max(1, r * 0.2);
+    ctx.beginPath(); ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r * 1.05, cy + r * 0.8); ctx.lineTo(cx - r * 1.05, cy + r * 0.8); ctx.closePath(); ctx.fill(); ctx.stroke();
+    if (r >= 6) trapMark(ctx, t.k, cx, cy, r);
+    if (ts >= 9) tag(ctx, TRAP_LABEL[t.k], cx, cy - r - 4, COL[t.k]);
+  }
+}
+
+/** 7.23: each trap kind has its own mark inside the warning triangle, so the glyph does not rest on colour alone: darts an exclamation mark, a pit a dark hole, a collapse a falling slash pair, gas three bubbles. */
+function trapMark(ctx, k, cx, cy, r) {
+  ctx.fillStyle = ctx.strokeStyle = "rgba(20,10,4,.95)"; ctx.lineWidth = Math.max(1, r * 0.16);
+  if (k === "pit") { ctx.beginPath(); ctx.ellipse(cx, cy + r * 0.28, r * 0.42, r * 0.22, 0, 0, TAU); ctx.fill(); }
+  else if (k === "collapse") { ctx.beginPath(); ctx.moveTo(cx - r * 0.35, cy - r * 0.2); ctx.lineTo(cx - r * 0.05, cy + r * 0.55); ctx.moveTo(cx + r * 0.1, cy - r * 0.25); ctx.lineTo(cx + r * 0.38, cy + r * 0.5); ctx.stroke(); }
+  else if (k === "gas") { for (const [dx, dy, q] of [[-0.3, 0.45, 0.15], [0.05, 0.1, 0.18], [0.3, 0.5, 0.13]]) { ctx.beginPath(); ctx.arc(cx + r * dx, cy + r * dy, r * q, 0, TAU); ctx.fill(); } }
+  else { ctx.fillRect(cx - r * 0.09, cy - r * 0.35, r * 0.18, r * 0.65); ctx.fillRect(cx - r * 0.09, cy + r * 0.42, r * 0.18, r * 0.18); }
+}
+
+/** 7.23: the labyrinth as far as it has been explored: a violet outline round the floor cells somebody has seen (and a faint wash inside), on the level being looked at. Nothing for cells nobody has seen. */
+export function drawDungeonOutline(game, ctx) {
+  const { sim, cam, renderer } = game, view = cam.visible();
+  const duns = dungeonsIn(sim.def, view.x0 - 1, view.y0 - 1, view.x1 + 1, view.y1 + 1);
+  if (!duns.length) return;
+  ctx.strokeStyle = "rgba(214,140,255,.9)"; ctx.fillStyle = "rgba(154,107,255,.13)"; ctx.lineWidth = Math.max(1.2, cam.zoom * 0.09); ctx.lineCap = "round";
+  for (const dun of duns) {
+    const cache = new Map();
+    const at = (x, y) => {                                                    // the stand z of an explored labyrinth floor cell in this column, or -1
+      const k = (y - view.y0 + 2) * 4096 + (x - view.x0 + 2);
+      let z = cache.get(k);
+      if (z === undefined) { const t = renderer.topAt(x, y); z = t >= 0 && isAir(dun, x, y, t + 1) && isSeen(sim, x, y, t) ? t + 1 : -1; cache.set(k, z); }
+      return z;
+    };
+    for (let y = view.y0 - 1; y <= view.y1 + 1; y++) for (let x = view.x0 - 1; x <= view.x1 + 1; x++) {
+      const z = at(x, y);
+      if (z < 0) continue;
+      const [sx, sy, cw, th] = cam.rect(x, y, x + 1, y + 1, z);
+      ctx.fillRect(sx, sy, cw, th);
+      ctx.beginPath();
+      if (at(x, y - 1) !== z) { ctx.moveTo(sx, sy); ctx.lineTo(sx + cw, sy); }
+      if (at(x, y + 1) !== z) { ctx.moveTo(sx, sy + th); ctx.lineTo(sx + cw, sy + th); }
+      if (at(x - 1, y) !== z) { ctx.moveTo(sx, sy); ctx.lineTo(sx, sy + th); }
+      if (at(x + 1, y) !== z) { ctx.moveTo(sx + cw, sy); ctx.lineTo(sx + cw, sy + th); }
+      ctx.stroke();
+    }
+  }
 }
 
 export function drawDecor(game, ctx) {
@@ -56,6 +118,7 @@ export function drawDecor(game, ctx) {
     if (bad) for (const ci of bad) mark(ci, true);
     for (const ci of cr) mark(ci, false);
   }
+  drawTraps(game, ctx);
   // creatures: health bars once hurt, and the hit flash
   const flash = (e, sx, sy) => {
     const age = sim.tick - (e.ht || 0);
@@ -65,12 +128,17 @@ export function drawDecor(game, ctx) {
     if (!calm) { ctx.strokeStyle = miss ? "#cfd6e4" : "#ff3b3b"; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.ellipse(sx, sy, ts * (0.35 + 0.5 * k), ts * (0.35 + 0.5 * k) * cam.sinP, 0, 0, TAU); ctx.stroke(); }
     const ty = sy - ts * 0.9 - k * ts * 0.9; ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,.85)"; ctx.strokeText(txt, sx, ty); ctx.fillStyle = miss ? "#cfd6e4" : "#ffd2d2"; ctx.fillText(txt, sx, ty); ctx.globalAlpha = 1;
   };
+  for (const e of sim.ents.ofKind("fauna")) {                           // 7.22: a monster's blow: a red slash (melee) or a green streak (a spitter's shot) from it to the one aimed at, for a moment
+    if (!e.sh || sim.tick - e.sh[3] > 14 || !inView(e.x, e.y) || !renderer.isShown(e)) continue;
+    const [ax, ay] = cam.toScreen(...renderer.drawPos(e), e.z), [bx, by] = cam.toScreen(e.sh[0] + 0.5, e.sh[1] + 0.5, e.sh[2]), k = (sim.tick - e.sh[3]) / 14;
+    ctx.globalAlpha = 1 - k; ctx.strokeStyle = e.sh[4] ? "#ff4a4a" : "#b6ee4a"; ctx.lineWidth = Math.max(2, ts * (e.sh[4] ? 0.2 : 0.14)); ctx.beginPath(); ctx.moveTo(ax, ay - ts * 0.4); ctx.lineTo(ax + (bx - ax) * Math.min(1, 0.4 + k * 1.2), ay - ts * 0.4 + (by - ay) * Math.min(1, 0.4 + k * 1.2)); ctx.stroke(); ctx.globalAlpha = 1;
+  }
   for (const e of sim.ents.ofKind("fauna")) {
     if (!inView(e.x, e.y) || !renderer.isShown(e)) continue;
     const [sx, sy] = cam.toScreen(...renderer.drawPos(e), e.z);
-    if (e.hp < e.mhp && ts >= 5) { const w = ts * 0.9, y = sy - ts * (e.sp === "thornback" ? 1.9 : 1.1); ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(sx - w / 2, y, w, 3); ctx.fillStyle = e.hp / e.mhp > 0.5 ? "#6fbf73" : "#e5594f"; ctx.fillRect(sx - w / 2, y, w * Math.max(0, e.hp / e.mhp), 3); }
+    if (e.hp < e.mhp && ts >= 5) { const w = ts * 0.9, y = sy - ts * (e.sp === "guardian" ? 2.6 : e.sp === "thornback" ? 1.9 : e.sp === "coreback" ? 1.7 : 1.1); ctx.fillStyle = "rgba(0,0,0,.6)"; ctx.fillRect(sx - w / 2, y, w, 3); ctx.fillStyle = e.hp / e.mhp > 0.5 ? "#6fbf73" : "#e5594f"; ctx.fillRect(sx - w / 2, y, w * Math.max(0, e.hp / e.mhp), 3); }
     flash(e, sx, sy);
-    if (ui.hover && ui.hover.ents && ui.hover.ents.includes(e)) tag(ctx, faunaWord(e), sx, sy - ts * 1.2 - 6);
+    if ((ui.hover && ui.hover.ents && ui.hover.ents.includes(e)) || (e.mon && e.st === "attack" && ts >= 10)) tag(ctx, faunaWord(e), sx, sy - ts * 1.2 - 6);       // 7.22: a monster in a fight says what it is doing ("Crawler: Biting")
   }
   // slimes: a class dot above each, the job chip and a short label for the selected / hovered, a need badge when something is wrong
   const sel = new Set(ui.sel), hov = ui.hover && ui.hover.villager;

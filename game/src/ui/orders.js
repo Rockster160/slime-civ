@@ -9,11 +9,12 @@ import { DIG } from "../sim/dig.js";
 import { FAUNA } from "../sim/fauna.js";
 import { can } from "../sim/knowledge.js";
 import { exploredAt } from "../sim/seen.js";
+import { seenTrapNear } from "../sim/traps.js";
 import { svg } from "./icons.js";
 import { avatar, tipAttr } from "./kit.js";
 import { esc } from "./dom.js";
 
-const VERB_ICON = { forage: "forage", chop: "chop", gather: "gather", haul: "haul", dig: "dig", hunt: "hunt", capture: "capture", scout: "scout", move: "move" };
+const VERB_ICON = { forage: "forage", chop: "chop", gather: "gather", haul: "haul", dig: "dig", hunt: "hunt", clear: "hunt", capture: "capture", scout: "scout", move: "move", disarm: "craft" };
 
 export const VERBS = [
   { verb: "forage", label: "Forage", tip: "Pick berries from bushes around the target" },
@@ -22,8 +23,10 @@ export const VERBS = [
   { verb: "haul", label: "Haul", tip: "Carry loose items around the target to the stockpile" },
   { verb: "dig", label: "Dig", tip: "Dig out the rock or soil around the target (a 5x5 patch). Gives stone and dirt for building" },
   { verb: "hunt", label: "Hunt", tip: "Hunt the hoppers around the target; the meat is hauled to the stockpile. Villagers fight nothing else on their own" },
+  { verb: "clear", label: "Clear", tip: "Send spear-carrying villagers to kill the monsters round the target, a den (needs a copper spear in the stockpile; they still run from the big ones, and never take on a guardian)" },
   { verb: "capture", label: "Capture", tip: "Catch the wild hoppers around the target alive and walk them to a finished pen (needs husbandry and a staked-out pen)" },
   { verb: "scout", label: "Scout", tip: "Walk to unexplored land and reveal it (right-click unexplored land, or right-click the minimap)" },
+  { verb: "disarm", label: "Disarm", tip: "Defuse the spotted trap here (a craft job; a slip sets it off)" },
   { verb: "move", label: "Move", tip: "Walk to the spot" },
 ];
 const VERB_LABEL = Object.fromEntries(VERBS.map(v => [v.verb, v.label]));
@@ -38,9 +41,12 @@ export function optionsAt(game, pick) {
       else if (e.species === "berry") add("forage", e, "berry bush");
       else if (e.species === "tuft") add("gather", e, "grass tuft");
     } else if (e.kind === "item" && !stockZoneAt(sim, e.x, e.y, e.z)) add("haul", e, e.n + " " + itemName(e.item));
+    else if (e.kind === "fauna" && FAUNA[e.sp].mon && !FAUNA[e.sp].boss) add("clear", e, FAUNA[e.sp].label);
     else if (e.kind === "fauna" && FAUNA[e.sp].huntable && !e.tame) { add("hunt", e, FAUNA[e.sp].label); if (can(sim, "HUSBANDRY") && sim.farm.pens.some(p => p.built)) add("capture", e, FAUNA[e.sp].label + " alive"); }
   }
   if (pick.z > 0 && DIG[game.sim.world.mat(pick.x, pick.y, pick.z - 1)] && game.sim.world.mat(pick.x, pick.y, pick.z - 1) > 2 && game.sim.world.mat(pick.x, pick.y, pick.z - 1) !== 4) add("dig", null, "the rock here");     // rock (hard, soft, flint, malachite) or clay offers digging
+  const trap = seenTrapNear(sim, pick.x, pick.y, pick.z);
+  if (trap) add("disarm", null, "the trap");                                    // 7.21: a spotted trap offers the craft job
   if (!exploredAt(sim.seen, pick.x, pick.y)) add("scout", null, "there");       // S17: unexplored land: the default order is to go and look
   add("move", null, "here");
   return out;
@@ -64,7 +70,7 @@ export function issueOrder(game, opt, pick) {
   }
   if (opt.verb === "move" && (pick.z < 0 || !sim.world.isWalkable(pick.x, pick.y, pick.z))) { game.toast("They cannot stand there."); return false; }
   const cmd = { type: "order", ids: vs.map(v => v.id), verb: opt.verb };
-  if (opt.tid) cmd.tid = opt.tid; else { cmd.x = pick.x; cmd.y = pick.y; cmd.z = opt.verb === "dig" ? pick.z - 1 : pick.z; }
+  if (opt.tid) cmd.tid = opt.tid; else { cmd.x = pick.x; cmd.y = pick.y; cmd.z = opt.verb === "dig" ? pick.z - 1 : opt.verb === "disarm" ? seenTrapNear(sim, pick.x, pick.y, pick.z).z : pick.z; }
   const ok = sim.apply(cmd);
   if (ui.crewTarget && sim.crews.list.some(c => c.id === ui.crewTarget)) {          // S11: aimed from the Crews panel: this order is also the crew's default task
     const t = { t: "order", verb: opt.verb, x: opt.tid ? sim.ents.get(opt.tid).x : cmd.x, y: opt.tid ? sim.ents.get(opt.tid).y : cmd.y, z: opt.tid ? sim.ents.get(opt.tid).z : cmd.z, tid: opt.tid || 0 };
@@ -81,7 +87,7 @@ export function issueOrder(game, opt, pick) {
 /** Right-click: one-click default; a popup only when several verbs fit. */
 export function rightClick(game, pick, sx, sy) {
   const opts = optionsAt(game, pick);
-  if (pick.ents.some(e => e.kind === "fauna" && FAUNA[e.sp].hostile)) { game.toast("Villagers will not fight a thornback on their own. Guide one yourself (select it, press Q), with a copper spear."); return; }
+  if (pick.ents.some(e => e.kind === "fauna" && FAUNA[e.sp].hostile && !(FAUNA[e.sp].mon && !FAUNA[e.sp].boss))) { game.toast("Villagers will not fight a thornback on their own. Guide one yourself (select it, press Q), with a copper spear."); return; }
   if (!game.ui.sel.length) { game.toast("Select villagers first, then right-click to give an order."); return; }
   if (opts.length === 1) { issueOrder(game, opts[0], pick); return; }
   if (opts.length === 2 && opts[0].verb !== "move" && opts[1].verb === "move") { issueOrder(game, opts[0], pick); return; }   // target + "move here": the target wins

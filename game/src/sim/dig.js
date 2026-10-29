@@ -22,6 +22,14 @@ export const DIG = {
   [M.SALT]:      { item: "salt",      n: 2, dur: 160 },
   [M.PEAT]:      { item: "peat",      n: 3, dur: 140 },
   [M.HERB]:      { item: "herb",      n: 2, dur: 100 },
+  // 7.20: what a core's field leaves in the rock. The core itself has no row: nobody digs it until 7.23 gives the choice (harvest or leave).
+  [M.GEM]:       { item: "gem",       n: 1, dur: 400, hard: true },
+  [M.CRYSTAL]:   { item: "crystal",   n: 2, dur: 360, hard: true },
+  [M.COREORE]:   { item: "core_ore",  n: 2, dur: 480, hard: true, needs: "iron_pick" },
+  // 7.21: dungeons (D42): the ancient stonework resists everything but an iron pick, and then at 1/6 the speed of hard rock (320 -> 1920), so cheating in through a wall is possible and slow.
+  // A sealed cache spills its loot (traps.js openCache; the `item` here is only the fallback) in a quarter of the time of hard rock.
+  [M.DWALL]:     { item: "stone",     n: 1, dur: 1920, hard: true, needs: "iron_pick" },
+  [M.CACHE]:     { item: "gem",       n: 0, dur: 240, hard: true },
 };
 /** The tool a cell needs in hand (an item name) or "". */
 export const toolNeeded = (sim, x, y, z) => { const d = DIG[sim.world.mat(x, y, z)]; return d && d.needs ? d.needs : ""; };

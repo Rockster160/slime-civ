@@ -10,7 +10,6 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { mkdirSync, readFileSync } from "node:fs";
 import assert from "node:assert/strict";
-import * as S20 from "./s20.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 mkdirSync(join(root, "tmp"), { recursive: true });
@@ -1580,17 +1579,8 @@ await G(() => { __game.fpvDevOff = false; });
   await G(() => { __game.setTips(false); __game.clearSelection(); __game.setLevel(__game.D - 1); });
 }
 
-// 6.20 UX stability: off-screen markers, box select, the depth gauge, the slime inspector, and hints on a brand-new profile (tools/s20.js)
-{
-  await page.setViewportSize({ width: 1280, height: 720 }); await page.waitForTimeout(300);
-  const c20 = { G, ok, shot };
-  await S20.pointers(page, c20);
-  await S20.boxSelect(page, c20);
-  await S20.gauge(page, c20);
-  await S20.inspector(page, c20);
-  await S20.hints(browser, c20);
-  await S20.buildStamp(page, c20);
-}
+// 6.20 UX stability checks (markers, box select, gauge, inspector, hints, build stamp) run in tools/ui_shots20.js, and 7.20/7.21's in tools/ui_smoke_p7.js:
+// this script sits at the five-minute limit. Run all three, one after another.
 
 await browser.close();
 if (errors.length) { console.log("ERRORS:\n" + errors.join("\n")); process.exit(1); }

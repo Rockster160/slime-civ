@@ -20,7 +20,7 @@ const AO = [0.5, 0.68, 0.84, 1];
 export const SOLID = new Uint8Array(256);
 MAT.forEach((m, i) => { SOLID[i] = m.solid ? 1 : 0; });
 const ROOF = new Uint8Array(256); ROOF[M.THATCH] = ROOF[M.LOGROOF] = ROOF[M.HIDEROOF] = 1;
-const ORE = new Uint8Array(256); for (const m of [M.FLINT, M.MALACHITE, M.CLAY, M.IRONORE, M.COAL, M.SALT, M.PEAT, M.HERB]) ORE[m] = 1;
+const ORE = new Uint8Array(256); for (const m of [M.FLINT, M.MALACHITE, M.CLAY, M.IRONORE, M.COAL, M.SALT, M.PEAT, M.HERB, M.GEM, M.CRYSTAL, M.COREORE, M.CORE, M.CACHE]) ORE[m] = 1;
 export const hash3 = (x, y, z, d) => (Math.imul(x, 73856093) ^ Math.imul(y, 19349663) ^ Math.imul(z, 83492791) ^ Math.imul(d + 1, 2654435761)) >>> 0;
 
 /** Mesh one chunk into `out` (a Float32Array of at least MAX_FACES * 4 * FLOATS) -> a copy of the used part. */
@@ -52,12 +52,14 @@ export function meshChunk(view, seen, cx, cy, out, opts = {}) {
       let sky = 1;
       for (let k = 1; k <= 4; k++) if (isNatural(mat(ax, ay, az + k))) { sky = 0; break; }
       const seenF = sn(lx, ly, z) || sn(ax, ay, az);
-      const col = MAT[m].color, jit = 0.92 + 0.16 * ((hash3(ox + lx, oy + ly, z, d) & 255) / 255);
+      const col = MAT[m].color, jit0 = 0.92 + 0.16 * ((hash3(ox + lx, oy + ly, z, d) & 255) / 255), jit = m === M.DWALL ? jit0 * (((ox + lx + oy + ly + z) & 1) ? 0.86 : 1.08) : jit0;      // 7.21: ancient stonework is laid in a checker of flags and blocks
       let r = col[0] / 255, g = col[1] / 255, b = col[2] / 255;
       if (d === 4 && !water) {
         const bi = bm[(ly << 4) | lx];
         if (bi && z >= hs[(ly << 4) | lx]) { const t = BIOMES[bi].tint, k = t[3]; r = r * (1 - k) + t[0] / 255 * k; g = g * (1 - k) + t[1] / 255 * k; b = b * (1 - k) + t[2] / 255 * k; }
       }
+      const mn = own.mb ? (z >= hs[(ly << 4) | lx] ? own.mb[(ly << 4) | lx] : own.md[(ly << 4) | lx]) : 0;      // 7.20: seen ground in a core's field is tinted violet (more the nearer the core)
+      if (mn && seenF && !water) { const k = 0.06 + 0.05 * mn; r = r * (1 - k) + 0.6 * k; g = g * (1 - k) + 0.38 * k; b = b * (1 - k) + 1.0 * k; }
       let f = bake ? FACE_SHADE[d] * jit : jit, state = 0;
       if (!seenF) {
         if (bake) { if (sky) { r *= 0.5; g *= 0.58; b *= 0.8; f *= 0.8; } else f *= 0.06; }

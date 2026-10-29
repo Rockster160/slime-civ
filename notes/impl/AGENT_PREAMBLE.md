@@ -20,7 +20,7 @@ A previous session crashed the user's machine by running many sims in parallel.
 - **Every sim run ≤ 5 min wall clock** (user rule, 2026-10-28): each test, each fixture build, each probe. Fast-forward is fine; anything longer needs a real reason, stated in the report.
 - **Pre-situated saves.** Build fixtures that sit right before the moment under test (needs already low, crop one stage from ripe, kiln loaded, dusk, monster in range) by editing state in the fixture tool, not by simulating up to it. A test loads the fixture, applies the command, runs until the event happens (with a cap), and stops.
 - **Feature tests:** load a pre-situated fixture (`tests/fixture.js` `loadFixture`), run only until the event (capped; a game day is now 12000 ticks, so "N days" windows are a smell), and assert the feature works. Add new fixtures to the fixture tool when a stage needs a new starting point.
-- **What to run:** only `node tests/all.js` (quick) and `node tools/build.js && node tools/ui_smoke.js`.
+- **What to run:** only `node tests/all.js` (quick) and `node tools/build.js`, then `node tools/ui_smoke.js`, `node tools/ui_shots20.js` and `node tools/ui_smoke_p7.js` one after another. A smoke script near five minutes is split, never left to grow; new stage checks go in `ui_smoke_p7.js` (or a new small script).
   - Run them sequentially, one sim or browser at a time, with explicit timeouts.
   - **Never** run `--full` or background a sim.
   - Long bots go in FULL only, for the user's balance pass.

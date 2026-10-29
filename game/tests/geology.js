@@ -5,7 +5,9 @@
 //   * rivers and caves are continuous across chunk borders
 import assert from "node:assert/strict";
 import { World, M, F, D } from "../src/sim/world.js";
-import { genChunk, colInto, baseDef, wormOf, WATER_LEVEL, SOFT_THICK, dirtAt, RS } from "../src/sim/terrain.js";
+import { genChunk, colInto, baseDef, WATER_LEVEL, SOFT_THICK, dirtAt, RS } from "../src/sim/terrain.js";
+import { pathsIn } from "../src/sim/caves.js";
+import { HOME_R } from "../src/sim/worms.js";
 import { defOf, REACH_R, validateSpawn } from "../src/sim/spawn.js";
 import { generateWorld } from "../src/sim/worldgen.js";
 import { MEADOW, HIGHLAND, MARSH } from "../src/sim/biome.js";
@@ -40,7 +42,7 @@ const hashChunk = (c) => { const h = new Hasher(); h.bytes(c.mats); h.bytes(c.fl
 {
   const def = defOf(7, { biomes: true, depth: true }), t = { h: 0, b: 0, clay: 0, wet: 0 };
   const w = new World((cx, cy) => genChunk(def, cx, cy), def);
-  let waterEdges = 0, caveEdges = 0, wormCrossings = 0;
+  let waterEdges = 0, caveEdges = 0, wormCrossings = 0;     // (7.20: the tunnels of the networks are checked beyond the camp's HOME_R; inside it the S16 home caves stand)
   // every column's stored height is the pure column function (so a border is not special), and water continues over a border
   for (let cy = -4; cy <= 4; cy++) for (let cx = -4; cx <= 4; cx++) {
     const c = w._get(cx, cy);
@@ -60,19 +62,18 @@ const hashChunk = (c) => { const h = new Hasher(); h.bytes(c.mats); h.bytes(c.fl
     }
   }
   assert.ok(waterEdges > 0, "the window holds water on a chunk border");
-  // caves: walk the worms of the regions round the origin; consecutive steps that fall in different chunks are both open air
-  for (let rx = -3; rx <= 2; rx++) for (let ry = -3; ry <= 2; ry++) {
-    const worm = wormOf(def, rx, ry);
-    if (!worm) continue;
-    for (let i = 1; i < worm.length; i++) {
-      const a = worm[i - 1], b = worm[i];
+  // caves (7.20 networks replace the worms): walk the tunnels round the origin; consecutive steps that fall in different chunks are both open air
+  for (const worm of pathsIn(def, -300, -300, 300, 300)) {
+    if (worm.ramp) continue;
+    for (let i = 1; i < worm.xs.length; i++) {
+      const a = { x: worm.xs[i - 1], y: worm.ys[i - 1], z: worm.zs[i - 1] }, b = { x: worm.xs[i], y: worm.ys[i], z: worm.zs[i] };
       if ((a.x >> 4) === (b.x >> 4) && (a.y >> 4) === (b.y >> 4)) continue;
       wormCrossings++;
       for (const s of [a, b]) {
         const roof = w.hsAt(s.x, s.y) - 3;
-        if (s.ramp || s.z + 1 > roof) continue;
-        assert.equal(w.mat(s.x, s.y, s.z), M.AIR, "worm step " + s.x + "," + s.y + "," + s.z + " is open on both sides of a border");
-        assert.ok(w.flags(s.x, s.y, s.z) & F.NATURAL);
+        if (s.z < 0 || s.z + 1 > roof || (def.spawn && (s.x - def.spawn.x) ** 2 + (s.y - def.spawn.y) ** 2 < HOME_R * HOME_R)) continue;
+        assert.ok([M.AIR, M.WATER, M.CORE].includes(w.mat(s.x, s.y, s.z)), "tunnel step " + s.x + "," + s.y + "," + s.z + " is open (air, or a room's pool, or the core) on both sides of a border");
+        if (w.mat(s.x, s.y, s.z) !== M.CORE) assert.ok(w.flags(s.x, s.y, s.z) & F.NATURAL);
         caveEdges++;
       }
     }

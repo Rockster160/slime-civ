@@ -156,6 +156,7 @@ export function evidenceOf(sim, craft) {
   let n = 0;
   for (const f of sim.ents.ofKind("furniture")) if (ev.furniture.includes(f.f)) n++;
   if (ev.items.length) for (const s of sim.ents.ofKind("item")) if (ev.items.includes(s.item)) n++;
+  if (n === 0 && sim.trp && sim.trp.ws.some(q => q[0] === craft)) return 0.6;          // 7.21: an ancient workshop somebody has stood in is evidence of its craft
   return n === 0 ? 0 : Math.min(1, 0.6 + 0.2 * (n - 1));
 }
 /** Evidence stands where? (cells, for the tinker to work next to). */

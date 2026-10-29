@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { restore, toJSON, SAVE_VERSION, migrate, OLD_WORLD, OLD_CLOCK } from "../src/sim/save.js";
+import { restore, toJSON, SAVE_VERSION, migrate, OLD_WORLD, OLD_CLOCK, OLD_TERRAIN } from "../src/sim/save.js";
 import { loadFixture } from "./fixture.js";
 
 const dir = join(dirname(fileURLToPath(import.meta.url)), "oldsaves");
@@ -50,6 +50,12 @@ assert.deepEqual([...versions].sort(), [3, 4, 5, 6, 9], "a save of every older v
   const a = loadFixture("start"), j = JSON.parse(toJSON(a));
   j.v = 10;
   assert.throws(() => restore(JSON.stringify(j)), (e) => e.message === OLD_CLOCK);
+}
+// v11 (S18b) saves are on the old terrain (7.20): refused with their own plain message
+{
+  const a = loadFixture("start"), j = JSON.parse(toJSON(a));
+  j.v = 11;
+  assert.throws(() => restore(JSON.stringify(j)), (e) => e.message === OLD_TERRAIN && /magic cores/.test(e.message) && /Start a new game/.test(e.message));
 }
 assert.throws(() => restore(JSON.stringify({ v: 1 })), /Unsupported save version 1/);
 assert.throws(() => restore(JSON.stringify({ v: SAVE_VERSION + 1 })), /Unsupported save version/);

@@ -13,6 +13,7 @@ import { lightSources, isNatural } from "../sim/light.js";
 import { phase, warmthAt } from "../sim/season.js";
 import { cropStage } from "../sim/farm.js";
 import { spriteOf, uiSprite, SPR } from "./sprites.js";
+import { seenTraps } from "../sim/traps.js";
 import { perspective, lookAlong, mul, project, lookDir } from "./fpvmath.js";
 import { MeshCache, FLOATS, MAX_FACES } from "./chunkmesh.js";
 
@@ -294,6 +295,11 @@ export class FpvRenderer {
         if (!spr) continue;
         put(e, spr, e.x + 0.5, e.y + 0.5, e.z);
       }
+    }
+    for (const t of seenTraps(sim)) {                                                          // 7.21: spotted traps stand as warning marks on the floor
+      const dx = t.x + 0.5 - cam.x, dy = t.y + 0.5 - cam.y;
+      if (dx * dx + dy * dy > R2) continue;
+      put({ kind: "trap", x: t.x, y: t.y, z: t.z }, spriteOf({ kind: "trap", k: t.k }, sim, false, {}), t.x + 0.5, t.y + 0.5, t.z);
     }
     if (heads.size > 600) for (const [id, h] of heads) if (tick - h.t > 40) heads.delete(id);
     this.dyn[0].n = ns; this.dyn[1].n = nq; this.spritesDrawn = nq;

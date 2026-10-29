@@ -35,7 +35,7 @@ const SKILL_CAP = { dig: "Dig", build: "Build", craft: "Craft" };
 const NEED_ICON = { hunger: "food", thirst: "water", energy: "energy", warm: "warmth" };
 const TRAIT_ICON = { strength: "haul", speed: "flee", stamina: "health", intelligence: "knowledge", drive: "bolt", leisure: "mood-hi", fertility: "people", longevity: "spoilage", hardiness: "warmth" };
 const SKILL_ICON = { dig: "dig", build: "build", craft: "craft" };
-export const JOB_ICON = { eat: "eat", drink: "drink", sleep: "sleep", huddle: "sleep", leisure: "mood-hi", forage: "forage", dry: "rack", build_bed: "bed", build_rack: "rack", build_site: "build", craft_site: "craft", deconstruct: "deconstruct", dig: "dig", mine: "dig", cut: "gather", chop: "chop", haul: "haul", store: "drop", goto: "move", tend_fire: "hearth", fire_kiln: "kiln", burn_charcoal: "mound", smelt: "forge", smoke: "smoker", make_tool: "workbench", fetch_water: "water", tinker: "knowledge", cook: "hearth", haul_wagon: "haul", flee: "flee", defend: "hunt", mend: "tend", convalesce: "tend", tend_sick: "tend", hunt: "hunt", till: "field", sow: "sprout", water_field: "water", harvest: "field", fence: "pen", fodder: "gather", slaughter: "hunt", capture: "capture", scout: "scout", strike: "hunt" };
+export const JOB_ICON = { eat: "eat", drink: "drink", sleep: "sleep", huddle: "sleep", leisure: "mood-hi", forage: "forage", dry: "rack", build_bed: "bed", build_rack: "rack", build_site: "build", craft_site: "craft", deconstruct: "deconstruct", dig: "dig", mine: "dig", cut: "gather", chop: "chop", haul: "haul", store: "drop", goto: "move", tend_fire: "hearth", fire_kiln: "kiln", burn_charcoal: "mound", smelt: "forge", smoke: "smoker", make_tool: "workbench", fetch_water: "water", tinker: "knowledge", cook: "hearth", haul_wagon: "haul", flee: "flee", defend: "hunt", mend: "tend", convalesce: "tend", tend_sick: "tend", hunt: "hunt", till: "field", sow: "sprout", water_field: "water", harvest: "field", fence: "pen", fodder: "gather", slaughter: "hunt", capture: "capture", scout: "scout", strike: "hunt", disarm: "craft" };
 const RIM = { need: "circle", vcrit: "tri", order: "sq", standing: "hex", demand: "none", leisure: "none" };
 
 /** The "Now" section (UI_SPEC §3.2): why this villager is doing this, as a chain of icons. Words are in tips and in a hidden copy; "Say it in words" opens the table. */
@@ -264,7 +264,7 @@ function otherHtml(game, o) {
   const { sim } = game;
   if (o.kind === "room") return roomHtml(game, o.id);
   if (o.kind === "proom") return proomHtml(game, o);
-  if (o.kind === "cell") { const c = cellInfo(sim, o.x, o.y, o.z); return { title: c.title, html: c.lines.map(l => `<p>${esc(l)}</p>`).join("") }; }
+  if (o.kind === "cell") { const c = cellInfo(sim, o.x, o.y, o.z); return { title: c.title, html: (c.pip ? `<p class="mana m${c.pip}" data-test="danger-pip" data-band="${c.pip}"><i></i>${esc(c.pipText)}</p>` : "") + c.lines.map(l => `<p>${esc(l)}</p>`).join("") }; }
   if (o.kind === "stock") {
     const z = sim.stock, s = survey(sim);
     let h = `<p>A ${z.x1 - z.x0 + 1} by ${z.y1 - z.y0 + 1} cell area where villagers keep food and materials. Holds ${zoneCapacity(z)} items in stacks of ${STACK_CAP}.` + (sim.zones.list.length ? ` With the ${sim.zones.list.length} extra zone${sim.zones.list.length === 1 ? "" : "s"} the village holds ${stockCapacity(sim)}.` : "") + `</p><div class="kv">`;

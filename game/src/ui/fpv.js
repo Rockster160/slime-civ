@@ -21,7 +21,7 @@ const PITCH = -0.16, TURN_MS = 150;         // UI_SPEC §12.3: a grid crawler: f
 
 const IC = { warm: "warmth", hp: "health", "bad-air": "warn", "cave-in": "underground", dark: "night", strike: "hunt", take: "use" };     // the old local glyph names -> the shared registry (ui/icons.js)
 const svg = (n, cls = "") => iconSvg(IC[n] || n, 16, "fv-i " + cls);
-const VERB = { chop: ["Chop", "chop"], forage: ["Pick", "take"], cut: ["Cut", "take"], haul: ["Take", "take"], strike: ["Strike", "strike"], dig: ["Dig", "dig"], sleep: ["Sleep", "sleep"], eat: ["Eat", "food"], dry: ["Hang to dry", "take"], build_site: ["Build", "build"], craft_site: ["Build", "build"], store: ["Put down", "take"], drink: ["Drink", "water"] };
+const VERB = { chop: ["Chop", "chop"], forage: ["Pick", "take"], cut: ["Cut", "take"], haul: ["Take", "take"], strike: ["Attack", "strike"], dig: ["Dig", "dig"], sleep: ["Sleep", "sleep"], eat: ["Eat", "food"], dry: ["Hang to dry", "take"], build_site: ["Build", "build"], craft_site: ["Build", "build"], store: ["Put down", "take"], drink: ["Drink", "water"] };
 const NEEDS = [["hunger", "Food", "food"], ["thirst", "Water", "water"], ["energy", "Energy", "energy"], ["warm", "Warmth", "warm"]];
 const RING_CAP = { Energy: "Rest", Warmth: "Warm" };
 const HAZ_ICON = (t) => /roof/i.test(t) ? "cave-in" : /air/i.test(t) ? "bad-air" : "dark";
@@ -154,7 +154,7 @@ export function createFpv(game) {
   function ensureHud() {
     if (host) return;
     host = hud;
-    host.innerHTML = '<div class="fv-vig"></div><div class="fv-edge"></div><div class="fv-plate"></div><div class="fv-haz"></div><div class="fv-cross"><i></i><i></i></div><div class="fv-tags"></div><div class="fv-chip" style="display:none"></div><div class="fv-rings"></div><div class="fv-state"></div><div class="fv-held"><canvas width="32" height="32"></canvas><span class="fv-heldt"></span></div><div class="fv-msg"></div>';
+    host.innerHTML = '<div class="fv-vig"></div><div class="fv-edge"></div><div class="fv-plate"></div><div class="fv-haz"></div><div class="fv-cross"><i></i><i></i></div><div class="fv-tags"></div><div class="fv-chip" style="display:none"></div><div class="fv-rings"></div><div class="fv-state"></div><div class="fv-held" style="display:none"><canvas width="32" height="32"></canvas><span class="fv-heldt"></span></div><div class="fv-msg"></div>';
     chip = host.querySelector(".fv-chip");
   }
   function ring(label, v, soft, crit, ic, extra = "") {
@@ -190,7 +190,7 @@ export function createFpv(game) {
       if (!el) { el = document.createElement("div"); el.className = "fv-tag"; host2.appendChild(el); tagEls.set(e.id, el); }
       const txt = (e.kind === "villager" ? (e.name || "").split(" ")[0] + ": " : "") + word;
       if (el.dataset.t !== txt) { el.dataset.t = txt; el.textContent = txt; }
-      el.className = "fv-tag" + (e.kind === "fauna" ? (e.hostile || (e.sp === "wolf" || e.sp === "thornback") ? " foe" : " beast") : "");
+      el.className = "fv-tag" + (e.kind === "fauna" ? (e.hostile || e.mon || (e.sp === "wolf" || e.sp === "thornback") ? " foe" : " beast") : "");
       el.style.transform = `translate(${p[0].toFixed(0)}px,${p[1].toFixed(0)}px) translate(-50%,-100%)`;
       el.style.opacity = String(Math.max(0.45, 1 - d / (TAG_R + 1)).toFixed(2));
     }
@@ -223,7 +223,7 @@ export function createFpv(game) {
       }
       prev.ht.set(e.id, e.ht);
     }
-    if (v.ht && v.hd > 0 && v.ht !== prev.hp && sim.tick - v.ht < 30) { prev.hp = v.ht; pop("-" + v.hd, "hurt", "hit", W / 2, H - 150); }
+    if (v.ht && v.ht !== prev.hp && sim.tick - v.ht < 30) { prev.hp = v.ht; if (v.hd > 0) pop("-" + v.hd, "hurt", "hit", W / 2, H - 150); else pop("dodged", "", "miss", W / 2, H - 150); }
     const st = v.slp === 1 ? "Sleeping…" : v.action ? ((v.job && JOB[v.job.k] ? JOB[v.job.k].noun : "Working") + "…") : "";
     const el = host.querySelector(".fv-state"); if (el && el.dataset.s !== st) { el.dataset.s = st; el.textContent = st; }
   }
@@ -272,6 +272,7 @@ export function createFpv(game) {
     lastFb = msg;
     const ht = host.querySelector(".fv-heldt"), hk = `<kbd>${esc(km.label("drop"))}</kbd> put down`;
     ht.innerHTML = (v.carry ? `<b>${v.carry.n}</b>` : "") + `<span class="sr">${esc(heldTxt)}</span>` + (v.carry ? ` <kbd>${esc(km.label("drop"))}</kbd>` : "");
+    host.querySelector(".fv-held").style.display = heldKey ? "" : "none";            // 7.23: nothing in hand, no empty chip at the foot of the screen
     if (heldKey !== held) {
       held = heldKey; const cv = host.querySelector(".fv-held canvas"), c = cv.getContext("2d");
       c.clearRect(0, 0, 32, 32);

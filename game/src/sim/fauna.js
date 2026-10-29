@@ -25,6 +25,7 @@ import { BIOMES, biomeAt, HIGHLAND, MARSH } from "./biome.js";
 import { World } from "./world.js";
 import { wolf as wolfBehave, grazer as grazerBehave, TURN_TICKS } from "./packs.js";
 import { depthOn, dryAir, deposits } from "./depth.js";
+import { MONSTERS, monster as monsterBehave, monsterDrops, spawnPass, PERIOD as SPAWN_PERIOD, PHASE as SPAWN_PHASE } from "./monsters.js";
 
 export const FAUNA = {
   hopper: { label: "hopper", beh: "hopper", hp: 18, tpc: 7, huntable: 1, tamable: 1, scare: 0, meat: 2, hide: 1, roam: 6, flee: { r: 4, tpc: 5, steps: 4, rest: 40 },
@@ -36,10 +37,12 @@ export const FAUNA = {
     curio: "A lean grey hunter that runs in a pack. By day it chases hoppers; on a winter night it will go after anyone who is alone. It will not come near a crowd or a fire." },
   grazer: { label: "grazer", beh: "grazer", hp: 120, tpc: 9, chase: 6, huntable: 2, tamable: 1, scare: 0, dmg: 24, hit: 0.55, cd: 60, fearDmg: 0.45, meat: 8, hide: 3, bone: 4, roam: 7, flee: { r: 5, tpc: 8, steps: 3, rest: 60 },
     curio: "A heavy grazer that walks slowly off from anyone who comes near. It is a great deal of meat, hide and bone, and it turns on whoever it is struck by or crowded up against." },
+  ...MONSTERS,        // 7.22: cave crawler, coreback, spitter, core guardian (monsters.js: rows, behaviour and the spawner)
 };
 export const FEAR_AT = 0.6;          // above this an autonomous villager drops what they do and runs (§13.7)
 export const FEAR_STOP = 0.3;        // ... and keeps running until it falls below this
 export const FEAR_R = 14;            // how far a scary creature is seen
+export const ARMED_BOLD = 0.5, ARMED_FEAR = 0.2;      // 7.22: a villager with a spear in hand fears a weak thing (scare < ARMED_BOLD: crawlers, spitters) a fifth as much, so a spear crew can clear a den
 const FEAR_RISE = 0.3, FEAR_FALL = 0.02, FEAR_COMPANY = 0.03;     // per 10 ticks
 export const BARE = 12, SPEAR = 50;  // damage of a bare-handed blow and of a copper spear thrust (GDD §13.6: three thrusts kill the thornback)
 export const SPEAR_USES = 30;
@@ -157,7 +160,7 @@ function thornback(sim, e) {
   e.cd = row.tpc;
 }
 const TERRITORY_SEE = 16;
-const BEHAVE = { hopper, thornback, wolf: (sim, e) => wolfBehave(sim, e, HELP), grazer: (sim, e) => grazerBehave(sim, e, HELP) };
+const BEHAVE = { hopper, thornback, wolf: (sim, e) => wolfBehave(sim, e, HELP), grazer: (sim, e) => grazerBehave(sim, e, HELP), monster: (sim, e) => monsterBehave(sim, e, HELP) };
 
 /** S14: walk towards a cell like `walk`, but when the greedy step is blocked (a tree, a pond) take the first step of a real path to it. Used by wolves and grazers, which range farther than a hopper. */
 function chase(sim, e, tx, ty, tz) {
@@ -170,7 +173,7 @@ function chase(sim, e, tx, ty, tz) {
   sim.ents.move(e, x, y, z);
   return true;
 }
-const HELP = { FAUNA, walk, chase, nearestVillager, near1, swing: (sim, a, b) => swing(sim, a, b), penById };      // what packs.js uses (it cannot import this file)
+const HELP = { FAUNA, spawnFauna, walk, chase, nearestVillager, near1, swing: (sim, a, b) => swing(sim, a, b), penById };      // what packs.js uses (it cannot import this file)
 
 // ---- the tick ----
 
@@ -189,6 +192,7 @@ export function faunaTick(sim) {
     if (--e.cd > 0) continue;
     BEHAVE[FAUNA[e.sp].beh](sim, e);
   }
+  if (t % SPAWN_PERIOD === SPAWN_PHASE) spawnPass(sim, HELP);        // 7.22: monsters spawn from the mana of the active land (monsters.js)
   if (t % 50 === 33) sightings(sim);
 }
 
@@ -354,17 +358,19 @@ export function faunaDaily(sim) {
 
 /** Fear rises with how close a scary creature is and falls over time, faster in company (§13.7). Returns the new fear. */
 export function fearStep(sim, v) {
-  let near = 1e9;
+  let near = 1e9, rise = 0;
   for (const e of faunaOf(sim)) {
-    if (!FAUNA[e.sp].scare || Math.abs(e.z - v.z) > 3) continue;
+    const sc = FAUNA[e.sp].scare;
+    if (!sc || Math.abs(e.z - v.z) > 3) continue;
     const d = cheb(e, v);
     if (d < near) near = d;
+    if (d <= FEAR_R) { let q = sc * (1 - d / FEAR_R); if (sc < ARMED_BOLD && v.eq && v.eq.item === "copper_spear") q *= ARMED_FEAR; if (q > rise) rise = q; }        // 7.22: a row's `scare` scales the fear it causes (1 = the thornback); the strongest creature in sight counts
   }
   let f = v.fear || 0;
   if (near === 1e9 && f === 0) return 0;
   let company = false;
   if (f > 0) for (const o of sim.ents.ofKind("villager")) if (o !== v && Math.abs(o.x - v.x) <= 3 && Math.abs(o.y - v.y) <= 3 && Math.abs(o.z - v.z) <= 1) { company = true; break; }
-  f += (near <= FEAR_R ? FEAR_RISE * (1 - near / FEAR_R) : 0) - (company ? FEAR_COMPANY : FEAR_FALL);
+  f += (near <= FEAR_R ? FEAR_RISE * rise : 0) - (company ? FEAR_COMPANY : FEAR_FALL);
   return (v.fear = r3(Math.max(0, Math.min(1, f))));
 }
 /** The nearest scary creature within sight, or null. */
@@ -411,7 +417,8 @@ export function swing(sim, att, tgt) {
 function defeat(sim, att, tgt) {
   if (tgt.kind === "villager") { kill(sim, tgt, label(att)); return; }
   const row = FAUNA[tgt.sp];
-  dropLoose(sim, "hopper_meat", row.meat, tgt.x, tgt.y, tgt.z);       // carrion / game: the baseline hauling brings it in
+  if (row.mon) monsterDrops(sim, tgt, att);                                 // 7.22: core shards and parts, not meat
+  if (row.meat) dropLoose(sim, "hopper_meat", row.meat, tgt.x, tgt.y, tgt.z);       // carrion / game: the baseline hauling brings it in
   if (row.hide) { dropLoose(sim, "hide", row.hide, tgt.x, tgt.y, tgt.z); sight(sim, "HIDE_WORKING", "skin", tgt.x, tgt.y, tgt.z, null); }     // S9: the skin comes off the carcass; whoever sees it worked may understand hide working
   if (row.bone) { dropLoose(sim, "bone", row.bone, tgt.x, tgt.y, tgt.z); sight(sim, "BONE_TOOL", "carcass", tgt.x, tgt.y, tgt.z, null); }    // S14: a big carcass leaves bone; one may split on a rock into an edge
   if (depthOn(sim) && row.meat >= 2) carcassSights(sim, tgt);

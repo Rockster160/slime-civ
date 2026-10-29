@@ -89,6 +89,25 @@ export function fauna(c, sp, o, view = "side") {
     ell(c, 16, 20, 13, 9, o.tame ? "#9a7650" : "#7d5a3a", o.hostile ? "#ff5d5d" : "#3b2916"); c.fillStyle = "#3b2916"; c.fillRect(7, 25, 3, 6); c.fillRect(21, 25, 3, 6);
     line(c, 6, 14, 3, 8, "#e9dcc0", 2.4); line(c, 26, 14, 29, 8, "#e9dcc0", 2.4);
     if (o.tame) line(c, 11, 18, 21, 18, "#e5594f", 2);
+  } else if (sp === "crawler") {                                                                                 // 7.22: a low pale many-legged crawler, red-eyed
+    for (const dx of [-8, -3, 3, 8]) { line(c, 16 + dx, 25, 16 + dx * 1.45, 30, "#4a4332", 1.6); line(c, 16 + dx, 22, 16 + dx * 1.35, 18, "#4a4332", 1.6); }
+    ell(c, 15, 24, 11, 5, "#d8d0b8", o.hostile ? "#ff5d5d" : "#4a4332"); line(c, 9, 20, 9, 28, "#a89e84", 1); line(c, 15, 19, 15, 29, "#a89e84", 1);
+    ell(c, 25, 23, 4.2, 3.4, "#b8ae92", "#4a4332"); if (!o.back) { ell(c, 27, 22, 1.2, 1.2, "#ff3b3b"); line(c, 28, 25, 31, 27, "#4a4332", 1.4); }
+  } else if (sp === "coreback") {                                                                                // 7.22: a thornback gone violet: glowing spines, quicker and leaner
+    ell(c, 16, 21, 13, 8, "#3a2a4a", o.hostile ? "#ff5d5d" : "#150d1f");
+    for (let i = -2; i <= 2; i++) poly(c, [16 + i * 5 - 2, 14, 16 + i * 5, 5, 16 + i * 5 + 2, 14], "#b070ff");
+    c.fillStyle = "#150d1f"; c.fillRect(6, 26, 4, 5); c.fillRect(22, 26, 4, 5);
+    if (!o.back) { ell(c, 26, 21, 1.8, 1.8, "#e6b8ff"); poly(c, [28, 24, 31, 27, 27, 26], "#e9dcc0"); }
+  } else if (sp === "spitter") {                                                                                 // 7.22: a squat green thing with a wide mouth; it spits when it attacks
+    ell(c, 16, 23, 9, 7.5, "#6f8f3a", o.hostile ? "#ff5d5d" : "#2c3d14"); ell(c, 16, 14, 5, 4.5, "#85a84a", "#2c3d14");
+    if (!o.back) { ell(c, 14, 13, 1.2, 1.2, "#ffec7a"); ell(c, 19, 13, 1.2, 1.2, "#ffec7a"); ell(c, 16, 17, 3, 1.6, o.hostile ? "#5a1010" : "#1c2a0c"); }
+    if (o.hostile) { ell(c, 24, 17, 2, 2, "#c4f05a"); ell(c, 28, 16, 1.4, 1.4, "#c4f05a"); }
+    c.fillStyle = "#2c3d14"; c.fillRect(9, 28, 4, 3); c.fillRect(19, 28, 4, 3);
+  } else if (sp === "guardian") {                                                                                // 7.22: a tall stone figure with the core burning in its chest
+    c.fillStyle = "#7d7a86"; c.fillRect(8, 10, 16, 20); c.strokeStyle = o.hostile ? "#ff5d5d" : "#34323b"; c.lineWidth = 1.6; c.strokeRect(8, 10, 16, 20);
+    ell(c, 16, 7, 5.5, 5, "#8e8b98", "#34323b"); c.fillStyle = "#7d7a86"; c.fillRect(3, 12, 5, 14); c.fillRect(24, 12, 5, 14);
+    ell(c, 16, 19, 3.8, 3.8, "#d68cff", "#6a2fa8"); if (!o.back) { ell(c, 14, 6.5, 1.1, 1.1, "#d68cff"); ell(c, 18, 6.5, 1.1, 1.1, "#d68cff"); }
+    c.fillStyle = "#34323b"; c.fillRect(9, 28, 5, 3); c.fillRect(18, 28, 5, 3);
   } else {                                                                                                       // the thornback: a big dark boar with a spiked back
     ell(c, 16, 21, 14, 9, "#4a2f22", o.hostile ? "#ff5d5d" : "#1c120c");
     for (let i = -2; i <= 2; i++) poly(c, [16 + i * 5 - 2, 14, 16 + i * 5, 6, 16 + i * 5 + 2, 14], "#1c120c");
@@ -125,6 +144,7 @@ function fire(c, x, y, k) {
 export function misc(c, kind, o, view = "side") {
   if (kind === "flame") { if (o.tree) { fire(c, 16, 28, 2.2); fire(c, 9, 29, 1.4); fire(c, 23, 29, 1.4); } else { ell(c, 16, 29, 4, 2, "#ff8a2a"); ell(c, 16, 22, 3, 5, "rgba(190,190,200,.55)"); } }
   else if (kind === "grave") { ell(c, 16, 29, 11, 3, "rgba(70,52,34,.9)"); poly(c, [9, 28, 9, 11, 16, 5, 23, 11, 23, 28], "#b9b4a8", "#5e594f"); c.fillStyle = `hsl(${o.hue || 0},70%,55%)`; c.fillRect(13, 14, 6, 6); }
+  else if (kind === "trap") { const col = { dart: "#ff7a4a", pit: "#ffc23a", collapse: "#e5594f", gas: "#9bd83a" }[o.t] || "#ff7a4a"; ell(c, 16, 27, 11, 3, "rgba(0,0,0,.45)"); poly(c, [16, 6, 28, 26, 4, 26], col, "#2a1208"); c.fillStyle = "#2a1208"; c.fillRect(15, 12, 2.4, 8); c.fillRect(15, 22, 2.4, 2.4); }
   else if (kind === "wagon") { c.fillStyle = o.cart ? "#b0803f" : "#a67c52"; c.fillRect(3, 12, 26, 12); c.strokeStyle = "#3d2810"; c.strokeRect(3, 12, 26, 12); ell(c, 9, 26, 5, 5, "#2c2118", "#c9a85c"); ell(c, 23, 26, 5, 5, "#2c2118", "#c9a85c"); }
   else { c.strokeStyle = "rgba(255,255,255,.85)"; c.lineWidth = 1.5; c.setLineDash([3, 3]); c.strokeRect(5, 8, 22, 22); c.setLineDash([]); c.fillStyle = "rgba(255,255,255,.12)"; c.fillRect(5, 8, 22, 22); }       // a ghost: a dashed box
 }
@@ -134,6 +154,10 @@ export function uiSprite(c, kind) {
   if (kind === "shadow") { const g = c.createRadialGradient(16, 16, 0, 16, 16, 15); g.addColorStop(0, "rgba(0,0,0,.55)"); g.addColorStop(0.6, "rgba(0,0,0,.35)"); g.addColorStop(1, "rgba(0,0,0,0)"); c.fillStyle = g; c.fillRect(0, 0, 32, 32); }
   else { c.fillStyle = "rgba(255,244,190,.10)"; c.fillRect(0, 0, 32, 32); c.strokeStyle = "rgba(255,244,190,.9)"; c.lineWidth = 1.6; c.strokeRect(0.8, 0.8, 30.4, 30.4); }
 }
+
+/** 7.23: a billboard's side in cells, by what the creature is. The painters draw the body across most of the 32 px square, so this is close to its body length: a slime is 0.9, and a 16-hit-point crawler is
+ *  about half that (it filled the bottom third of the first-person view when it stood beside you at 1.0). */
+export const FAUNA_SIZE = { guardian: 1.9, thornback: 1.6, coreback: 1.3, grazer: 1.3, wolf: 0.95, spitter: 0.62, crawler: 0.5, hopper: 0.6 };
 
 /**
  * What to draw for an entity: {key, w, h (cells), em (0..1 glow), paint(ctx)} or null. `back` = the viewer is behind it (no face).
@@ -162,7 +186,7 @@ export function spriteOf(e, sim, back, ctxInfo = {}) {
     return { key: `p${stage}${tub ? "t" : ""}${wet}`, w: 0.95, h: 0.95, em: 0, flat: true, paint: (c) => plant(c, { species: "crop", stage, tuber: tub, wet: !!wet }) };
   }
   if (k === "fauna") {
-    const hostile = e.st === "attack" || e.st === "hunt" || e.st === "turn", bk = back ? 1 : 0, big = e.sp === "thornback" ? 1.8 : e.sp === "grazer" ? 1.4 : e.sp === "wolf" ? 1.0 : 0.6;
+    const hostile = e.st === "attack" || e.st === "hunt" || e.st === "turn" || e.st === "raid", bk = back ? 1 : 0, big = FAUNA_SIZE[e.sp] || 0.6;
     return { key: `f${e.sp}${e.tame ? "t" : ""}${hostile ? "h" : ""}${bk}`, w: big, h: big, em: 0, paint: (c) => fauna(c, e.sp, { tame: !!e.tame, hostile, back: !!back }) };
   }
   if (k === "furniture") {
@@ -174,6 +198,7 @@ export function spriteOf(e, sim, back, ctxInfo = {}) {
   if (k === "flame") { const tree = e.src === "tree"; return { key: "fl" + (tree ? "t" : "s"), w: tree ? 1.6 : 0.8, h: tree ? 1.6 : 0.8, em: 0.9, paint: (c) => misc(c, "flame", { tree }) }; }
   if (k === "grave") { const hue = Math.round((e.hue || 0) / 6) * 6; return { key: "g" + hue, w: 0.8, h: 0.9, em: 0, paint: (c) => misc(c, "grave", { hue }) }; }
   if (k === "wagon") { const cart = e.t === "cart" ? 1 : 0; return { key: "w" + cart, w: 1.4, h: 1.1, em: 0, paint: (c) => misc(c, "wagon", { cart: !!cart }) }; }
+  if (k === "trap") return { key: "tr" + e.k, w: 0.8, h: 0.8, em: 0.3, paint: (c) => misc(c, "trap", { t: e.k }) };      // 7.21: a spotted trap (drawn from sim.trp, not an entity)
   if (k === "site" || k === "csite") return { key: "gh", w: 0.9, h: 0.9, em: 0.35, paint: (c) => misc(c, "ghost", {}) };
   return null;
 }

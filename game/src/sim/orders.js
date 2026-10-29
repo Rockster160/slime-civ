@@ -3,7 +3,7 @@
 // Sim.apply, so a run replays exactly.
 //
 //   {type:"order", ids:[villagerId...], verb, tid?, x?,y?,z?}
-//        verb: forage | chop | gather | haul | move | dig | hunt | capture (S10: catch a wild hopper alive and put it in a finished pen) (S8 hunt: hoppers around the target; the meat is hauled in). For dig, z is the level of the SOLID cell to remove
+//        verb: clear (7.22: spear crews kill the monsters round the target, a den; never the guardian) | disarm (7.21: defuse the spotted trap at x,y,z; a craft job) | forage | chop | gather | haul | move | dig | hunt | capture (S10: catch a wild hopper alive and put it in a finished pen) (S8 hunt: hoppers around the target; the meat is hauled in). For dig, z is the level of the SOLID cell to remove
 //        (the stand cell above it is z+1); the order covers a 5x5 patch of columns at that level and yields stone/dirt items.
 //        Target = entity id (tid) or a cell (x,y,z). An order is AREA-wide: after
 //        the named target the villager keeps working targets within ORDER_AREA
@@ -21,7 +21,7 @@ import { setTeach } from "./skills.js";
 import { splitSolo } from "./population.js";
 import { can } from "./knowledge.js";
 
-const VERBS = ["forage", "chop", "gather", "haul", "move", "dig", "hunt", "capture", "scout"];     // S17: scout = walk to unexplored land and reveal it (scout.js)
+const VERBS = ["forage", "chop", "gather", "haul", "move", "dig", "hunt", "clear", "capture", "scout", "disarm"];     // S17: scout = walk to unexplored land and reveal it (scout.js)
 
 export const ORDER_COMMANDS = {
   order(sim, c) {

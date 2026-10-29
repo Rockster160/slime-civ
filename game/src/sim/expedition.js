@@ -21,6 +21,7 @@ import { cancelAction } from "./jobstate.js";
 import { DUR_DAY } from "./clock.js";
 import { World } from "./world.js";
 import { crewById, crewOf, CREW_COMMANDS } from "./crews.js";
+import { delveTarget, delveStep, finishDelve, DELVE_TIME, DELVE_LIGHT } from "./delve.js";
 
 export const EXP_ITEMS = [...SEEK_ITEMS, "any"];
 export const EXP_N = 2;              // units to bring back: one cell's worth (a sample; the player can send them again for more)
@@ -60,6 +61,7 @@ export const EXP_COMMANDS = {
       return n > 0 || fail("NO_TARGET");
     }
     if (c.op !== "start") return fail("NO_TARGET");
+    if (c.kind === "delve") return startDelve(sim, c, fail);
     if (!EXP_ITEMS.includes(c.item)) return fail("UNKNOWN_ITEM");
     const cw = c.crew ? crewById(sim, c.crew) : null;               // S11: "send this crew": its members are the party
     const ids = Array.isArray(cw ? cw.ids : c.ids) ? (cw ? cw.ids : c.ids).filter(id => { const v = sim.ents.get(id); return v && v.kind === "villager" && isAdult(sim, v) && !v.xp && !v.poss; }) : [];
@@ -82,12 +84,30 @@ export const EXP_COMMANDS = {
   },
 };
 
+/** 7.23: a delve ({kind:"delve", crew|ids, core?}): the party is sent into a labyrinth (delve.js drives it). */
+function startDelve(sim, c, fail) {
+  const cw = c.crew ? crewById(sim, c.crew) : null;
+  const ids = Array.isArray(cw ? cw.ids : c.ids) ? (cw ? cw.ids : c.ids).filter(id => { const v = sim.ents.get(id); return v && v.kind === "villager" && isAdult(sim, v) && !v.xp && !v.poss; }) : [];
+  if (!ids.length) return fail("NO_TARGET");
+  const tg = delveTarget(sim, c, sim.ents.get(ids[0]));
+  if (!tg) return fail("NO_DUNGEON");
+  const id = sim.exp.n + 1;
+  const x = { id, kind: "delve", ids: ids.slice(), item: "delve", want: "the labyrinth", did: 0, dids: [], t0: sim.tick, deadline: sim.tick + DELVE_TIME, st: "work", why: "", t1: 0, got: 0, depth: 0, stall: "", s0: 0, k0: {}, rep: "",
+    core: tg.core, name: tg.name, ent: tg.ent, light: DELVE_LIGHT, vis: [], skip: [], pos: {}, cw: {}, dp: {}, dn: [], idle: 0, loot: {}, opened: 0, disarmed: 0, rooms: tg.dun.rooms.length, mapped: 0 };
+  sim.exp.n++; sim.exp.list.push(x);
+  linkCrew(sim, x, cw);
+  for (const vid of ids) { const v = sim.ents.get(vid); v.xp = id; v.order = null; cancelAction(sim, v); v.job = null; v.rp = 0; v.ep = 0; v.br = 1; }
+  sim.board.ep++;
+  log(sim, "MILESTONE", "A party set out to delve into the labyrinth of " + tg.name + ": " + ids.map(i => sim.ents.get(i).name).join(", ") + ".", ids, { exp: id, core: tg.core }, 1);
+  return true;
+}
+
 function goHome(sim, x, why) {
   x.st = "home"; x.why = why; x.t1 = sim.tick;
-  for (const id of x.ids) { const v = sim.ents.get(id); if (v) v.rp = 1; }
+  for (const id of x.ids) { const v = sim.ents.get(id); if (v) { v.rp = 1; if (x.kind === "delve") { v.order = null; cancelAction(sim, v); } } }
   sim.board.ep++;
-  const text = { found: "found what they came for", nothing: "found nothing", wounded: "someone was badly hurt", food: "someone ran short of food", time: "time ran out", recall: "the player called them back", lost: "the crew was lost" }[why] || why;
-  log(sim, "MILESTONE", "The expedition for " + x.want + " turned back: " + text + ".", x.ids, { exp: x.id, why }, 1);
+  const text = { found: "found what they came for", nothing: "found nothing", wounded: "someone was badly hurt", food: "someone ran short of food", time: "time ran out", recall: "the player called them back", lost: "the crew was lost", light: "the brands burned low", mapped: "the labyrinth was mapped" }[why] || why;
+  log(sim, "MILESTONE", (x.kind === "delve" ? "The delve into the labyrinth of " + x.name : "The expedition for " + x.want) + " turned back: " + text + ".", x.ids, { exp: x.id, why }, 1);
 }
 
 /** Every 20 ticks (just before mineTick): drop the dead, read the search, apply the recall rule, write the stall summary, notice new things. */
@@ -100,6 +120,11 @@ export function expeditionTick(sim) {
     x.ids = x.ids.filter(id => sim.ents.get(id));
     const vs = x.ids.map(id => sim.ents.get(id));
     if (!vs.length) { x.why = "lost"; finish(sim, x); continue; }
+    if (x.kind === "delve") {                                           // 7.23: a delve is driven by orders, not a search (delve.js)
+      const r = delveStep(sim, x, vs);
+      if (x.st === "work" && r) goHome(sim, x, r); else if (x.st === "home" && r === "done") finish(sim, x);
+      continue;
+    }
     const ds = x.dids.map(i => sim.mine.list.find(q => q.id === i)).filter(Boolean);
     x.got = Math.max(x.got, ...ds.map(q => q.got)); x.depth = Math.max(x.depth, ...ds.map(q => q.depth || 0));
     const won = ds.find(q => q.done && !q.fail);
@@ -138,6 +163,7 @@ export function looseTarget(sim, x, v) {
 }
 
 function finish(sim, x) {
+  if (x.kind === "delve") { finishDelve(sim, x); return; }
   const have = survey(sim).stock[x.want], brought = Math.max(0, have - x.s0);
   x.st = "done";
   const names = x.ids.map(id => sim.ents.get(id)).filter(Boolean).map(v => v.name);

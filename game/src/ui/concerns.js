@@ -6,7 +6,7 @@ import { CRIT_BASE, CRIT_WINTER, CAMP } from "../sim/board.js";
 import { winterAhead, isNight, seasonIdx, dayF, WINTER_START } from "../sim/season.js";
 import { holders } from "../sim/knowledge.js";
 import { CRAFTS } from "../sim/phenomena.js";
-import { huntingPressure } from "../sim/fauna.js";
+import { huntingPressure, FAUNA } from "../sim/fauna.js";
 import { isAdult, isElder } from "../sim/villager.js";
 import { DUR_DAY } from "../sim/clock.js";
 import { rottingSoon, runwayText } from "./text.js";
@@ -19,6 +19,7 @@ import { can as canDo } from "../sim/knowledge.js";
 
 
 export const CONCERN_ORDER = ["food", "cold", "illness", "danger", "underground", "crew", "knowledge", "spoilage", "hunting", "idle"];   // ties between equally urgent classes
+export const MONSTER_NEAR = 30;                                  // 7.22: monsters this close to the camp are a Concern
 export const THORN_NEAR = 24;                                    // cells from the camp: the beast is "near camp"
 export const IDLE_SHARE = 0.2;                                   // this share of the adults (at least 3) with nothing to do is worth a line
 
@@ -55,6 +56,15 @@ const RULES = {
     return { level: n >= 3 || weak ? 3 : 2, text: n + (n === 1 ? " villager is sick (" : " villagers are sick (") + causes + (n >= 3 ? "; it is spreading" : "") + "). " + help, loc: { ...cellOf(s0), id: s0.id } };
   },
   danger(sim) {
+    const mons = sim.ents.ofKind("fauna").filter(e => e.mon);          // 7.22: monsters near the camp (spawned by a core's mana): a Concern, a raid when they come for the village
+    if (mons.length) {
+      const cp = CAMP(sim.stock), dist = (e) => Math.max(Math.abs(e.x - cp.x), Math.abs(e.y - cp.y)), near = mons.filter(e => dist(e) <= MONSTER_NEAR).sort((a, b) => dist(a) - dist(b) || a.id - b.id);
+      if (near.length) {
+        const m0 = near[0], d = dist(m0), raid = near.some(e => e.st === "raid" || e.st === "attack" || e.st === "hunt"), scared = sim.ents.ofKind("villager").filter(v => (v.fear || 0) > 0.6);
+        const name = near.every(e => e.sp === m0.sp) ? FAUNA[m0.sp].label + (near.length > 1 ? "s" : "") : "monsters";
+        return { level: raid || scared.length ? 3 : 2, text: near.length + " " + name + (raid ? " are raiding the village, " : " are ") + d + " cells from camp. Walls, doors and light keep them out; spear crews can clear them (Clear order).", loc: cellOf(m0) };
+      }
+    }
     const wolves = sim.ents.ofKind("fauna").filter(e => e.sp === "wolf");
     if (wolves.length) {                                         // S14: wolves worry the village only when they are close
       const cp = CAMP(sim.stock), w0 = wolves.slice().sort((a, b) => Math.max(Math.abs(a.x - cp.x), Math.abs(a.y - cp.y)) - Math.max(Math.abs(b.x - cp.x), Math.abs(b.y - cp.y)))[0];

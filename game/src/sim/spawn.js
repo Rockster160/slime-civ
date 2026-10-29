@@ -16,6 +16,7 @@ import { Entities } from "./entities.js";
 import { cellIdx, cellXyz, chunkKey } from "./cellkey.js";
 import { baseDef, colInto, dirtAt, genChunk, localIdx, WATER_LEVEL, SOFT_THICK, SITE_R, SITE_Z } from "./terrain.js";
 import { activateChunk } from "./flora.js";
+import { placeSpawnCore } from "./core.js";
 
 export const REACH_R = 64;         // validator: key inputs within this many cells of the landing site (§11.10 item 3)
 export const WATER_NEAR = 14, BERRY_NEAR_R = 15, BERRY_MIN = 3;     // S17: the camp the search prefers
@@ -41,6 +42,7 @@ export function buildDef(seed, opts, at) {
     def.pond = { r: 5, x: at.x + (dir === 0 ? pd : dir === 2 ? -pd : jit), y: at.y + (dir === 1 ? pd : jit) };
   }
   def.geo = { caves: [], malachite: [], ridge: [], tells: [] };
+  placeSpawnCore(def);                            // 7.20: the camp's one findable core (core.js)
   def.stamps = buildStamps(def);
   return def;
 }

@@ -6,7 +6,7 @@ import { COMFORT } from "../sim/villager.js";
 import { inZone } from "../sim/items.js";
 import { CLASS } from "../ui/text.js";
 import { drawSites, drawRoom, drawMarks, drawMining } from "./ghosts.js";
-import { drawDecor } from "./mapdecor.js";
+import { drawDecor, drawTraps } from "./mapdecor.js";
 import { provisionalRoom } from "../sim/proom.js";
 import { drawIcon } from "../ui/icons.js";
 import { TOKENS } from "../ui/kit.js";
@@ -30,7 +30,7 @@ export function drawOverlays(game) {
   if (ui.overlays.zones || ui.hoverStock || (ui.other && ui.other.kind === "stock")) zones(game, ctx, at, ts);
   if (ui.overlays.jobs) jobLines(game, ctx, at, sel, ts);
 
-  if (game.cam.oblique) drawDecor(game, ctx);
+  if (game.cam.oblique) drawDecor(game, ctx); else drawTraps(game, ctx);
   concernMarkers(game, ctx);
   drawLight(game, ctx);
 

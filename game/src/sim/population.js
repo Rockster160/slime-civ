@@ -212,6 +212,7 @@ export function deathContext(cause, c) {
   if (cause === "illness") return " - the sickness wore down a body that could not fight it" + (c.poss ? ", while guided" : "");
   if (cause === "wolf") return " - taken by a wolf" + (c.poss ? ", while guided" : "") + (c.beds ? "; " + beds : "");
   if (cause === "grazer") return " - gored by a grazer" + (c.poss ? ", while guided" : "");
+  if (cause === "cave crawler" || cause === "coreback" || cause === "spitter" || cause === "core guardian") return " - killed by a " + cause + " from the dark" + (c.poss ? ", while guided" : "");      // 7.22
   if (cause === "bad air") return " - breathed foul air in a dead-end tunnel" + (c.poss ? ", while guided" : "");
   if (cause === "starvation") return " - the stockpile held " + (c.runway >= 99 ? "plenty" : c.runway.toFixed(1) + " days of food per head");
   return " - " + beds;

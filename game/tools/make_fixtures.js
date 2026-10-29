@@ -25,6 +25,10 @@ import { initFauna, spawnFauna } from "../src/sim/fauna.js";
 import { CROP } from "../src/sim/farm.js";
 import { DAY as DAY_TICKS, DUR_DAY } from "../src/sim/clock.js";
 import { newDepth } from "../src/sim/depth.js";
+import { coresNear } from "../src/sim/core.js";
+import { dungeonOf, trapList, reachable, standable } from "../src/sim/dungeon.js";
+import { coreKey } from "../src/sim/core.js";
+import { guardianSlain } from "../src/sim/cm.js";
 
 export const SEED = 7;
 export const DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "tests", "fixtures");
@@ -328,6 +332,127 @@ export function prepSettle(sim) {
   return { bench, pen, grazer: g };
 }
 
+/**
+ * 7.22: monsters beside the camp. Derived from `settled`: a swarm of four cave crawlers and a spitter stand on the meadow about 12 cells east of the stockpile, a spear in stock, everybody fed.
+ * There is no mana within 66 cells of a camp, so these are hand-placed: they carry `hr` (a home radius that stands in for the band >= 1 territory they would have in real mana) and `mon`,
+ * and their home is where they stand, so they raid the camp (a crawler's home within RAID_R of the camp). Returns {crawlers: [ids], spitter: id, at}.
+ */
+export function prepMonsters(sim) {
+  const w = sim.world, sz = w.standZ(sim.site.x, sim.site.y);
+  let at = null;
+  for (let r = 12; r < 22 && !at; r++) for (let dy = 0; dy < 8 && !at; dy++) for (const sy of [1, -1]) {
+    const x = sim.site.x + r, y = sim.site.y + sy * dy, z = w.standZ(x, y);
+    if (z >= 0 && z <= sz + 1 && !sim.ents.at(x, y, z).length) { at = [x, y, z]; break; }
+  }
+  if (!at) throw new Error("no meadow for the monsters fixture");
+  const made = [], want = ["crawler", "crawler", "crawler", "crawler", "spitter"];
+  for (let r = 0; r < 4 && made.length < want.length; r++) for (let dy = -r; dy <= r && made.length < want.length; dy++) for (let dx = -r; dx <= r && made.length < want.length; dx++) {
+    const x = at[0] + dx, y = at[1] + dy, z = w.standZ(x, y);
+    if (z < 0 || Math.abs(z - at[2]) > 1 || sim.ents.at(x, y, z).length) continue;
+    const e = spawnFauna(sim, want[made.length], x, y, z);
+    e.mon = 1; e.hr = 24; e.home = at.slice(); e.st = "patrol";
+    made.push(e);
+  }
+  storeInZone(sim, "copper_spear", 2);
+  for (const v of sim.ents.ofKind("villager")) { v.hunger = v.thirst = v.energy = 1; v.hp = 100; v.fear = 0; v.carry = null; }       // (empty hands: a villager carrying berries cannot take a spear)
+  sim.cache.iv++;
+  return { crawlers: made.filter(e => e.sp === "crawler").map(e => e.id), spitter: made.find(e => e.sp === "spitter").id, at };
+}
+
+/**
+ * 7.21: a labyrinth, and a villager two cells from a hidden dart trap at the far end of a straight corridor (a trap in a corridor, so a seen one blocks it), a second villager
+ * beside a hidden trap of another kind, and everybody fed. Derived from `settled`; the dungeon is the nearest one to the camp that has the shape. The villagers stand on cells of the labyrinth
+ * with their chunks activated by the sim as it runs. Returns {dun, a: {id, trap}, b: {id, trap}} (trap = {x, y, z, k}).
+ */
+export function prepTrap(sim) {
+  const def = sim.def, sp = sim.site, w = sim.world;
+  const cs = coresNear(def, sp.x - 800, sp.y - 800, sp.x + 800, sp.y + 800, 0).map(c => [c, dungeonOf(def, c)]).filter(q => q[1])
+    .sort((p, q) => Math.hypot(p[0].x - sp.x, p[0].y - sp.y) - Math.hypot(q[0].x - sp.x, q[0].y - sp.y));
+  const line = (dun, t) => {                                           // a straight run: two stand cells west of the trap, and east of it
+    for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+      const c1 = [t.x + dx, t.y + dy, t.z], c2 = [t.x + 2 * dx, t.y + 2 * dy, t.z];
+      if (standable(dun, ...c1) && standable(dun, ...c2) && !dun.traps.has((t.z * dun.H + (c1[1] - dun.y0)) * dun.W + (c1[0] - dun.x0)) && !dun.traps.has((t.z * dun.H + (c2[1] - dun.y0)) * dun.W + (c2[0] - dun.x0))) return { at: c2, from: c1 };
+    }
+    return null;
+  };
+  for (const [core, dun] of cs) {
+    const R = reachable(dun), ts = trapList(dun).filter(t => R.has(t.x, t.y, t.z));
+    const a = ts.find(t => t.k === "dart" && line(dun, t)), b = ts.find(t => t.k !== "dart" && t !== a && line(dun, t) && Math.abs(t.x - (a ? a.x : 0)) + Math.abs(t.y - (a ? a.y : 0)) > 12);
+    if (!a || !b) continue;
+    const vs = sim.ents.ofKind("villager").filter(v => isAdult(sim, v));
+    const place = (v, t) => { const l = line(dun, t); sim.ents.move(v, l.at[0], l.at[1], l.at[2]); look(sim, l.at[0], l.at[1], l.at[2]); };
+    place(vs[0], a); place(vs[1], b);
+    for (const v of sim.ents.ofKind("villager")) { v.hunger = v.thirst = v.energy = 1; v.hp = 100; }
+    sim.cache.iv++;
+    return { dun, a: { id: vs[0].id, trap: a }, b: { id: vs[1].id, trap: b }, core };
+  }
+  throw new Error("no labyrinth with the right traps near the camp for the trap fixture");
+}
+
+/** The labyrinths nearest the camp, nearest first: [{core, dun}]. */
+function labyrinths(sim) {
+  const def = sim.def, sp = sim.site;
+  return coresNear(def, sp.x - 800, sp.y - 800, sp.x + 800, sp.y + 800, 0).map(c => [c, dungeonOf(def, c)]).filter(q => q[1])
+    .sort((p, q) => Math.hypot(p[0].x - sp.x, p[0].y - sp.y) - Math.hypot(q[0].x - sp.x, q[0].y - sp.y)).map(([core, dun]) => ({ core, dun }));
+}
+function fedAll(sim) { for (const v of sim.ents.ofKind("villager")) { v.hunger = v.thirst = v.energy = 1; v.hp = 100; v.fear = 0; v.carry = null; } }
+
+/**
+ * 7.23: a crew at a labyrinth entrance. Derived from `settled`: the nearest labyrinth with at least 8 rooms, three adults standing on its first door (inside the labyrinth, as if they had walked in),
+ * fed, with the surrounding rock already seen from the door. The test sends them with {type:"expedition", op:"start", kind:"delve", ids, core}. Returns {core: key, ids, ent}.
+ */
+export function prepDelve(sim) {
+  const L = labyrinths(sim).find(q => q.dun.rooms.length >= 8 && q.dun.entrances.length);
+  if (!L) throw new Error("no labyrinth for the delve fixture");
+  const e = L.dun.entrances[0], vs = sim.ents.ofKind("villager").filter(v => isAdult(sim, v)).slice(0, 3);
+  const spots = [[e.x, e.y, e.z]];
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2]]) if (standable(L.dun, e.x + dx, e.y + dy, e.z)) spots.push([e.x + dx, e.y + dy, e.z]);
+  vs.forEach((v, i) => { const c = spots[i % spots.length]; sim.ents.move(v, c[0], c[1], c[2]); look(sim, c[0], c[1], c[2]); });
+  fedAll(sim); sim.cache.iv++;
+  return { core: coreKey(L.core), ids: vs.map(v => v.id), ent: { x: e.x, y: e.y, z: e.z } };
+}
+
+/** The labyrinth whose core chamber has room for a villager and a guardian: {core, dun, room, spots: [[x, y, z]...]} (stand cells of the chamber, nearest the core first). */
+function chamberOf(sim) {
+  for (const L of labyrinths(sim)) {
+    const r = L.dun.rooms.find(q => q.kind === "core");
+    if (!r) continue;
+    const z = L.dun.s[r.j], spots = [];
+    for (let y = r.y0; y <= r.y1; y++) for (let x = r.x0; x <= r.x1; x++) if (standable(L.dun, x, y, z) && (x !== L.core.x || y !== L.core.y)) spots.push([x, y, z]);
+    spots.sort((a, b) => Math.abs(a[0] - L.core.x) + Math.abs(a[1] - L.core.y) - Math.abs(b[0] - L.core.x) - Math.abs(b[1] - L.core.y));
+    if (spots.length >= 6) return { ...L, room: r, spots };
+  }
+  throw new Error("no core chamber for the guardian fixture");
+}
+
+/**
+ * 7.23: a slime next to a weakened guardian. Derived from `settled`: the core chamber of the nearest labyrinth that has one, a villager standing in it, the guardian (as the spawner would have placed it,
+ * `ck` = the core's key) two cells away with 15 hit points left, the villager fed and holding a copper spear. A test possesses the villager and strikes. Returns {core, id, guardian}.
+ */
+export function prepGuardian(sim) {
+  const C = chamberOf(sim), v = sim.ents.ofKind("villager").find(q => isAdult(sim, q));
+  const [vx, vy, vz] = C.spots[0], g = C.spots.find(c => Math.abs(c[0] - vx) + Math.abs(c[1] - vy) === 2) || C.spots[3];
+  sim.ents.move(v, vx, vy, vz); look(sim, vx, vy, vz);
+  const e = spawnFauna(sim, "guardian", g[0], g[1], g[2]);
+  e.mon = 1; e.home = g.slice(); e.ck = coreKey(C.core); e.hp = 15; e.cd = 0;
+  fedAll(sim); v.eq = { item: "copper_spear", u: 12 }; sim.cache.iv++;
+  return { core: coreKey(C.core), id: v.id, guardian: e.id };
+}
+
+/**
+ * 7.23: a slain guardian with the choice pending. Derived from `settled`: the same chamber, a villager in it, the guardian dead (remembered in `sim.wild.gk`, its deed in the chronicle) and the core
+ * waiting on the player's answer (`sim.cm.pend`). Returns {core, id}.
+ */
+export function prepCoreSlain(sim) {
+  const C = chamberOf(sim), v = sim.ents.ofKind("villager").find(q => isAdult(sim, q)), key = coreKey(C.core);
+  const [vx, vy, vz] = C.spots[0];
+  sim.ents.move(v, vx, vy, vz); look(sim, vx, vy, vz);
+  (sim.wild.gk = sim.wild.gk || []).push(key);
+  guardianSlain(sim, key, v);
+  fedAll(sim); sim.cache.iv++;
+  return { core: key, id: v.id };
+}
+
 /** name -> {run: sim ticks until this returns true (checked every tick), bot?: scripted player}. All from SEED. */
 export const FIXTURES = {
   start: { until: () => true },
@@ -356,6 +481,11 @@ export const FIXTURES = {
   farm: { from: "settled", prep: prepFarm },
   pen: { from: "settled", prep: prepPen },
   settle: { from: "pen", prep: prepSettle },                           // S15: a bench, a penned grazer, FRAMING, timber and wheels, raw meat
+  monsters: { from: "settled", prep: prepMonsters },                    // 7.22: four crawlers and a spitter on the meadow east of the stockpile, a spear in stock
+  delve: { from: "settled", prep: prepDelve },                        // 7.23: three villagers on a labyrinth's first door, fed
+  guardian: { from: "settled", prep: prepGuardian },                   // 7.23: a villager in the core chamber, the guardian two cells away with 15 hit points
+  coreslain: { from: "settled", prep: prepCoreSlain },                  // 7.23: the guardian slain, the harvest-or-leave choice pending
+  trap: { from: "settled", prep: prepTrap },                         // 7.21: two villagers in a labyrinth, each two cells from a hidden trap (a dart plate and another kind) in a straight corridor                           // S15: a bench, a penned grazer, FRAMING, timber and wheels, raw meat
   crowd: { from: "settled", prep: prepCrowd },                         // S11: 60 villagers (spawned adults) for the scale checks
   // A roofed shelter with beds, a stockpile and its purpose set, built by the scripted shelter player (separate run).
   hut: { bot: true, until: (s) => s.tick >= 14 * DUR_DAY && s.rooms.all().some(r => r.enclosed) },

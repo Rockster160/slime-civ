@@ -16,7 +16,7 @@ export const DARK_RATE = 0.85;               // work speed underground beyond an
 export const LIT_SIGHT = 5;                  // a villager standing in light looks this far along a tunnel (the dark: seen.js SIGHT, 3)
 
 const NAT = new Uint8Array(256);
-for (const m of [M.GRASS, M.DIRT, M.STONE, M.SAND, M.SOFT, M.FLINT, M.MALACHITE, M.CLAY, M.IRONORE, M.COAL, M.DEEP, M.RUBBLE, M.SALT, M.PEAT, M.HERB]) NAT[m] = 1;
+for (const m of [M.GRASS, M.DIRT, M.STONE, M.SAND, M.SOFT, M.FLINT, M.MALACHITE, M.CLAY, M.IRONORE, M.COAL, M.DEEP, M.RUBBLE, M.SALT, M.PEAT, M.HERB, M.GEM, M.CRYSTAL, M.COREORE, M.CORE, M.DWALL, M.CACHE]) NAT[m] = 1;
 /** Natural ground (the stuff a roof is made of in a mine). */
 export const isNatural = (m) => NAT[m] === 1;
 
@@ -55,7 +55,8 @@ export function darkMul(sim, v) {
   return underground(sim.world, v.x, v.y, v.z) && !inLight(lightSources(sim), v.x, v.y, v.z) ? DARK_RATE : 1;
 }
 /** How far a villager looks from here: the light's reach inside light, else the dark default. */
-export function sightAt(sim, x, y, z, dark) {
+export function sightAt(sim, x, y, z, dark, v) {
   if (!underground(sim.world, x, y, z)) return dark;
+  if (v && v.br) return Math.max(dark, LIT_SIGHT);                         // 7.23: a delve party's own brands (while they last: delve.js)
   return inLight(lightSources(sim), x, y, z) ? Math.max(dark, LIT_SIGHT) : dark;
 }

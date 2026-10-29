@@ -1,7 +1,7 @@
 // Crew summaries in plain words (GDD §09 stall summary, §07 crews): "3 of 5 working; 2 blocked: no way to get there".
 // Pure functions of sim state - no DOM - so tests can check them headlessly.
 import { crewMembers, choreOf, taskText } from "../sim/crews.js";
-import { blockerText } from "./text.js";
+import { blockerText, delveStallText } from "./text.js";
 import { isAdult } from "../sim/villager.js";
 
 const SKIP = new Set(["LOWER_SCORE", "NEED_CRITICAL", "RESERVED", "MAX_WORKERS"]);   // "something else scored higher" and "enough hands are already on it" are not stalls: those members are simply idle
@@ -35,7 +35,7 @@ export function crewSummary(sim, crew) {
   const exp = crew.task && crew.task.t === "exp" ? sim.exp.list.find(x => x.id === crew.task.id) : null;
   for (const v of ms) {
     if (v.poss) { out.guided++; continue; }
-    if (v.xp && exp) { out.working++; if (exp.stall && v === ms[0]) { const t = exp.stall === "UNSAFE" ? "someone is afraid of the thornback" : blockerText("mine", exp.stall); by.set(t, (by.get(t) || 0) + 1); } continue; }
+    if (v.xp && exp) { out.working++; if (exp.stall && v === ms[0]) { const t = exp.kind === "delve" ? delveStallText(exp.stall) : exp.stall === "UNSAFE" ? "someone is afraid of the thornback" : blockerText("mine", exp.stall); by.set(t, (by.get(t) || 0) + 1); } continue; }
     const j = v.job && v.action ? v.job : null;
     if (j && j.c === "need") { out.resting++; continue; }
     if (j && j.c !== "leisure") { out.working++; continue; }

@@ -14,6 +14,10 @@ import { exploredAt } from "../sim/seen.js";
 import { BIOMES } from "../sim/biome.js";
 import { WATER_LEVEL } from "../sim/terrain.js";
 import { LM_LABEL } from "../sim/landmarks.js";
+import { dungeonOf, isAir } from "../sim/dungeon.js";
+import { coreByKey } from "../sim/cm.js";
+import { bandAt } from "../sim/core.js";
+import { isSeen } from "../sim/seen.js";
 import { remember } from "./dom.js";
 import { svg } from "./icons.js";
 
@@ -21,8 +25,9 @@ export const MM_SIZE = 192;
 export const MM_SCALES = [1, 2, 3, 4, 6, 8, 12, 16];
 export const MM_MS = 350;               // terrain layer redraw period
 export const MM_BUDGET = 48;            // chunks the render view may generate per redraw
-const LM_COLOR = { cave: "#1c1c24", salt: "#f2f2ec", ruin: "#b9a98c", lake: "#4a8bd8" };
-const LM_LETTER = { cave: "C", salt: "S", ruin: "R", lake: "L" };
+const LM_COLOR = { cave: "#1c1c24", salt: "#f2f2ec", ruin: "#b9a98c", lake: "#4a8bd8", core: "#8a5cd6" };
+const BAND_PIP = ["", "#c9b5ff", "#9a6bff", "#ff9a2e", "#ff5d5d"];       // 7.23: danger pips by mana band 1..4 (the colours of the cell card's pip)
+const LM_LETTER = { cave: "C", salt: "S", ruin: "R", lake: "L", core: "*" };
 
 export function createMinimap(root, game) {
   const ui = game.ui, cam = game.cam;
@@ -36,7 +41,7 @@ export function createMinimap(root, game) {
   const lctx = land.getContext("2d"), img = lctx.createImageData(MM_SIZE, MM_SIZE);
   const px32 = new Uint32Array(img.data.buffer);
   const rgb = (r, g, b) => (255 << 24) | (b << 16) | (g << 8) | r;
-  const DARK = rgb(20, 26, 38), PENDING = rgb(34, 44, 62), WATER = rgb(58, 111, 181);
+  const DUNGEON_PX = rgb(214, 140, 255), DARK = rgb(20, 26, 38), PENDING = rgb(34, 44, 62), WATER = rgb(58, 111, 181);
   const pal = MAT.map(m => m.color);
 
   const setOpen = (on) => { mm.open = on; remember("mm.open", on ? "1" : "0"); apply(); };
@@ -83,6 +88,15 @@ export function createMinimap(root, game) {
         px32[o] = rgb(Math.max(0, Math.min(255, r | 0)), Math.max(0, Math.min(255, g | 0)), Math.max(0, Math.min(255, b | 0)));
       }
     }
+    for (const key of sim.cm.known || []) {                                   // 7.23: a labyrinth somebody has entered, outlined as far as it is explored: its seen floor cells in violet (one pixel per cell sampled)
+      const c = coreByKey(sim, key), dun = c ? dungeonOf(sim.def, c) : null;
+      if (!dun || dun.bb.x1 < ox || dun.bb.x0 > ox + MM_SIZE * s || dun.bb.y1 < oy || dun.bb.y0 > oy + MM_SIZE * s) continue;
+      for (let j = 0; j < dun.L; j++) for (let y = dun.y0; y < dun.y0 + dun.H; y++) for (let x = dun.x0; x < dun.x0 + dun.W; x++) {
+        if (!isAir(dun, x, y, dun.s[j]) || !isSeen(sim, x, y, dun.s[j] - 1)) continue;
+        const qx = Math.floor((x - ox) / s), qy = Math.floor((y - oy) / s);
+        if (qx >= 0 && qy >= 0 && qx < MM_SIZE && qy < MM_SIZE) px32[qy * MM_SIZE + qx] = DUNGEON_PX;
+      }
+    }
     lctx.putImageData(img, 0, 0);
     mm.pending = pending; mm.redraws++;
   }
@@ -100,6 +114,13 @@ export function createMinimap(root, game) {
       ctx.beginPath(); ctx.arc(x, y, 5.5, 0, 6.2832); ctx.fillStyle = LM_COLOR[m[0]] || "#ccc"; ctx.fill(); ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.2; ctx.stroke();
       ctx.font = "bold 8px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = m[0] === "salt" || m[0] === "ruin" ? "#222" : "#fff"; ctx.fillText(LM_LETTER[m[0]] || "?", x, y + 0.5);
     }
+    for (const m of sim.seen.lm || []) {                                      // 7.23: danger pips: the band at a core or ruin that has been seen (a ring: how deep), then the monsters in cells somebody has seen
+      if (m[0] !== "core" && m[0] !== "ruin") continue;
+      const b = bandAt(sim.def, m[1], m[2], 0) || bandAt(sim.def, m[1], m[2], 8);
+      const [x, y] = pixOf(m[1] + 0.5, m[2] + 0.5);
+      if (!b || x < -6 || y < -6 || x > MM_SIZE + 6 || y > MM_SIZE + 6) continue;
+      ctx.beginPath(); ctx.arc(x + 5, y - 5, 3, 0, 6.2832); ctx.fillStyle = BAND_PIP[b]; ctx.fill(); ctx.strokeStyle = "#000"; ctx.lineWidth = 1; ctx.stroke();
+    }
     for (const v of sim.ents.ofKind("villager")) {
       const [x, y] = pixOf(v.x + 0.5, v.y + 0.5);
       if (x < -3 || y < -3 || x > MM_SIZE + 3 || y > MM_SIZE + 3) continue;
@@ -112,6 +133,13 @@ export function createMinimap(root, game) {
         const [tx, ty] = pixOf(v.order.x + 0.5, v.order.y + 0.5);
         if (tx > 0 && ty > 0 && tx < MM_SIZE && ty < MM_SIZE) { ctx.strokeStyle = "#5fe0e8"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(tx - 3, ty - 3); ctx.lineTo(tx + 3, ty + 3); ctx.moveTo(tx + 3, ty - 3); ctx.lineTo(tx - 3, ty + 3); ctx.stroke(); }
       }
+    }
+    for (const e of sim.ents.ofKind("fauna")) {
+      if (!e.mon || !isSeen(sim, e.x, e.y, e.z - 1)) continue;
+      const [x, y] = pixOf(e.x + 0.5, e.y + 0.5);
+      if (x < -3 || y < -3 || x > MM_SIZE + 3 || y > MM_SIZE + 3) continue;
+      ctx.fillStyle = "#ff4a4a"; ctx.strokeStyle = "#220808"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(x, y, e.boss || e.sp === "guardian" ? 3.6 : 2, 0, 6.2832); ctx.fill(); ctx.stroke();
     }
     const vis = cam.visible(), [ax, ay] = pixOf(vis.x0, vis.y0), [bx, by] = pixOf(vis.x1 + 1, vis.y1 + 1);
     ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = 1.2; ctx.strokeRect(ax, ay, Math.max(3, bx - ax), Math.max(3, by - ay));

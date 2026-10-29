@@ -15,6 +15,7 @@ import { newCrews } from "./crews.js";
 import { newUg } from "./underground.js";
 import { newDepth } from "./depth.js";
 import { newZones } from "./yard.js";
+import { newTrp } from "./traps.js";
 import { genoFrom } from "./villager.js";
 import { newHeirloom, HEIRLOOM_ODDS } from "./people.js";
 import { mix32 } from "./rng.js";
@@ -22,13 +23,15 @@ import { chunkMeta } from "./chunks.js";
 import { activateChunk } from "./flora.js";
 import { cellXyz, chunkKX, chunkKY, chunkKey, cellIdx } from "./cellkey.js";
 import { packPlant, plantProps, isPackable } from "./dormant.js";
+import { newCm, applyCm } from "./cm.js";
 
-export const SAVE_VERSION = 11;       // 11 = S18b: the clock rebase (a game day is 12000 ticks, was 1800; a life 500 days): every tick-stamped field (born, nx, bt, cd, timers, chronicle) is on the new clock, so a v9/v10 save is REFUSED (OLD_CLOCK), not migrated. 10 = S17: compact (cell deltas per chunk, plants as arrays, the seen set as per-chunk bitsets, landmarks seen, chunk sleep state); a v9 save loads unchanged. 9 = S16: the endless world. Terrain is regrown from the seed (the spawn search is deterministic), so a save holds only the cells that differ from it (deltas), the list of active chunks (chunks: [key, active, changed, lastNear]) and the entities; seen = {c: revealed surface columns, l: other seen cells}. A save of the old fixed 128x128 map (v < 9) cannot be loaded: restore() refuses it with a message. 8 = S13: hidden genotype (g, gp, inb, wk), bonds (aff, mn, rel), grief (gr), hobby (hb), titles (ti), heirloom (hl), skill rust (rs, lu), grave entities. 7 = S12: biomes (sim.bio: 1 = the seed grows the biome map, 0 = a world made before it), cave-in state (ug). 6 = S7a: villager familiarity (fam), discovery state (disc), flames and hearths. 5 = 5 = S6: geology (new strata + ores), seen log, mining designations. 4 = S5: skills dig/build/craft, nine traits, clone and lesson fields
+export const SAVE_VERSION = 15;       // 15 = 7.23: sim.cm (the core ledger: choices pending, cores left, cores harvested), delve expeditions (`kind` on an expedition record, `br` on a member): additive, a v14 save loads as it is. 14 = 7.22: monsters (fauna rows with `mon`, `ck`, `sf`, `hr`, `sh`; sim.wild.gk = slain guardians; item rows chitin, core_hide, venom_sac): additive, a v13 save loads as it is. 13 = 7.21: dungeons (the land round every core gains a labyrinth: far content only, nothing within 100 cells of a camp changes) and the trap ledger `trp` (additive: absent = empty), so a v12 save loads as it is; its edits sit on the same rock except inside a labyrinth's footprint, which nobody had dug yet. 12 = 7.20: magic cores and cave networks. Terrain changed (caves, ore weights, gems, outcrops, spires), so the cells a v11 save edited sit on different rock and it is REFUSED (OLD_TERRAIN), not migrated; a v12 save has the same shape as v11. 11 = S18b: the clock rebase (a game day is 12000 ticks, was 1800; a life 500 days): every tick-stamped field (born, nx, bt, cd, timers, chronicle) is on the new clock, so a v9/v10 save is REFUSED (OLD_CLOCK), not migrated. 10 = S17: compact (cell deltas per chunk, plants as arrays, the seen set as per-chunk bitsets, landmarks seen, chunk sleep state); a v9 save loads unchanged. 9 = S16: the endless world. Terrain is regrown from the seed (the spawn search is deterministic), so a save holds only the cells that differ from it (deltas), the list of active chunks (chunks: [key, active, changed, lastNear]) and the entities; seen = {c: revealed surface columns, l: other seen cells}. A save of the old fixed 128x128 map (v < 9) cannot be loaded: restore() refuses it with a message. 8 = S13: hidden genotype (g, gp, inb, wk), bonds (aff, mn, rel), grief (gr), hobby (hb), titles (ti), heirloom (hl), skill rust (rs, lu), grave entities. 7 = S12: biomes (sim.bio: 1 = the seed grows the biome map, 0 = a world made before it), cave-in state (ug). 6 = S7a: villager familiarity (fam), discovery state (disc), flames and hearths. 5 = 5 = S6: geology (new strata + ores), seen log, mining designations. 4 = S5: skills dig/build/craft, nine traits, clone and lesson fields
 
 /** What a save of the old fixed-size world says when it is opened (S16 decision: the endless world does not emulate the 128 x 128 map). */
 export const OLD_WORLD = "This save was made in the old fixed-size world, which no longer exists: the world is endless now. Start a new game.";
 
 /** What a save from before the clock rebase says when it is opened (S18b, D35): its ages, timers and chronicle are all counted in 1800-tick days. Refused like the old world, never guessed at. */
+export const OLD_TERRAIN = "This save was made before magic cores and cave networks changed the ground under the world, so the cells it remembers no longer sit on the same rock. Start a new game.";
 export const OLD_CLOCK = "This save was made when a game day lasted 90 seconds. A day is now 10 minutes long and every age, timer and plant in the save is counted on the old clock, so it cannot be loaded. Start a new game.";
 
 /**
@@ -37,7 +40,8 @@ export const OLD_CLOCK = "This save was made when a game day lasted 90 seconds. 
  * start at average. Pure and deterministic: the same old save always migrates to the same new state.
  */
 export function migrate(data) {
-  if (data.v >= 11) return data;
+  if (data.v >= 12) return data;
+  if (data.v >= 11) throw new Error(OLD_TERRAIN);     // v11 is the clock-rebased world on the old caves and ore: refused (7.20)
   if (data.v >= 9) throw new Error(OLD_CLOCK);     // v9 and v10 are the endless world on the 1800-tick day (v9 -> v10 was a change of shape only)
   if (data.v >= 2) throw new Error(OLD_WORLD);
   if (data.v === 7) return v7to8(data);                  // v7 -> v8 (S13): people depth
@@ -164,6 +168,8 @@ export function snapshot(sim) {
     pond: sim.pond,                              // S17: 1 = the world was grown with the camp's pond (terrain regrows from the seed, so the save must say)
     dp: sim.dp,
     zones: sim.zones,
+    trp: sim.trp,
+    cm: sim.cm,
     ironman: sim.ironman ? 1 : 0,
     cmds: sim.cmdLog,
   };
@@ -201,11 +207,14 @@ export function restore(data) {
   sim.crews = data.crews || newCrews();          // S11: absent in older saves (additive)
   sim.ug = data.ug || newUg();                  // S12: absent in older saves (additive)
   sim.dp = data.dp || newDepth(0);              // S14: absent in older saves: the world plays as it did (no illness, wolves, grazers or perturbation); additive, so SAVE_VERSION stays 8
+  sim.cm = data.cm || newCm();                  // 7.23: absent in older saves (additive)
+  sim.trp = data.trp || newTrp();                // 7.21: absent in older saves (additive)
   sim.zones = data.zones || newZones();           // S17: absent in older saves (additive)
   sim.farm = data.farm || newFarm();            // S10: absent in older saves (additive)
   if (sim.board.sg === undefined) { sim.board.sg = 0; sim.board.ag = 0; }
   sim.rooms.fullRebuild(sim);                 // rooms are derived: rebuilt from cells + doors
   sim.tick = data.tick;
+  applyCm(sim);                                  // 7.23: harvested cores fade from their ticks
   sim.cmdLog = data.cmds;
   return sim;
 }

@@ -82,7 +82,7 @@ export function sleepChunks(sim, cs) {
   for (const e of sim.ents.ofKind("fauna")) {
     const k = chunkKey(e.x >> 4, e.y >> 4);
     if (!by.has(k)) continue;
-    if (e.wi && !e.tame && e.st !== "held" && !e.rv && e.sp !== "thornback") { if (!wild.has(k)) wild.set(k, []); wild.get(k).push(e.id); }
+    if ((e.wi || e.mon) && !e.tame && e.st !== "held" && !e.rv && e.sp !== "thornback") { if (!wild.has(k)) wild.set(k, []); wild.get(k).push(e.id); }
   }
   let n = 0;
   sim.quiet = true;

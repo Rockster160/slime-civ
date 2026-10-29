@@ -10,7 +10,8 @@
 //   strata, flint, ores      per-cell hashes and noise thresholds per depth band
 //   clay banks               next to the water, by the same distance field
 //   ridges                   strict local height maxima over 5x5 (the halo columns are computed too)
-//   caves                    worms seeded per 64x64 region cell, each chunk checks the worms of the regions round it
+//   caves                    7.20 networks (caves.js): tunnels between per-region nodes, spurs, rooms, entrance ramps; each chunk asks the owners round it
+//   cores, mana              7.20 (core.js): a core per 256-cell region; ore weights, gems, crystal, outcrops and the mana bands read the field
 //   gas pockets, deposits    per-region seeds, checked from the neighbouring regions
 // The camp is the one place the rules bend: a "spawn" (spawn.js picks it) flattens a clearing, forces meadow round it, and stamps the
 // slice-critical content (a lake with a stream and clay banks, a cave with the thornback's lair, malachite stains) from a pure rule keyed to
@@ -19,6 +20,10 @@ import { mix32 } from "./rng.js";
 import { vnoise, hash2, hash3, clamp } from "./noise.js";
 import { D, M, F } from "./world.js";
 import { MEADOW, HIGHLAND, MARSH } from "./biome.js";
+import { coresNear, manaOf, bandOf, oct, MANA_R } from "./core.js";
+import { carveChunk } from "./caves.js";
+import { carveHome } from "./worms.js";
+import { dungeonOf, carveDungeon } from "./dungeon.js";
 
 export const WATER_LEVEL = 11;     // water fills columns up to and including this z
 export const SOFT_THICK = 5;       // cells of soft rock under the soil (the 2-8 band of §11.5, trimmed to the slice)
@@ -39,7 +44,10 @@ function rcache(def) { const c = def.rc || (def.rc = new Map()); if (c.size > 40
 export function baseDef(seed, opts = {}) {
   seed = seed >>> 0;
   const pick = mix32(seed ^ 0xb10e, 7);
-  return { seed, biomes: opts.biomes !== false, depth: !!opts.depth, hiT: 142 + (pick & 31), maT: 142 + ((pick >> 5) & 31), spawn: null, stamps: null, geo: null, rc: null };
+  const d = { seed, biomes: opts.biomes !== false, depth: !!opts.depth, hiT: 142 + (pick & 31), maT: 142 + ((pick >> 5) & 31), spawn: null, stamps: null, geo: null, rc: null, spawnCore: null, hAt: null, dunOf: null, dc: null };
+  d.hAt = (x, y) => heightAt(d, x, y);
+  d.dunOf = (c) => dungeonOf(d, c);                  // (caves.js asks for a core's dungeon through the def, so it need not import dungeon.js)               // (core.js and caves.js read the ground through this, so they need not import this file)
+  return d;
 }
 
 // ---- one column ---------------------------------------------------------------------------------------------------------
@@ -111,46 +119,7 @@ export function biomeOf(def, x, y) { return colInto(def, x, y, _t).b; }
 
 // ---- region features ----------------------------------------------------------------------------------------------------
 
-export const RS = 64;                       // worm region cell
-const DX8 = [1, 1, 0, -1, -1, -1, 0, 1], DY8 = [0, 1, 1, 1, 0, -1, -1, -1];
-export const RAMP_N = 8;
-/** The cave worm of region cell (rx, ry), or null: [{x, y, z, r, ramp}] steps. A pure function of the seed and the region. */
-export function wormOf(def, rx, ry) {
-  const rc = rcache(def), key = "w" + rx + "," + ry;
-  let w = rc.get(key);
-  if (w !== undefined) return w;
-  w = null;
-  const seed = def.seed, hh = hash2(seed ^ 0xca7e, rx, ry);
-  if (hh % 100 < 55) {
-    const x0 = rx * RS + 6 + ((hh >>> 8) % 52), y0 = ry * RS + 6 + ((hh >>> 16) % 52), t = { h: 0, b: 0, clay: 0, wet: 0 };
-    colInto(def, x0, y0, t);
-    const sp = def.spawn, near = sp && (x0 - sp.x) * (x0 - sp.x) + (y0 - sp.y) * (y0 - sp.y) < 44 * 44;
-    if (!near && t.h >= WATER_LEVEL + 4 && t.h - RAMP_N >= 5) {
-      const rd = (hh >>> 24) & 3, rdx = [1, 0, -1, 0][rd], rdy = [0, 1, 0, -1][rd];
-      let dir = rd * 2, x = x0, y = y0, ok = true;
-      const steps = [], z0 = t.h + 1, c2 = { h: 0, b: 0, clay: 0, wet: 0 };
-      for (let i = 1; i <= RAMP_N && ok; i++) {                           // the ramp must stay in the hill: the floor column is always solid
-        x += rdx; y += rdy;
-        colInto(def, x, y, c2);
-        ok = c2.h >= z0 - i - 1 && c2.h >= WATER_LEVEL + 3;
-        steps.push({ x, y, z: z0 - i, r: 0, ramp: 1 });
-      }
-      if (ok) {
-        let zf = z0 - RAMP_N;
-        for (let n = 0; n < 56; n++) {
-          const rnd = mix32(hh, n + 1);
-          if ((rnd & 3) === 0) dir = (dir + ((rnd >>> 4) & 1 ? 1 : 7)) & 7;
-          x += DX8[dir]; y += DY8[dir];
-          if (n % 7 === 6) zf = clamp(zf + ((rnd >>> 8) % 3) - 1, 3, z0 - 8);
-          steps.push({ x, y, z: zf, r: n % 17 === 16 ? 3 : 1, ramp: 0 });
-        }
-        w = steps;
-      }
-    }
-  }
-  rc.set(key, w);
-  return w;
-}
+export const RS = 64;                       // landmark region cell (landmarks.js, scout.js)
 
 const DEP = { salt: { salt: 71, p: 60, r: 2, b: [HIGHLAND, MARSH], m: M.SALT }, peat: { salt: 72, p: 65, r: 3, b: [MARSH], m: M.PEAT }, herb: { salt: 73, p: 70, r: 2, b: [MARSH], m: M.HERB } };
 export const DEP_RS = 24;
@@ -217,10 +186,56 @@ function isPeak(def, halo, hx, hy, x, y, h) {
   return true;
 }
 
+
+// ---- 7.20: what a core's field does to the rock and the surface ----
+const GEM_P = [0, 5, 18, 45, 100];                 // gems per 10000 rock cells, by band
+const CRY_T = [999, 999, 246, 238, 228];           // crystal: value-noise threshold per band (bands 2+)
+const CORE_T = [999, 999, 999, 240, 230];          // core-touched ore: bands 3+
+/** Gems, crystal clusters and core-touched ore replace plain rock (and the ore veins) where the mana is. Pure per cell. */
+function richen(def, cores, X0, Y0, mats, hs) {
+  const seed = def.seed;
+  for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) {
+    const x = X0 + lx, y = Y0 + ly, h = hs[ly * 16 + lx];
+    let near = false;
+    for (const c of cores) if (oct(x - c.x, y - c.y) < MANA_R) { near = true; break; }
+    if (!near || h < WATER_LEVEL + 3) continue;
+    for (let z = h - dirtAt(seed, x, y) - 1; z >= 1; z--) {
+      const i = L(lx, ly, z), m = mats[i];
+      if (m !== M.SOFT && m !== M.STONE && m !== M.DEEP && m !== M.IRONORE && m !== M.COAL) continue;
+      const band = bandOf(manaOf(cores, x, y, z, true));
+      if (!band) continue;
+      if (hash3(seed ^ 0x6e6d, x, y, z) % 10000 < GEM_P[band]) mats[i] = M.GEM;
+      else if (band >= 2 && vnoise(seed, 81 + (z >> 1), x, y, 5) > CRY_T[band]) mats[i] = M.CRYSTAL;
+      else if (band >= 3 && vnoise(seed, 85 + (z >> 1), x, y, 6) > CORE_T[band]) mats[i] = M.COREORE;
+    }
+  }
+}
+/** Over a SHALLOW core the rock breaks the surface: scattered hard-rock outcrops, crystal and gems close in; a spired core stands up a crystal spire. */
+function outcrops(def, cores, X0, Y0, mats, flgs, hs) {
+  const seed = def.seed;
+  for (const c of cores) {
+    if (!c.sh || c.x < X0 - 12 || c.x > X0 + 27 || c.y < Y0 - 12 || c.y > Y0 + 27) continue;
+    for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) {
+      const x = X0 + lx, y = Y0 + ly, d = oct(x - c.x, y - c.y), h = hs[ly * 16 + lx];
+      if (d > 11 || h < WATER_LEVEL + 3) continue;
+      const r = hash2(seed ^ 0x0c0a, x, y) % 100, i = L(lx, ly, h);
+      if (c.spire && d <= 2) {                                           // the spire: a plus of crystal two cells high with a tall point
+        const hgt = d === 0 ? 5 : d === 1 ? 3 : 2;
+        for (let k = 0; k <= hgt && h + k < D; k++) mats[L(lx, ly, h + k)] = M.CRYSTAL;
+        flgs[i] |= F.NOGROW;
+      } else if (r < 46 - 3 * d) {
+        mats[i] = d <= 4 && r % 3 === 0 ? M.CRYSTAL : r % 11 === 0 && d <= 8 ? M.GEM : M.STONE;
+        flgs[i] |= F.NOGROW;
+      }
+    }
+  }
+}
+
 export function genChunk(def, cx, cy) {
   const seed = def.seed, X0 = cx << 4, Y0 = cy << 4, sp = def.spawn;
   const mats = new Uint8Array(CELLS), flgs = new Uint8Array(CELLS), hs = new Int16Array(256), bm = new Uint8Array(256), cl = new Uint8Array(256);
   const halo = new Int16Array(HW * HW);
+  const cores = coresNear(def, X0, Y0, X0 + 15, Y0 + 15), mb = new Uint8Array(256), md = new Uint8Array(256);       // 7.20: the cores whose field touches this chunk; the mana band at each column's surface and 8 cells under it (the map tint)
   for (let j = 0; j < HW; j++) for (let i = 0; i < HW; i++) {
     const inner = i >= HALO && i < HALO + 16 && j >= HALO && j < HALO + 16;
     colInto(def, X0 + i - HALO, Y0 + j - HALO, _o);
@@ -249,12 +264,13 @@ export function genChunk(def, cx, cy) {
     }
     if (h < WATER_LEVEL + 3) continue;                                    // no ore under the lake and the river beds
     // iron and coal: flat veins in the first two layers of the hard rock band; richer, rarer ones in the deep rock under it
-    if (vnoise(seed, 41, x, y, 9) > 214) for (let z = sb - 1; z >= sb - 2 && z >= 1; z--) if (mats[L(lx, ly, z)] === M.STONE) mats[L(lx, ly, z)] = M.IRONORE;
-    if (vnoise(seed, 42, x, y, 9) > 214) for (let z = sb - 1; z >= sb - 2 && z >= 1; z--) if (mats[L(lx, ly, z)] === M.STONE) mats[L(lx, ly, z)] = M.COAL;
+    const bonus = cores.length ? manaOf(cores, x, y, sb - 2, true) >> 3 : 0;      // 7.20: ore is richer in a core's field (up to 31 off the threshold)
+    if (vnoise(seed, 41, x, y, 9) > 214 - bonus) for (let z = sb - 1; z >= sb - 2 && z >= 1; z--) if (mats[L(lx, ly, z)] === M.STONE) mats[L(lx, ly, z)] = M.IRONORE;
+    if (vnoise(seed, 42, x, y, 9) > 214 - bonus) for (let z = sb - 1; z >= sb - 2 && z >= 1; z--) if (mats[L(lx, ly, z)] === M.STONE) mats[L(lx, ly, z)] = M.COAL;
     for (let z = sb - 3; z >= 1; z--) {
       if (mats[L(lx, ly, z)] !== M.DEEP) continue;
-      if (vnoise(seed, 44 + (z >> 1), x, y, 7) > 226) mats[L(lx, ly, z)] = M.IRONORE;
-      else if (vnoise(seed, 60 + (z >> 1), x, y, 7) > 226) mats[L(lx, ly, z)] = M.COAL;
+      if (vnoise(seed, 44 + (z >> 1), x, y, 7) > 226 - bonus) mats[L(lx, ly, z)] = M.IRONORE;
+      else if (vnoise(seed, 60 + (z >> 1), x, y, 7) > 226 - bonus) mats[L(lx, ly, z)] = M.COAL;
     }
     // malachite: stain blobs in the soft rock; the core of a blob has a seam up to a green stain on the surface (the tell)
     const mv = vnoise(seed, 47, x, y, 8);
@@ -269,6 +285,7 @@ export function genChunk(def, cx, cy) {
       if (hv > 206) { const q = mats[L(lx, ly, sb + SOFT_THICK - 1)]; if (q === M.SOFT) mats[L(lx, ly, sb + SOFT_THICK - 1)] = M.IRONORE; }
     }
   }
+  if (cores.length) richen(def, cores, X0, Y0, mats, hs);
   // S14 deposits: salt licks, peat bogs and herb beds on the surface of their biome
   if (def.depth) for (const kind of ["salt", "peat", "herb"]) {
     for (const d of depositsIn(def, kind, X0, Y0, X0 + 15, Y0 + 15)) {
@@ -279,6 +296,7 @@ export function genChunk(def, cx, cy) {
       }
     }
   }
+  if (cores.length) outcrops(def, cores, X0, Y0, mats, flgs, hs);
   // gas pockets: 3x3 of rock that releases foul air when dug into
   for (let rx = Math.floor((X0 - 2) / GAS_RS); rx <= Math.floor((X0 + 17) / GAS_RS); rx++) for (let ry = Math.floor((Y0 - 2) / GAS_RS); ry <= Math.floor((Y0 + 17) / GAS_RS); ry++) {
     const p = pocketOf(def, rx, ry);
@@ -289,23 +307,14 @@ export function genChunk(def, cx, cy) {
       if (m === M.SOFT || m === M.STONE || m === M.DEEP) flgs[i] |= F.GAS;
     }
   }
-  // natural caves: the worms of the regions round this chunk
-  for (let rx = Math.floor((X0 - 80) / RS); rx <= Math.floor((X0 + 96) / RS); rx++) for (let ry = Math.floor((Y0 - 80) / RS); ry <= Math.floor((Y0 + 96) / RS); ry++) {
-    const w = wormOf(def, rx, ry);
-    if (!w) continue;
-    for (const s of w) {
-      if (s.x + s.r < X0 || s.x - s.r > X0 + 15 || s.y + s.r < Y0 || s.y - s.r > Y0 + 15) continue;
-      for (let y = Math.max(Y0, s.y - s.r); y <= Math.min(Y0 + 15, s.y + s.r); y++) for (let x = Math.max(X0, s.x - s.r); x <= Math.min(X0 + 15, s.x + s.r); x++) {
-        if ((x - s.x) * (x - s.x) + (y - s.y) * (y - s.y) > s.r * s.r + (s.r > 1 ? 1 : 0)) continue;
-        const h = hs[(y - Y0) * 16 + (x - X0)];
-        for (let k = 0; k < (s.ramp ? 2 : 3); k++) {
-          const z = s.z + k;
-          if (z >= D || (!s.ramp && z > h - 3)) continue;
-          const i = L(x - X0, y - Y0, z), m = mats[i];
-          if (m !== M.AIR && m !== M.WATER) { mats[i] = M.AIR; flgs[i] |= F.NATURAL; }
-        }
-      }
-    }
+  // natural caves (7.20): the tunnel networks round this chunk, then the cores' own cells
+  carveHome(def, X0, Y0, mats, flgs, hs);
+  carveChunk(def, X0, Y0, mats, flgs, hs);
+  carveDungeon(def, X0, Y0, mats, flgs, hs);          // 7.21: the labyrinths round the cores (walls, rooms, caches; dungeon.js)
+  for (const c of cores) if (c.x >= X0 && c.x <= X0 + 15 && c.y >= Y0 && c.y <= Y0 + 15 && c.z < hs[(c.y - Y0) * 16 + c.x - X0]) { const i = L(c.x - X0, c.y - Y0, c.z); mats[i] = M.CORE; flgs[i] &= ~F.NATURAL; }
+  if (cores.length) for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) {
+    const c = ly * 16 + lx, h = hs[c];
+    mb[c] = bandOf(manaOf(cores, X0 + lx, Y0 + ly, h, true)); md[c] = bandOf(manaOf(cores, X0 + lx, Y0 + ly, Math.max(1, h - 8), true));
   }
   // ridges: the windy cells, local height maxima, for a draft furnace
   for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) {
@@ -318,6 +327,6 @@ export function genChunk(def, cx, cy) {
   if (st) for (let k = 0; k < st.length; k += 4) {
     const i = st[k]; if (st[k + 1] !== 255) mats[i] = st[k + 1]; flgs[i] = (flgs[i] | st[k + 2]) & ~st[k + 3];
   }
-  return { cx, cy, mats, flgs, hs, bm };
+  return { cx, cy, mats, flgs, hs, bm, mb, md };
 }
 const chunkKeyOf = (cx, cy) => (cx + 32768) * 65536 + (cy + 32768);

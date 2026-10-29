@@ -39,6 +39,7 @@ import { cookAt } from "./kitchen.js";
 import { drinkSip, ateCooked, tend as tendPatient } from "./disease.js";
 import { oreYield, fuelMul } from "./depth.js";
 import { MARSH, biomeAt } from "./biome.js";
+import { isSeenTrap, disarm, openCache } from "./traps.js";
 
 export const WATER_SIPS = 4;           // sips of the hide bag one plot takes (fill gives 24: six plots a trip)
 export function Task(k, steps) { return { type: "Task", k, steps, si: 0, ph: 0, mv: null, p: 0, blocker: null }; }
@@ -477,13 +478,24 @@ const VERBS = {
       w.set(s.cx, s.cy, s.cz, M.AIR, w.flags(s.cx, s.cy, s.cz) & ~F.PLAYER);
       let fz = s.cz; while (fz > 1 && w.mat(s.cx, s.cy, fz - 1) === M.AIR) fz--;               // S12: what falls out of a hole with no floor under it lands on the floor below, where it can be reached
       for (const id of sim.ents.at(s.cx, s.cy, s.cz + 1).slice()) { const e = sim.ents.get(id); if (e.kind === "item") sim.ents.move(e, s.cx, s.cy, fz); }
-      const got = oreYield(sim, info.item, info.n, World.idx(s.cx, s.cy, s.cz));            // S14: this world's richer or leaner ore
-      dropLoose(sim, info.item, got, s.cx, s.cy, fz);
+      let got;
+      if (m === M.CACHE) got = openCache(sim, v, s.cx, s.cy, fz);                           // 7.21: a sealed cache spills its table (traps.js), not one ore
+      else { got = oreYield(sim, info.item, info.n, World.idx(s.cx, s.cy, s.cz)); dropLoose(sim, info.item, got, s.cx, s.cy, fz); }       // S14: this world's richer or leaner ore
       gain(sim, v, "dig", VALUE[info.item], fresh, info.hard ? HARD_DIFFICULTY : undefined);   // hard rock teaches only past 0.8 (§10)
       sim.disc.dg = (sim.disc.dg || 0) + 1; if (info.hard) sim.disc.hd = 1;                    // S7b: tool_edge pressure counts the digging
       wearPick(sim, v);
       reveal(sim, s.cx, s.cy, s.cz);                                // the digger looks into the hole: its neighbours are now seen (fog, §13.8)
       if (s.did) mineDug(sim, s.did, m, got, s.cx, s.cy, s.cz);
+      return "done";
+    },
+  },
+  disarm: { // 7.21: defuse a spotted trap beside me (a craft job; a skilled hand mostly succeeds and keeps the parts, a slip sets it off in their face)
+    dur: 120, skill: "craft", tr: "intelligence",
+    check(sim, v, s) { return isSeenTrap(sim, s.tx, s.ty, s.tz) ? null : "GONE"; },
+    work(sim, v, s) {
+      const r = disarm(sim, v, s.tx, s.ty, s.tz);
+      if (r === "gone") return "GONE";
+      if (r === "ok") gain(sim, v, "craft", 0.5, false);
       return "done";
     },
   },

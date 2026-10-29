@@ -102,6 +102,7 @@
   .nr.ok .fg { stroke:var(--ok); } .nr.soft .fg { stroke:var(--warm); } .nr.crit .fg { stroke:var(--danger); } .nr.crit { animation:pulse 1.4s ease-in-out infinite; }
   .nr .nr-i { position:relative; color:var(--tx); } .nr.crit .nr-i { color:var(--danger); }
   @keyframes pulse { 50% { opacity:.55; } }
+  .mana { display:flex; align-items:center; gap:6px; font-weight:600; } .mana i { width:10px; height:10px; border-radius:50%; background:#9a6bff; box-shadow:0 0 0 2px rgba(154,107,255,.3); flex:none; } .mana.m3 i { background:var(--warm); } .mana.m4 i { background:var(--danger); }
   .pip { vertical-align:-1px; flex:none; } .pip.p1 { color:var(--water); } .pip.p2 { color:var(--warm); } .pip.p3 { color:var(--danger); animation:pulse 1.4s ease-in-out infinite; }
   .rk { display:inline-flex; gap:2px; } .rk i { width:6px; height:6px; border-radius:50%; border:1px solid var(--tx3); } .rk i.f { background:var(--water); border-color:var(--water); } .rk i.h { background:linear-gradient(90deg, var(--water) 50%, transparent 50%); border-color:var(--water); }
   .rk.rusty i.f { background:repeating-linear-gradient(45deg, var(--rot) 0 2px, #b98c5c 2px 4px); border-color:var(--rot); }
@@ -252,6 +253,8 @@
   #digest { position:fixed; left:50%; bottom:80px; transform:translateX(-50%); width:560px; max-width:92vw; max-height:42vh; overflow-y:auto; background:var(--s1); border-radius:var(--r2); box-shadow:var(--e2); padding:var(--sp3) var(--sp4); z-index:12; display:none; zoom:var(--ui); }
   #digest { width:420px; } .dg-head { display:flex; align-items:center; gap:var(--sp2); margin-bottom:var(--sp1); } .dg-head .dg-close { margin-left:auto; }
   .dg-row { display:flex; align-items:center; gap:6px; height:26px; padding:0 4px; border-radius:var(--r1); font-size:13px; } .dg-row[data-a] { cursor:pointer; } .dg-row[data-a]:hover { background:var(--s2); } .dg-row.big .ic { color:var(--danger); } .dg-t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .dg-row .when { color:var(--tx2); font-size:11px; flex:none; } .dg-more { margin-top:var(--sp1); font-size:12px; }
+  #corechoice { position:fixed; left:50%; top:30%; transform:translateX(-50%); width:380px; max-width:92vw; z-index:14; display:none; zoom:var(--ui); }
+  .cc-card { background:var(--s1); border-radius:var(--r2); box-shadow:var(--e2); padding:var(--sp3) var(--sp4); border:1px solid #9a6bff; } .cc-head { display:flex; align-items:center; gap:var(--sp2); font-size:15px; } .cc-head .ic { color:#d68cff; } .cc-card p { margin:var(--sp2) 0; } .cc-btns { display:flex; gap:var(--sp2); } .cc-btns .btn { flex:1; justify-content:center; } .cc-sub { font-size:12px; color:var(--tx2); }
   #helpOverlay { display:none; }
   .setcard h2, .helpcard h2 { margin-bottom:6px; } .setcard h3, .helpcard h3 { margin:14px 0 4px; color:var(--tx2); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
   .setcard table, .helpcard table { border-collapse:collapse; width:100%; } .setcard td, .helpcard td { padding:3px 10px 3px 0; vertical-align:middle; border-bottom:1px solid var(--line); } .setcard td.act { width:230px; }
@@ -359,6 +362,7 @@
 <div id="fpvhud" style="display:none"></div>
 <div id="hud"></div>
 <div id="digest" data-test="digest"></div>
+<div id="corechoice" data-test="core-choice"></div>
 <div id="tip"></div>
 <div id="footer"><span id="hint" class="sr"></span><span id="perf"></span></div>
 <div id="book" class="sheet" data-test="book"></div>

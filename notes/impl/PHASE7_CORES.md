@@ -1,4 +1,4 @@
-# Phase 7: Magic cores, dungeons and caves (PLAN ONLY — not approved to build)
+# Phase 7: Magic cores, dungeons and caves (APPROVED by the user; 7.20-7.23 built, see DECISION_LOG D42-D45; the stages below are named 7.20-7.23, formerly S20-S23)
 
 Author direction (2026-10-28):
 - Underground caves and dungeons must exist.
@@ -39,7 +39,7 @@ A core sits at the heart of a **dungeon** (an authored-by-rules labyrinth with t
 - **Visible on the map.** Mana shows as a faint shimmer or tint (show, don't tell), and the cell card shows a danger pip.
 - **Tests.** Field purity and order-independence; resource density rising with mana; cave connectivity (a sample network is traversable across ≥3 levels); the spawn safety radius over 20 seeds; memory bounds when walking through networks.
 
-### S21 Dungeons (labyrinths)
+### 7.21 Dungeons (labyrinths) (BUILT, see DECISION_LOG D43)
 - **Generator.** Per core, a bounded labyrinth (e.g. 48–96 cells across, 2–5 levels) of rooms, corridors, stairs and dead ends, laid out by a deterministic room-and-maze rule. Built from a dungeon wall material that resists digging (hard to bypass, but it can be dug with iron tools, slowly).
 - **Entrances.** Linked to the cave network and sometimes to the surface (a ruin entrance landmark).
 - **Room kinds.** Corridor, trap hall, treasure vault, monster den, the core chamber, and "ancient workshop" rooms whose evidence speeds up rediscovery and carries Curiosities.
@@ -53,7 +53,7 @@ A core sits at the heart of a **dungeon** (an authored-by-rules labyrinth with t
 - **Fog and mapping.** The dungeon is fully fogged until explored. Its layout is not revealed by looking at it from the surface.
 - **Tests.** Generator determinism and bounds; every treasure room reachable from an entrance; trap detection and disarm; loot by distance.
 
-### S22 Monsters and spawning
+### 7.22 Monsters and spawning (BUILT, see DECISION_LOG D44)
 - **Spawner rule.** Monsters spawn at spawn points (dens, dark cave chambers, dungeon rooms) at a rate rising with mana. A per-region cap rises with mana too. Spawning needs darkness, so light from torches and lamps suppresses spawns nearby: a player lever.
   - Surface spawns happen only where the core's field reaches the surface (bands ≥2 at ground level), and mostly at night.
 - **Roster** (data rows on the S8/S14 fauna system; placeholder names):
@@ -66,7 +66,7 @@ A core sits at the heart of a **dungeon** (an authored-by-rules labyrinth with t
 - **Autonomy.** Villagers flee or avoid as with the thornback. Crews with spears can be sent to clear a den (an order). Possession is the way to fight the guardian.
 - **Tests.** Spawn rate monotone in mana; caps hold; light suppresses; no surface spawns far from cores; bounded entity count with monsters (memory); determinism.
 
-### S23 Delving gameplay and the core itself
+### 7.23 Delving gameplay and the core itself (BUILT, see DECISION_LOG D45; Phase 7 is complete)
 - **Expedition type "delve"** (extends S8/S17): a crew enters a dungeon, maps it, disarms seen traps, loots and returns, with recall rules tuned for danger (wounds, light running out). The stall summary names the trap or monster blocking them.
 - **The core chamber.** Defeating the guardian lets the player choose: **harvest** the core (a large one-time haul of core material; the field fades over seasons, so the region becomes poorer and safer), or **leave** it (keep rich ores and spawns). This is a real tradeoff.
 - **Map readability** (show, don't tell): danger pips on the minimap, mana shimmer, trap glyphs once seen, a dungeon outline drawn as explored.
@@ -81,4 +81,4 @@ A core sits at the heart of a **dungeon** (an authored-by-rules labyrinth with t
 - **OD-50:** dungeon wall diggability. Default: diggable only with iron tools, at 1/6 speed, so cheesing in through a wall is possible but slow.
 
 ## Effort (ASSUMPTION, same scale as MVP_SCOPE)
-S20 0.6–1.0, S21 0.8–1.4, S22 0.6–1.0, S23 0.5–0.9 FTE-months of design and engineering, plus content (monster and trap rows, treasure tables) of about 3–5 FTE-weeks.
+7.20 0.6–1.0, 7.21 0.8–1.4, 7.22 0.6–1.0, 7.23 0.5–0.9 FTE-months of design and engineering, plus content (monster and trap rows, treasure tables) of about 3–5 FTE-weeks.

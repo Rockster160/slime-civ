@@ -54,6 +54,9 @@ import { newDepth } from "./depth.js";
 import { illTick, illDaily } from "./disease.js";
 import { newZones, ZONE_COMMANDS, yardTick, YARD_PERIOD } from "./yard.js";
 import { SCOUT_COMMANDS, landmarkTick } from "./scout.js";
+import { newTrp, trapStep, trapTick } from "./traps.js";
+import { ownDef } from "./core.js";
+import { newCm, CM_COMMANDS } from "./cm.js";
 
 export const START_VILLAGERS = 7;
 
@@ -62,7 +65,7 @@ export class Sim {
   static create(seed, opts = {}) {
     const biomes = opts.biomes !== undefined ? opts.biomes : WORLD.biomes, depth = opts.depth !== undefined ? opts.depth : WORLD.depth, g = generateWorld(seed, { biomes, depth, spawn: opts.spawn, pond: opts.pond });             // S16: endless land; the spawn search (spawn.js) moved the camp to a fair start if the origin was not one (§11.10)
     const s = new Sim(seed, g.world, g.ents);
-    s.def = g.def; s.site = g.world.site;
+    s.site = g.world.site;
     if (!opts.restore) activateAround(s.world, s.ents, s.def, s.site.x, s.site.y, ACT_R, 0);     // the land round the camp grows its flora (a loaded save lists its own active chunks)
     s.bio = biomes ? 1 : 0;
     s.pond = s.def.pond ? 1 : 0;
@@ -85,7 +88,7 @@ export class Sim {
     this.rng = new Rng(this.seed);
     this.world = world;
     this.ents = ents;
-    this.def = world.def; this.site = world.site;     // S16: the generator's definition and the camp (world.site; not a constant any more)
+    this.def = ownDef(world.def); this.site = world.site;     // S16: the generator's definition and the camp (world.site; not a constant any more)
     hookEntities(this);
     this.path = new Pathfinder(this.world);
     this.cmdLog = [];                         // [{t, type, ...}] in application order
@@ -105,6 +108,8 @@ export class Sim {
     this.ug = newUg();                        // S12: cracking cells (cell, first tick), cave-ins so far (saved + hashed; the rules are pure functions of the world)
     this.dp = newDepth(0);                    // S14: world depth (illness, wolves and grazers, the alternates, perturbed properties): on/off switch and the illness ledger (saved + hashed)
     this.zones = newZones();                  // S17: extra stockpile zones the player drew (saved + hashed)
+    this.trp = newTrp();                      // 7.21: traps spotted or gone off, gas clouds, ancient workshops seen (saved + hashed; where the traps are is a pure rule: dungeon.js)
+    this.cm = newCm();                        // 7.23: cores whose guardian is slain (the choice pending), left, and harvested (saved + hashed)
     this.pond = 0;                            // S17: 1 = this world has the pond at the camp (saved: terrain regrows from the seed)
     this.bio = 1;                             // S12: 1 = the world was grown with biomes (worldgen), 0 = a pre-biome save regrown without them (saved)
     this.ironman = false;                     // S12: a UI rule (single autosave slot, no manual load), saved with the game, never read by the sim itself
@@ -125,6 +130,7 @@ export class Sim {
 
   step() {
     const t = this.tick;
+    this.def.fb.now = t;                                       // 7.23: a harvested core's field fades by this clock (core.js)
     if (t % 20 === 7) chunkTick(this);                       // S16: activate the land round the people, unload what is untouched and far
     this.rooms.update(this);
     if (t % 20 === 0) updateBoard(this);
@@ -144,6 +150,7 @@ export class Sim {
     if (t % 100 === 0) { growPlants(this); this.tidySites(); }
     if (t % 20 === 3) ugTick(this);                          // S12: cracks, falls, torchlight widening the seen frontier
     if (t % 100 === 90) ugAuto(this);                        // S12: the village shores up, lights and vents through ordinary ghosts
+    if (t % 20 === 13) trapTick(this);                       // 7.21: gas clouds thin out
     if (t % 20 === 11) crewTick(this);                       // S11: the dead leave their crews; empty crews go
     if (t % 20 === 9) expeditionTick(this);                  // recall predicates, the crew's stall summary (before mineTick finishes a search)
     faunaTick(this);
@@ -154,6 +161,7 @@ export class Sim {
     for (const v of vs) {
       if (!this.ents.get(v.id)) continue;
       watch(this, v);                                       // look around when they have moved (fog, §13.8)
+      if (this.world.flags(v.x, v.y, v.z) & F.DUNGEON) { trapStep(this, v); if (!this.ents.get(v.id)) continue; }      // 7.21: a labyrinth's traps are spotted, or go off
       if ((t + v.id) % NEED_STEP === 0) {
         if (fearStep(this, v) > FEAR_AT && v.job && v.job.k !== "flee" && !v.poss) v.rp = 1;     // afraid: re-plan now (jobs.js genFlee); a guided villager never flees (Steadfast)
         const cause = updateNeeds(this, v);
@@ -246,6 +254,8 @@ export class Sim {
     h.value(this.ug);
     h.value(this.dp);
     h.value(this.zones);
+    h.value(this.trp);
+    h.value(this.cm);
     return h.hex;
   }
 }
@@ -261,6 +271,7 @@ const COMMANDS = {
   ...CREW_COMMANDS,
   ...ZONE_COMMANDS,
   ...SCOUT_COMMANDS,
+  ...CM_COMMANDS,
   /** {type:"erase", x0,y0,x1,y1,z}: take ghosts away (delivered materials come back as loose items). */
   erase(sim, c) { return eraseGhosts(sim, c); },
   /** {type:"deconstruct", x0,y0,x1,y1,z}: mark built pieces for villagers to take down (a standing job, ~75% refund, no XP). */

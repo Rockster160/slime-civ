@@ -22,6 +22,8 @@ import { CROP, cropStage } from "../sim/farm.js";
 import { DUR_DAY } from "../sim/clock.js";
 import { crewOf, taskText } from "../sim/crews.js";
 import { BIOMES, biomeAt } from "../sim/biome.js";
+import { bandAt, BAND_NAME } from "../sim/core.js";
+import { seenTrapNear, TRAP_LABEL } from "../sim/traps.js";
 import { TORCH_R, LAMP_R } from "../sim/light.js";
 import { hazardLines, VENT_N, POCKET_N } from "../sim/underground.js";
 
@@ -43,6 +45,7 @@ export const BLOCKER_TEXT = {
   LOWER_SCORE: "something else scored higher",
   NO_SITE: "there is nowhere to build it",
   NO_TARGET: "nothing left to work on in the order area",
+  NO_DUNGEON: "there is no labyrinth to delve into from here",
   NO_WATER: "no water within reach",
   GONE: "the target is gone",
   TOO_FAR: "too far away - walk next to it first",
@@ -63,7 +66,7 @@ export const BLOCKER_TEXT = {
   NO_ANIMAL: "the cart has no penned grazer to pull it (keep a grazer in a big pen)",
   NO_FODDER: "the cart's grazer is not fed: its pen has no fodder in the trough (haul grass to the pen)",
   NO_PEN: "there is no finished pen with room for another animal (stake one out in build mode; a grazer needs a big pen of 12 cells or more)",
-  UNSAFE: "too dangerous to do on their own: it is the thornback's ground, cave nobody has mapped, a roof that is cracking or air that is foul, and villagers will not go there unless you guide one yourself",
+  UNSAFE: "too dangerous to do on their own: it is the thornback's ground, a labyrinth, cave nobody has mapped, a roof that is cracking or air that is foul, and villagers will not go there unless you guide one yourself",
 };
 
 /** Job-specific refinements: what exactly is missing. Falls back to BLOCKER_TEXT. */
@@ -171,6 +174,7 @@ export const JOB = {
   slaughter: { now: "Slaughtering a penned hopper", noun: "Slaughter" },
   capture: { now: "Catching a hopper alive for the pen", noun: "Capture" },
   scout: { now: "Scouting unexplored land", noun: "Scout" },
+  disarm: { now: "Disarming a trap", noun: "Disarm" },
   strike: { now: "Striking", noun: "Strike" },
 };
 export const CLASS = {
@@ -240,7 +244,14 @@ export function blockerText(job, blocker, chosen, rej) {
   return sp ? sp(rej) : BLOCKER_TEXT[blocker] || String(blocker);
 }
 
-export const EXP_WHY = { found: "found it", nothing: "found nothing", wounded: "someone is badly hurt", food: "someone is short of food", time: "time ran out", recall: "you called them back", lost: "the crew was lost", "": "" };
+export const EXP_WHY = { found: "found it", nothing: "found nothing", wounded: "someone is badly hurt", food: "someone is short of food", time: "time ran out", recall: "you called them back", lost: "the crew was lost", light: "the brands burned low", mapped: "the labyrinth is mapped", "": "" };
+/** 7.23: what holds a delve party up, in words: the trap or monster named. `stall` = "TRAP:dart" | "MONSTER:crawler" | "NO_PATH" | "UNSAFE". */
+export function delveStallText(stall) {
+  const [k, a] = String(stall).split(":");
+  if (k === "TRAP") return "a " + (TRAP_LABEL[a] || a).toLowerCase() + " trap is in the way";
+  if (k === "MONSTER") return "a " + (FAUNA[a] ? FAUNA[a].label : a) + " is in the way";
+  return k === "NO_PATH" ? "no way to get on from here" : "someone is afraid";
+}
 const FOOD_JOBS = ["forage", "dry", "build_rack"];
 const CRAFT_JOBS = ["fire_kiln", "burn_charcoal", "smelt", "make_tool", "smoke"];
 const SHELTER_JOBS = ["build_bed", "cut"];
@@ -265,7 +276,7 @@ export function reasonText(sim, v, job, cls) {
       if (SHELTER_JOBS.includes(job) || (!FOOD_JOBS.includes(job) && !b.fc && b.sc)) return "the village is short of beds and winter is near (village critical)";
       return "village food runs out in " + runwayText(b.runway) + " (village critical)";
     case "order": {
-      if (v.xp) { const x = sim.exp.list.find(q => q.id === v.xp); return x ? "on an expedition to find " + (x.want === x.item ? x.want : "something new (" + x.want + ")") + ", and " + (x.st === "home" ? "heading home (" + EXP_WHY[x.why] + ")" : "digging toward it") : "on an expedition"; }
+      if (v.xp) { const x = sim.exp.list.find(q => q.id === v.xp); if (x && x.kind === "delve") return "delving into the labyrinth of " + x.name + ", and " + (x.st === "home" ? "heading home (" + EXP_WHY[x.why] + ")" : x.mapped + " of " + x.rooms + " rooms mapped"); return x ? "on an expedition to find " + (x.want === x.item ? x.want : "something new (" + x.want + ")") + ", and " + (x.st === "home" ? "heading home (" + EXP_WHY[x.why] + ")" : "digging toward it") : "on an expedition"; }
       const o = v.order;
       return o ? "you ordered " + o.verb + (o.tid ? "" : " around here") + (o.done ? ", " + o.done + " done so far" : "") : "you gave the order";
     }
@@ -405,6 +416,7 @@ export function faunaLine(e) {
   if (e.sp === "wolf") return "Wolf - " + ({ attack: "biting someone", hunt: "stalking prey", flee: "running from a crowd or a fire", rest: "keeping its distance", patrol: "ranging its ground" }[e.st] || "waiting") + ". It runs with a pack: it takes hoppers by day and, on a winter night, anyone it finds alone. It will not come near a group or a fire. " + hp;
   if (e.sp === "grazer" && e.tame) return "Penned grazer - " + hp + ". It eats as much as three hoppers; the pen's keep-N decides how many adults stay.";
   if (e.sp === "grazer") return "Grazer - " + ({ turn: "turned on someone", flee: "ambling off", idle: "grazing" }[e.st] || "grazing") + ". Big game: about " + row.meat + " meat, " + row.hide + " hides and " + row.bone + " bone. Slow, but it turns on whoever strikes it or crowds it: hunt it in a group, with spears. " + hp;
+  if (row.mon) return row.label[0].toUpperCase() + row.label.slice(1) + " - " + ({ attack: e.sp === "spitter" ? "spitting at someone" : "attacking someone", hunt: "after prey", raid: "raiding the village", retreat: "hurt and limping home", return: "heading home", patrol: "ranging its ground" }[e.st] || "waiting") + ". Hits for about " + row.dmg + ", " + Math.round(row.hit * 100) + "% of the time" + (row.range ? ", from up to " + row.range + " cells away" : "") + ". Villagers run from it" + (row.dark ? "; it will not cross light or a door" : "") + ". " + hp;
   const doing = { attack: "mauling someone", hunt: "after prey", retreat: "hurt and limping home", return: "heading home", patrol: "patrolling its ground", idle: "resting" }[e.st] || e.st;
   return "Thornback - " + doing + ". It mauls anything that walks into its territory (about half a villager's health a bite); villagers will not go near it. " + hp;
 }
@@ -514,6 +526,8 @@ const CELL_BLURB = {
   [M.SALT]: "A salt lick: white crust that animals come to. Dug out it keeps meat.", [M.PEAT]: "Peat: dark wet marsh turf. Dug and dried it burns like wood, but never as hot as charcoal.", [M.HERB]: "A bed of bitter marsh herb. The sick are said to do better near it.",
   [M.IRONORE]: "Iron ore: heavy rust-red rock in the hard rock band. It takes coal and a forge to get anything out of it.", [M.COAL]: "A coal seam: black stone that burns hotter than charcoal. The Forge level needs it.",
   [M.DEEP]: "Deep rock: the bottom of the hard rock. Only an iron pick will dig it.",
+  [M.GEM]: "A gemstone, pink in the grey rock. It grows thicker the nearer a core.", [M.CRYSTAL]: "Pale crystal. Clusters grow in the rock where a core's power reaches.", [M.COREORE]: "Core-touched ore: violet veins that only form deep in a core's power. Only an iron pick will dig it.", [M.CORE]: "A magic core. Something old and strong sleeps in the rock round it.",
+  [M.DWALL]: "Ancient stonework: the walls of a labyrinth. Only an iron pick will dig it, and slowly (a sixth of hard rock's speed).", [M.CACHE]: "A sealed cache set in a vault. Dig it open and what is inside spills out.",
   [M.HIDEWALL]: "A hide wall: skin stretched on poles. Cheap and warm enough for a teepee.", [M.HIDEROOF]: "A hide roof.", [M.DRESSED]: "A dressed-stone wall: squared blocks, tight and warm.",
   [M.SUPPORT]: "A timber support: a post and cap. A roof is held up by anything solid within 2 cells, so a post in the middle of a wide room stops it falling in.", [M.RUBBLE]: "Rubble from a fallen roof. It digs out quickly and gives stone, and it holds up what is left.",
   [M.TIMBERWALL]: "A timber wall: a framed cabin wall.", [M.PLANKFLOOR]: "A plank floor.", [M.BRICKWALL]: "A brick wall: the warmest wall there is, and it holds heat for a furnace.",
@@ -534,7 +548,10 @@ export function cellInfo(sim, x, y, z) {
   const mk = marked(sim, x, y, z);
   if (mk) lines.push("Marked for digging (" + ({ region: "dig region", depth: "stair down", vein: "follow vein", seek: "seek " + mk.item })[mk.kind] + ").");
   lines.push("Level " + z + (isOre(m) ? ", ore" : ""));
-  return { title: name, lines };
+  const tr = seenTrapNear(sim, x, y, z);                                               // 7.21: a spotted trap
+  if (tr) lines.push("Trap: " + TRAP_LABEL[tr.k] + ", spotted.");
+  const band = bandAt(sim.def, x, y, z);                                         // 7.20: the danger pip (0 = wild: nothing shown)
+  return { title: name, lines, pip: band, pipText: band ? BAND_NAME[band] : "" };
 }
 
 /** S15: the one-line description of a wagon or cart: who is pushing it, what pulls it, how it is doing. */

@@ -77,13 +77,24 @@ export const ITEMS = {
   cooked_meat: { food: 3, spoil: 0.04, spoilW: 0.015, load: 1, label: "cooked meat", color: "#a04a38", made: 1, cooked: 1 },
   baked_tuber: { food: 1.5, spoil: 0.015, spoilW: 0.007, load: 1, label: "baked tubers", color: "#c99a5a", made: 1, cooked: 1 },
   wheel:       { food: 0, spoil: 0, spoilW: 0, load: 2, label: "wheels", color: "#a8743c", made: 1 },
+  gem:         { food: 0, spoil: 0, spoilW: 0, load: 1, label: "gems", color: "#e24c96", made: 1 },              // 7.20: valuables from the rock near a core
+  crystal:     { food: 0, spoil: 0, spoilW: 0, load: 1, label: "crystal", color: "#96c4ff", made: 1 },
+  core_ore:    { food: 0, spoil: 0, spoilW: 0, load: 2, label: "core-touched ore", color: "#8054d6", made: 1 },
+  core_shard:  { food: 0, spoil: 0, spoilW: 0, load: 1, label: "core shards", color: "#d68cff", made: 1 },       // 7.21: dungeon loot; an ordinary material (D42)
+  ancient_tool: { food: 0, spoil: 0, spoilW: 0, load: 2, label: "ancient tools", color: "#c9b27a", made: 1 },
+  tablet:      { food: 0, spoil: 0, spoilW: 0, load: 2, label: "stone tablets", color: "#b7b1a6", made: 1 },
+  relic:       { food: 0, spoil: 0, spoilW: 0, load: 2, label: "relics", color: "#f0d27a", made: 1 },
+  trap_parts:  { food: 0, spoil: 0, spoilW: 0, load: 1, label: "trap parts", color: "#9aa0ac", made: 1 },           // 7.21: what disarming a trap leaves
+  chitin:      { food: 0, spoil: 0, spoilW: 0, load: 1, label: "chitin plates", color: "#cfc7b0", made: 1 },           // 7.22: monster parts (monsters.js drops)
+  core_hide:   { food: 0, spoil: 0, spoilW: 0, load: 1, label: "core-touched hide", color: "#7a4fb0", made: 1 },
+  venom_sac:   { food: 0, spoil: 0, spoilW: 0, load: 1, label: "venom sacs", color: "#9bd83a", made: 1 },
   wagon:       { food: 0, spoil: 0, spoilW: 0, load: 0, label: "wagons", color: "#b88a4c", made: 1, ent: 1 },
   cart:        { food: 0, spoil: 0, spoilW: 0, load: 0, label: "animal carts", color: "#c89a5c", made: 1, ent: 1 },
 };
 export const ITEM_KINDS = ["berry", "dried", "tuber", "grass", "stick", "log", "stone", "dirt", "flint", "clay", "malachite", "fired_clay", "jar", "charcoal", "copper", "copper_pick", "copper_spear", "hopper_meat",
   "hide", "cordage", "leather", "backpack", "basket", "smoked_meat", "block", "stone_axe", "timber", "brick", "mould", "copper_axe", "cast_pick", "sheet", "fitting", "iron_ore", "coal", "iron", "iron_pick", "iron_axe",
   "salt", "salted_meat", "dried_meat", "peat", "dried_peat", "herb", "herbal_remedy", "bone", "bone_axe",
-  "cooked_meat", "baked_tuber", "wheel", "wagon", "cart"];
+  "cooked_meat", "baked_tuber", "wheel", "wagon", "cart", "gem", "crystal", "core_ore", "core_shard", "ancient_tool", "tablet", "relic", "trap_parts", "chitin", "core_hide", "venom_sac"];
 
 export function newCache() { return { iv: 0, sv: -1, s: null }; }
 const bump = (sim) => { sim.cache.iv++; };
