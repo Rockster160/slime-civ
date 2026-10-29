@@ -49,6 +49,8 @@ import { genFarm, genPens, captureMk } from "./farmjobs.js";
 import { sickOnes, SICK_WORK } from "./disease.js";
 import { freeWagon, wagonReady, WAGON, WAGON_FAR, BATCH_R, BATCH_MAX } from "./wagon.js";
 import { kitchens, cookable, DISHES } from "./kitchen.js";
+import { genExplore } from "./explore.js";
+import { memBias, candSubjects } from "./memory.js";
 import { tinkerCandidates, pickCandidate, itchAt, askActive, cdKey, VERB_DUR, TINKER_WORK } from "./discovery.js";
 
 export const GATHER_FIT = 15;       // gathering is skill-less (Appendix B) but everyone is a practised forager: a flat fit worth a 0.25 skill, nudged by speed (D21); forage, gather and sun-drying use it
@@ -914,7 +916,7 @@ function genMine(ctx, only) {
     c.blocker = noTool && !any ? "NO_TOOL" : any || !stuck ? (only ? "NO_TARGET" : "RESERVED") : stuck.why;
     c.mk = () => ({ blocker: c.blocker }); add(ctx, c); return;
   }
-  c.d = bd;
+  c.d = bd; c.cell = [best.x, best.y, best.z];
   if (!only && capped(ctx, "standing", "mine", mineCap(ctx))) c.blocker = "MAX_WORKERS";
   if (c.blocker) c.mk = () => ({ blocker: c.blocker });
   else c.mk = () => {
@@ -1415,9 +1417,10 @@ function scoreCand(ctx, c) {
     tmp: c.cls === "standing" || c.cls === "demand" || c.cls === "leisure" ? 5 * (2 * temper(v, c.kind) - 1) : 0,   // orders bypass temper (R5)
     sw: 0,
   };
+  if (c.cls !== "need" && c.cls !== "vcrit" && v.mem && v.mem.length) { const m = memBias(v, candSubjects(ctx.sim, c)); if (m) p.mem = m; }      // experiment: what the slime has lived through (memory.js), +-20, inside the clamp; absent for an empty memory
   const cur = ctx.cur;
   if (cur && c.key !== cur.key && ctx.t - cur.t0 < COMMIT && c.cls !== "vcrit" && !(c.cls === "need" && c.u > 0.5)) p.sw = -SWITCH_COST;
-  const within = clamp(p.urg + p.fit + p.prox + p.path + p.pref + p.soc + p.ill + p.crew + p.tmp + p.sw, -WITHIN_CLAMP, WITHIN_CLAMP);
+  const within = clamp(p.urg + p.fit + p.prox + p.path + p.pref + p.soc + p.ill + p.crew + p.tmp + p.sw + (p.mem || 0), -WITHIN_CLAMP, WITHIN_CLAMP);
   c.parts = p; c.score = c.cls === "vcrit" ? Math.min(VCRIT_CAP, base + within) : base + within;
   // Low mood pre-empts orders (§08) but not a hungry village: leisure may not outrank village-critical.
   if (c.cls === "need" && c.kind === "leisure") c.score = Math.min(c.score, MOOD_CAP);
@@ -1441,7 +1444,7 @@ export function plan(sim, v, replan, probe, dry) {
       return k ? { cls: "standing", kp: item } : { cls: "demand", kp: "" };
     });
   }
-  if (adult) genTinker(ctx);
+  if (adult) { genTinker(ctx); genExplore(ctx, HELP); }
   add(ctx, { kind: "leisure", cls: "leisure", urg: (1 - v.mood) * 0.5, grp: "leisure", d: 0, key: "leisure:0", mk: () => ({ task: Wander(), res: [] }) });
 
   for (const c of ctx.cands) scoreCand(ctx, c);
@@ -1458,6 +1461,7 @@ export function plan(sim, v, replan, probe, dry) {
     if (r.task && !steadfast(v)) {                                   // S8: autonomy refuses the thornback's ground and unmapped cave (a guided villager does not, K7)
       let why = unsafeTask(sim, r.task);
       if ((c.kind === "disarm" || c.clr || delving(sim, v)) && why === "dungeon") why = "";             // 7.21: the one job the player can send into a labyrinth by order; 7.23: and a delve party goes where its orders say
+      if (c.kind === "explore" && c.scout && why === "unmapped") why = "";                  // experiment: a scout (memory.js) maps unmapped cave; labyrinth, bad air, unstable ground and the lair stay forbidden
       if (c.kind === "build_site") {                                    // S12: shoring a cracking roof and fitting a vent in foul air are the only jobs allowed there
         const st = sim.ents.get(c.tid);
         if (st && ((why === "unstable" && st.w === "wall" && st.m === "support") || (why === "badair" && st.w === "vent"))) why = "";

@@ -20,6 +20,7 @@ import { once } from "./chronicle.js";
 import { noteKnown } from "./cm.js";
 import { CRAFT_IDS } from "./phenomena.js";
 import { mix32 } from "./rng.js";
+import { feel } from "./memory.js";
 
 /** The trap rows. dmg = hit points; parts = what disarming gives; hard = how much harder than a plain task it is to disarm. */
 export const TRAPS = {
@@ -108,6 +109,7 @@ function hurt(sim, v, n, cause) {
 export function springTrap(sim, v, x, y, z, k) {
   const row = TRAPS[k], w = sim.world;
   finish(sim, x, y, z);
+  feel(sim, v, "trap", "bad", 20 + row.dmg * 2); feel(sim, v, "deep", "bad", 10 + row.dmg);          // experiment (memory.js): caught, and in the deep
   if (k === "dart") hurt(sim, v, row.dmg, "a dart trap");
   else if (k === "gas") { sim.trp.gas.push([idx(x, y, z), sim.tick + GAS_TICKS]); sim.trp.n++; hurt(sim, v, row.dmg, "bad air"); }
   else if (k === "pit") {
@@ -138,7 +140,7 @@ export function trapStep(sim, v) {
     if (!k) continue;
     const ci = idx(x, y, v.z);
     if (st.done.has(ci) || st.seen.has(ci)) continue;
-    if (mix32(mix32(ci, v.id), sim.tick) / 4294967296 < p) spot(sim, x, y, v.z);
+    if (mix32(mix32(ci, v.id), sim.tick) / 4294967296 < p) { spot(sim, x, y, v.z); feel(sim, v, "trap", "bad", 6); }
   }
   if ((sim.tick + v.id) % 20 === 0) {
     const r = roomAt(d, v.x, v.y, v.z);
@@ -179,12 +181,14 @@ export function disarm(sim, v, x, y, z) {
 /** A sealed cache at (x, y, z) was dug open: its loot lands loose on the floor where it stood (the caller removed the cell). Returns the units. */
 export function openCache(sim, v, x, y, z, into) {
   const loot = lootAt(sim.def, x, y, z);
-  let n = 0;
+  let n = 0, relic = false;
   for (const [item, c] of loot) {
     if (into) into[item] = (into[item] || 0) + c; else dropLoose(sim, item, c, x, y, z);       // 7.23: a delve party packs what it opens (`into`), a digger leaves it on the floor
     n += c;
+    if (item === "relic") relic = true;
     if (item === "relic") once(sim, "relic:" + x + "," + y + "," + z, "DISCOVERY", v.name + " brought up " + relicName(sim.def, x, y, z) + " from a sealed cache in the labyrinth.", [v.id], { x, y, z }, 2);
   }
+  feel(sim, v, "treasure", "good", relic ? 90 : 50);                        // experiment (memory.js)
   return n;
 }
 export { cacheAt, trapList };

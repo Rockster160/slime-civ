@@ -13,6 +13,8 @@ import assert from "node:assert/strict";
 import * as C720 from "./core720.js";
 import { loadFixture } from "../tests/fixture.js";
 import { dungeonAt, trapList } from "../src/sim/dungeon.js";
+import { feel } from "../src/sim/memory.js";
+import { toJSON } from "../src/sim/save.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 mkdirSync(join(root, "tmp"), { recursive: true });
@@ -268,6 +270,31 @@ try {
     assert.ok(pip >= 3, "a monster in a seen cell is a red danger pip on the minimap (" + pip + " px; " + JSON.stringify(await GD(() => { const s = __game.sim, ms = s.ents.ofKind("fauna").filter(e => e.mon); return ms.map(e => [e.sp, e.x, e.y, e.z, s.seen.b.size && 1, __game.sim.world.mat(e.x, e.y, e.z - 1)]).slice(0, 3).concat([[__game.ui.mm.ox, __game.ui.mm.oy, __game.ui.mm.ps, __game.cam.x, __game.cam.y]]); })) + ")"); ok("danger pips: a seen monster is a red dot on the minimap (" + pip + " px)");
     await dp.close();
   }
+  // ---- experiment: experience and memory. The `memory` fixture, a slime that has lived through a cave walk and a fight: the inspector's Memories sub shows chips and episodes ----
+  {
+    const sim = loadFixture("memory"), v = sim.ents.ofKind("villager").slice().sort((a, b) => a.id - b.id).find(q => q.x > 60);
+    v.ps = { b: 40, c: 90, s: 70 };
+    for (let i = 0; i < 4; i++) { feel(sim, v, "cave", "safe", 20); feel(sim, v, "crawler", "bad", 40); }
+    feel(sim, v, "crawler", "good", 80); feel(sim, v, "gem", "good", 30); feel(sim, v, "gem", "good", 30); feel(sim, v, "cave", "good", 60);
+    assert.ok(v.mem.length >= 3 && v.epi.length >= 2, "the setup gave the slime memories");
+    const mp = await mk("?tools=all&seed=1&debug=1");
+    await mp.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), toJSON(sim));
+    await mp.keyboard.press("Shift+O"); await mp.waitForTimeout(800);
+    await mp.evaluate((id) => { const g = __game; g.state.paused = true; g.selectOnly(id, false); }, v.id);
+    await mp.waitForTimeout(900);
+    const mem = mp.locator("[data-test=memories]");
+    assert.equal(await mem.count(), 1, "the inspector has a Memories sub");
+    const text = await mem.innerText();
+    assert.ok(/memories/i.test(text) && /(Loves caves|Fears cave crawlers|Drawn to gems)/.test(text), "chips read like words: " + text.split("\n").join(" | "));
+    assert.ok(await mem.locator(".ttl").count() <= 3, "at most three chips");
+    assert.ok(text.split(/[.!?]\s/).length === 1 || !/[a-z]\. [A-Z]/.test(text), "no explanation sentences");
+    await mem.evaluate((el) => el.scrollIntoView({ block: "center" })); await mp.waitForTimeout(300);
+    await mp.setViewportSize({ width: 1280, height: 1100 }); await mp.waitForTimeout(700);        // (the inspector's "more" area is a small scroller at 720 high; a tall window shows the whole Memories sub for the picture)
+    await mem.evaluate((el) => el.scrollIntoView({ block: "center" })); await mp.waitForTimeout(300);
+    await mp.locator("[data-test=inspector]").screenshot({ path: join(root, "tmp", "ui-mem-inspector.png") });
+    ok("the inspector's Memories sub: " + text.split("\n").filter(Boolean).join(" | "));
+    await mp.close();
+  }
 } finally { await browser.close(); }
 if (errors.length) { console.log("ERRORS:\n" + errors.join("\n")); process.exit(1); }
-console.log("phase 7 smoke passed (" + n + " checks), no console errors; screenshots in game/tmp/ui-720-*.png ui-721-*.png ui-722-*.png ui-723-*.png");
+console.log("phase 7 smoke passed (" + n + " checks), no console errors; screenshots in game/tmp/ui-mem-inspector.png ui-720-*.png ui-721-*.png ui-722-*.png ui-723-*.png");

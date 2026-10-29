@@ -412,6 +412,37 @@ export function prepDelve(sim) {
   return { core: coreKey(L.core), ids: vs.map(v => v.id), ent: { x: e.x, y: e.y, z: e.z } };
 }
 
+/**
+ * Experiment (notes/impl/MEMORY_SYSTEM.md): a cave beside the camp and two slimes at its mouth. Derived from `settled`. A stair of 6 levels goes down into the rock east of camp, then a tunnel of 44 cells
+ * runs on east, all of it open natural ground and NOT yet seen (only what a walker sees is known). A cave crawler (made sturdier, 40 hp, so it lands a few blows) waits 14 cells along it. The first two adults stand at the stair head, fed, fit,
+ * bare-handed (a blow is 12, so the 40 hp crawler takes a few and lands a few). Their temperament is set by the test. Returns {ids: [a, b], head: [x, y, z], tunnel: [x0, x1, y, z], crawler: id}.
+ */
+export function prepMemory(sim) {
+  const w = sim.world, S = sim.site, len = 44;
+  let x = S.x + 11, y = S.y - 3, z0 = -1;
+  for (; x < S.x + 24 && z0 < 0; x += 2) {
+    z0 = w.standZ(x, y);
+    const cells = z0 > 0 ? rampCells(sim, x, y, z0, 6, [1, 0]) : null;
+    let clear = !!cells;
+    for (let i = 1; clear && i <= 6; i++) for (const dz of [0, 1, 2]) if (sim.ents.at(x + i, y, z0 - i + dz).length) clear = false;
+    if (clear) { x -= 2; break; }
+    z0 = -1;
+  }
+  if (z0 < 0) throw new Error("no place for the memory fixture");
+  x += 2;
+  const open = (cx, cy, cz) => { if (w.isSolid(cx, cy, cz)) w.set(cx, cy, cz, M.AIR, (w.flags(cx, cy, cz) & ~F.PLAYER) | F.NATURAL); };
+  for (const i of rampCells(sim, x, y, z0, 6, [1, 0])) { const [a, b, c] = World.xyz(i); open(a, b, c); }
+  const zb = z0 - 6, xs = x + 6;
+  for (let k = 1; k <= len; k++) open(xs + k, y, zb);
+  const vs = sim.ents.ofKind("villager").filter(q => isAdult(sim, q)).slice(0, 2);
+  const spots = [[x - 1, y], [x - 1, y + 1], [x - 2, y], [x - 2, y + 1]].map(([a, b]) => [a, b, w.standZ(a, b)]).filter(c => c[2] >= 0);
+  vs.forEach((v, i) => { sim.ents.move(v, ...spots[i]); v.eq = null; v.lk = null; });
+  const cr = spawnFauna(sim, "crawler", xs + 14, y, zb);
+  cr.mon = 1; cr.hp = cr.mhp = 40; cr.hr = 6; cr.home = [xs + 14, y, zb]; cr.st = "patrol";
+  fedAll(sim); sim.cache.iv++;
+  return { ids: vs.map(v => v.id), head: [x, y, z0], tunnel: [xs + 1, xs + len, y, zb], crawler: cr.id };
+}
+
 /** The labyrinth whose core chamber has room for a villager and a guardian: {core, dun, room, spots: [[x, y, z]...]} (stand cells of the chamber, nearest the core first). */
 function chamberOf(sim) {
   for (const L of labyrinths(sim)) {
@@ -485,6 +516,7 @@ export const FIXTURES = {
   delve: { from: "settled", prep: prepDelve },                        // 7.23: three villagers on a labyrinth's first door, fed
   guardian: { from: "settled", prep: prepGuardian },                   // 7.23: a villager in the core chamber, the guardian two cells away with 15 hit points
   coreslain: { from: "settled", prep: prepCoreSlain },                  // 7.23: the guardian slain, the harvest-or-leave choice pending
+  memory: { from: "settled", prep: prepMemory },                      // experiment: a cave (stair + 44-cell tunnel, unseen) east of camp, a crawler 14 cells in, two armed slimes at the stair head
   trap: { from: "settled", prep: prepTrap },                         // 7.21: two villagers in a labyrinth, each two cells from a hidden trap (a dart plate and another kind) in a straight corridor                           // S15: a bench, a penned grazer, FRAMING, timber and wheels, raw meat
   crowd: { from: "settled", prep: prepCrowd },                         // S11: 60 villagers (spawned adults) for the scale checks
   // A roofed shelter with beds, a stockpile and its purpose set, built by the scripted shelter player (separate run).

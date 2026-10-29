@@ -14,6 +14,7 @@ import { HOBBIES, hobbyOf, hobbyLevel, NOTABLE_AT } from "./hobby.js";
 import { SKILLS, level, PROFESSION } from "./skills.js";
 import { inZone } from "./items.js";
 import { restricted } from "./lair.js";
+import { initTemper, tell } from "./memory.js";
 
 // ---- kinship and inbreeding (R16) ----------------------------------------------------------------------------------------
 
@@ -84,6 +85,7 @@ export function newHeirloom(v, tick) {
 /** Everything a villager gets when they are made (founder, birth, clone): alleles when missing, maybe an heirloom. */
 export function initPerson(sim, v) {
   if (!v.g) v.g = genoFrom(v.t, v.id);
+  if (!v.ps) v.ps = initTemper(sim, v);                // experiment: temperament, the lens experience is appraised through (memory.js)
   if (mix32(v.id, 0x41ab) % HEIRLOOM_ODDS === 0) v.hl = newHeirloom(v, sim.tick);
   return v;
 }
@@ -119,6 +121,17 @@ export function socialTick(sim) {
         const ch = chemistry(a, b);
         if (ch >= 0) bump(a, b, 0, 2 * ch); else bump(a, b, 2, 2 * ch);
       } else if (a.rest > 0 && b.rest > 0 && (a.warm < 0.6 || b.warm < 0.6)) bump(a, b, 1, 0.5);        // cold nights huddled together
+    }
+  }
+  // Experiment (memory.js): stories. A slime with a strong memory tells one friend, partner or close kin standing near; each hears at most one a call.
+  const told = new Set();
+  for (const a of vs) {
+    if (!a.mem || !a.mem.length) continue;
+    for (const b of vs) {
+      if (b === a || told.has(b.id) || !near3(a, b)) continue;
+      const r = relOf(a, b.id);
+      if (!((r && (r.k === "friend" || r.k === "partner")) || kinship(a, b) >= 0.25)) continue;
+      if (tell(sim, a, b)) { told.add(b.id); break; }
     }
   }
 }

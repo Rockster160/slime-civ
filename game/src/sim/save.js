@@ -24,6 +24,7 @@ import { activateChunk } from "./flora.js";
 import { cellXyz, chunkKX, chunkKY, chunkKey, cellIdx } from "./cellkey.js";
 import { packPlant, plantProps, isPackable } from "./dormant.js";
 import { newCm, applyCm } from "./cm.js";
+import { fillMemory } from "./memory.js";
 
 export const SAVE_VERSION = 15;       // 15 = 7.23: sim.cm (the core ledger: choices pending, cores left, cores harvested), delve expeditions (`kind` on an expedition record, `br` on a member): additive, a v14 save loads as it is. 14 = 7.22: monsters (fauna rows with `mon`, `ck`, `sf`, `hr`, `sh`; sim.wild.gk = slain guardians; item rows chitin, core_hide, venom_sac): additive, a v13 save loads as it is. 13 = 7.21: dungeons (the land round every core gains a labyrinth: far content only, nothing within 100 cells of a camp changes) and the trap ledger `trp` (additive: absent = empty), so a v12 save loads as it is; its edits sit on the same rock except inside a labyrinth's footprint, which nobody had dug yet. 12 = 7.20: magic cores and cave networks. Terrain changed (caves, ore weights, gems, outcrops, spires), so the cells a v11 save edited sit on different rock and it is REFUSED (OLD_TERRAIN), not migrated; a v12 save has the same shape as v11. 11 = S18b: the clock rebase (a game day is 12000 ticks, was 1800; a life 500 days): every tick-stamped field (born, nx, bt, cd, timers, chronicle) is on the new clock, so a v9/v10 save is REFUSED (OLD_CLOCK), not migrated. 10 = S17: compact (cell deltas per chunk, plants as arrays, the seen set as per-chunk bitsets, landmarks seen, chunk sleep state); a v9 save loads unchanged. 9 = S16: the endless world. Terrain is regrown from the seed (the spawn search is deterministic), so a save holds only the cells that differ from it (deltas), the list of active chunks (chunks: [key, active, changed, lastNear]) and the entities; seen = {c: revealed surface columns, l: other seen cells}. A save of the old fixed 128x128 map (v < 9) cannot be loaded: restore() refuses it with a message. 8 = S13: hidden genotype (g, gp, inb, wk), bonds (aff, mn, rel), grief (gr), hobby (hb), titles (ti), heirloom (hl), skill rust (rs, lu), grave entities. 7 = S12: biomes (sim.bio: 1 = the seed grows the biome map, 0 = a world made before it), cave-in state (ug). 6 = S7a: villager familiarity (fam), discovery state (disc), flames and hearths. 5 = 5 = S6: geology (new strata + ores), seen log, mining designations. 4 = S5: skills dig/build/craft, nine traits, clone and lesson fields
 
@@ -194,6 +195,7 @@ export function restore(data) {
   sim.world.applyDeltas(data.dc ? unpackDeltas(data.dc) : data.deltas);
   sim.ents.load(unpackEnts(data.entities));
   sim.stock = data.stock; sim.board = data.board; sim.chron = data.chron;
+  for (const v of sim.ents.ofKind("villager")) fillMemory(sim, v);          // experiment: temperament from the hash and an empty memory for a save made before them (additive)
   sim.rng.restore(data.rng);
   sim.rooms.marks = data.rooms || {};
   sim.bps = data.bps || { n: 0, list: [] };

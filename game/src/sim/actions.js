@@ -11,6 +11,7 @@
 // (NO_PATH, BLOCKED, ...) so the Why panel can say why (rule 4).
 import { World } from "./world.js";
 import { restricted } from "./lair.js";
+import { avoids } from "./memory.js";
 import { wagonStep } from "./wagon.js";
 
 export const TICKS_PER_CELL = 6;              // walking speed: 3.3 cells/s at 1x (placeholder until traits)
@@ -64,7 +65,7 @@ export const ACTIONS = {
             ty = Math.max(sim.site.y - WANDER_LEASH, Math.min(sim.site.y + WANDER_LEASH, ty));
           }
           const tz = sim.world.standZ(tx, ty);
-          if (tz < 0 || (tx === ent.x && ty === ent.y) || (!ent.poss && restricted(sim, tx, ty, tz))) continue;      // S8: idle wandering keeps out of the thornback's ground too
+          if (tz < 0 || (tx === ent.x && ty === ent.y) || (!ent.poss && (restricted(sim, tx, ty, tz) || avoids(sim, ent, tx, ty, tz)))) continue;      // S8: idle wandering keeps out of the thornback's ground too
           const p = sim.path.find(World.idx(ent.x, ent.y, ent.z), World.idx(tx, ty, tz));
           if (!p.ok) continue;
           a.move = Move(tx, ty, tz, p.path, ent.mv || TICKS_PER_CELL);

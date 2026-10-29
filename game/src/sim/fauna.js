@@ -25,6 +25,7 @@ import { BIOMES, biomeAt, HIGHLAND, MARSH } from "./biome.js";
 import { World } from "./world.js";
 import { wolf as wolfBehave, grazer as grazerBehave, TURN_TICKS } from "./packs.js";
 import { depthOn, dryAir, deposits } from "./depth.js";
+import { feel, fearMul, placeOf } from "./memory.js";
 import { MONSTERS, monster as monsterBehave, monsterDrops, spawnPass, PERIOD as SPAWN_PERIOD, PHASE as SPAWN_PHASE } from "./monsters.js";
 
 export const FAUNA = {
@@ -358,16 +359,17 @@ export function faunaDaily(sim) {
 
 /** Fear rises with how close a scary creature is and falls over time, faster in company (§13.7). Returns the new fear. */
 export function fearStep(sim, v) {
-  let near = 1e9, rise = 0;
+  let near = 1e9, rise = 0, seen = "";
   for (const e of faunaOf(sim)) {
     const sc = FAUNA[e.sp].scare;
     if (!sc || Math.abs(e.z - v.z) > 3) continue;
     const d = cheb(e, v);
     if (d < near) near = d;
-    if (d <= FEAR_R) { let q = sc * (1 - d / FEAR_R); if (sc < ARMED_BOLD && v.eq && v.eq.item === "copper_spear") q *= ARMED_FEAR; if (q > rise) rise = q; }        // 7.22: a row's `scare` scales the fear it causes (1 = the thornback); the strongest creature in sight counts
+    if (d <= FEAR_R) { let q = sc * (1 - d / FEAR_R); if (sc < ARMED_BOLD && v.eq && v.eq.item === "copper_spear") q *= ARMED_FEAR; q *= fearMul(v, e.sp); if (q > rise) { rise = q; seen = e.sp; } }        // 7.22: a row's `scare` scales the fear it causes (1 = the thornback); the strongest creature in sight counts
   }
   let f = v.fear || 0;
   if (near === 1e9 && f === 0) return 0;
+  if (seen && f < FEAR_AT) feel(sim, v, seen, "safe", 3);                                  // experiment: a scary creature in sight that has not yet frightened them is exposure without harm (habituation)
   let company = false;
   if (f > 0) for (const o of sim.ents.ofKind("villager")) if (o !== v && Math.abs(o.x - v.x) <= 3 && Math.abs(o.y - v.y) <= 3 && Math.abs(o.z - v.z) <= 1) { company = true; break; }
   f += (near <= FEAR_R ? FEAR_RISE * rise : 0) - (company ? FEAR_COMPANY : FEAR_FALL);
@@ -406,6 +408,11 @@ export function swing(sim, att, tgt) {
   } else {
     tgt.fear = Math.max(tgt.fear || 0, att.kind === "fauna" && FAUNA[att.sp].fearDmg !== undefined ? FAUNA[att.sp].fearDmg : 0.8);                   // damage is fear (§13.7); a grazer's blow frightens less than a beast's (hunters stand)
     once(sim, "firstWound", "DISASTER", tgt.name + " was wounded by the " + label(att) + ".", [tgt.id], {}, 2);
+    if (tgt.hp > 0 && att.kind === "fauna") {                                // experiment (memory.js): hurt by this kind, and where it happened
+      const mag = clamp(20 + dmg * 3, 20, 100), pl = placeOf(sim, tgt.x, tgt.y, tgt.z);
+      feel(sim, tgt, att.sp, "bad", mag);
+      if (pl) feel(sim, tgt, pl, "bad", mag >> 1);
+    }
   }
   if (att.kind === "villager" && att.eq && att.eq.item === "copper_spear" && --att.eq.u <= 0) {
     log(sim, "MILESTONE", att.name + "'s copper spear broke.", [att.id], {}, 0);
@@ -417,6 +424,11 @@ export function swing(sim, att, tgt) {
 function defeat(sim, att, tgt) {
   if (tgt.kind === "villager") { kill(sim, tgt, label(att)); return; }
   const row = FAUNA[tgt.sp];
+  if (att.kind === "villager") {                                           // experiment (memory.js): a win over this kind (a monster is a big one), and where it happened
+    const mag = row.mon ? 80 : tgt.sp === "hopper" ? 6 : 50, pl = placeOf(sim, tgt.x, tgt.y, tgt.z);
+    feel(sim, att, tgt.sp, "good", mag);
+    if (pl && row.mon) feel(sim, att, pl, "good", mag >> 1);
+  }
   if (row.mon) monsterDrops(sim, tgt, att);                                 // 7.22: core shards and parts, not meat
   if (row.meat) dropLoose(sim, "hopper_meat", row.meat, tgt.x, tgt.y, tgt.z);       // carrion / game: the baseline hauling brings it in
   if (row.hide) { dropLoose(sim, "hide", row.hide, tgt.x, tgt.y, tgt.z); sight(sim, "HIDE_WORKING", "skin", tgt.x, tgt.y, tgt.z, null); }     // S9: the skin comes off the carcass; whoever sees it worked may understand hide working

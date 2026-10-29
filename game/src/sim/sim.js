@@ -23,6 +23,7 @@ import { addFounder, foundColony, breedDaily, kill, refreshDerived } from "./pop
 import { releaseJob, RES_EXPIRY } from "./jobstate.js";
 import { resetDay, rustDay } from "./skills.js";
 import { socialTick, peopleDaily } from "./people.js";
+import { decay, DECAY_EVERY } from "./memory.js";
 import { ORDER_COMMANDS } from "./orders.js";
 import { Rooms } from "./rooms.js";
 import { BP_COMMANDS, newBps, autoBuild, instanceTick } from "./blueprint.js";
@@ -160,6 +161,7 @@ export class Sim {
     const vs = this.ents.ofKind("villager").slice();       // deaths/births change the live list
     for (const v of vs) {
       if (!this.ents.get(v.id)) continue;
+      if (v.mem && v.mem.length && (t + v.id) % DECAY_EVERY === 0) decay(v);       // experiment: memories fade, one staggered pass per slime (memory.js)
       watch(this, v);                                       // look around when they have moved (fog, §13.8)
       if (this.world.flags(v.x, v.y, v.z) & F.DUNGEON) { trapStep(this, v); if (!this.ents.get(v.id)) continue; }      // 7.21: a labyrinth's traps are spotted, or go off
       if ((t + v.id) % NEED_STEP === 0) {

@@ -18,6 +18,7 @@ import { untilDawn, isNight } from "./season.js";
 import { once } from "./chronicle.js";
 import { costOf, finishSite, unbuild, UNBUILD_DUR } from "./build.js";
 import { M, F, World } from "./world.js";
+import { feel, mineSubject } from "./memory.js";
 import { INSPIRE } from "./inspire.js";
 import { DIG, diggable, diggableMarked, uproot, HARD_DIFFICULTY, toolNeeded } from "./dig.js";
 import { reveal } from "./seen.js";
@@ -484,6 +485,8 @@ const VERBS = {
       gain(sim, v, "dig", VALUE[info.item], fresh, info.hard ? HARD_DIFFICULTY : undefined);   // hard rock teaches only past 0.8 (§10)
       sim.disc.dg = (sim.disc.dg || 0) + 1; if (info.hard) sim.disc.hd = 1;                    // S7b: tool_edge pressure counts the digging
       wearPick(sim, v);
+      const sj = mineSubject(m);
+      if (sj) feel(sim, v, sj, "good", sj === "gem" ? 30 : 8);                              // experiment (memory.js): what the dig turned up
       reveal(sim, s.cx, s.cy, s.cz);                                // the digger looks into the hole: its neighbours are now seen (fog, §13.8)
       if (s.did) mineDug(sim, s.did, m, got, s.cx, s.cy, s.cz);
       return "done";

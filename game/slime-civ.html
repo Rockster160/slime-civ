@@ -369,7 +369,7 @@
 <div id="helpOverlay"></div>
 <div id="settingsOverlay" data-test="settings"></div>
 <script>
-window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10-28 20:51"};
+window.__BUILD = {"stage":"7.23","commit":"9a7896d","dirty":true,"time":"2026-10-29 00:52"};
 (function () {
   "use strict";
   
@@ -3267,6 +3267,251 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     return { underground, lightSources, inLight, lit, darkMul, sightAt, TORCH_R, LAMP_R, FIRE_LIGHT_R, DARK_RATE, LIT_SIGHT, isNatural };
   })();
   
+  __mod["sim/chronicle.js"] = (function () {
+    // Chronicle (GDD §18): a small consumer of sim events. Entries are factual
+    // one-liners built from templates, kept in sim.chron = {n, entries, recs, f}.
+    //
+    //   entry  = {id, t, y, d, kind, a:[villagerId], text, data:{...}, sev:0..2}
+    //   record = recs[villagerId] = {id, name, hue, par, gen, birth, death, cause, top}   (kept after death)
+    //   f      = one-shot flags ("firstBed", "firstWinter", ...) so firsts are logged once
+    //
+    // kinds used in S2: BIRTH, DEATH, BUILT_FIRST, DISASTER (hunger crisis), MILESTONE.
+    // Capped at MAX entries; the oldest severity-0 entries are dropped first.
+    const { dateOf } = __mod["sim/clock.js"];
+    
+    const MAX_ENTRIES = 300;
+    
+    function newChron() { return { n: 0, entries: [], recs: {}, f: {} }; }
+    
+    function log(sim, kind, text, actors = [], data = {}, sev = 0) {
+      const c = sim.chron, d = dateOf(sim.tick);
+      c.entries.push({ id: ++c.n, t: sim.tick, y: d.year, d: d.day, kind, a: actors, text, data, sev });
+      if (c.entries.length > MAX_ENTRIES) {
+        const i = c.entries.findIndex(e => e.sev === 0);
+        c.entries.splice(i < 0 ? 0 : i, 1);
+      }
+    }
+    
+    /** Log a one-shot milestone; returns true the first time. */
+    function once(sim, flag, kind, text, actors, data, sev) {
+      if (sim.chron.f[flag]) return false;
+      sim.chron.f[flag] = 1;
+      log(sim, kind, text, actors, data, sev);
+      return true;
+    }
+    
+    function yearDay(sim) { const d = dateOf(sim.tick); return "Year " + d.year + ", day " + d.day; }
+    
+    return { newChron, log, once, yearDay, MAX_ENTRIES };
+  })();
+  
+  __mod["sim/memory.js"] = (function () {
+    // Experience and memory (experiment, notes/impl/MEMORY_SYSTEM.md): experience -> memory -> interest / fear -> autonomous action.
+    //
+    //   v.ps  = {b, c, s}      temperament, integers 0..100: bold, curious, sensitive. The LENS an event is appraised through. Never changes.
+    //   v.mem = [[subj, p, n, count, last]]   at most MEM_CAP slots; p (liking) and n (fear) are each 0..1000 and coexist
+    //   v.epi = [[tick, subj, kind]]          at most EPI_CAP vivid episodes (for the inspector)
+    //
+    // Subjects are strings: "cave" "deep" "ore" "gem" "treasure" "trap", or a fauna kind ("crawler", "thornback" ...).
+    // feel(sim, v, subj, kind, mag) is called only from the shared choke points (fauna damage and kill, dig results, traps, cache open, cave reveals, fearStep),
+    // so possession and the AI feel the same things; the appraisal is the villager's own. No per-tick work: events, a 1000-tick decay, and a <= 8 slot scan when scoring.
+    // Pure integers; nothing here reads a clock or a random stream (temperament comes from a hash).
+    const { mix32 } = __mod["sim/rng.js"];
+    const { once } = __mod["sim/chronicle.js"];
+    const { clamp } = __mod["sim/util.js"];
+    const { F, M } = __mod["sim/world.js"];
+    
+    const MEM_CAP = 8, EPI_CAP = 4;
+    const K = 3;                     // event scale: a mag-80 win gives a curious slime (c 90) about 335 liking
+    const STRONG = 400;              // a chronicle line, and a full-strength score term
+    const HEARD_CAP = 190;           // a story never outweighs a lived memory
+    const DECAY_EVERY = 1000;        // ticks between decay passes (staggered by id)
+    const EPI_MAG = 30;              // events at least this large are remembered as episodes
+    const MEM_CLAMP = 20;            // the p.mem score term, inside the +-45 within-class clamp
+    const EXPLORE_P = 200;           // liking needed before a slime goes looking for it
+    const SCOUT_P = 400;             // ... and (with c > 50) before it may map unmapped cave
+    const EXPLORE_LEASH = 60;        // cells from the camp (wandering is 30)
+    const FEAR_DEAD = 100;           // fearMul: |n - p/2| below this leaves the scare as it was
+    const FEAR_AT = 250;             // n at which a slime keeps clear of a subject (wander) and the inspector says "Fears"
+    const flags = { off: false };    // test-only: tools/mem_probe.js sets it to run a memory-OFF baseline; nothing else touches it
+    const SUBJECTS = ["cave", "deep", "ore", "gem", "treasure", "trap"];
+    
+    const NAMES = { cave: "caves", deep: "the deep", ore: "ore", gem: "gems", treasure: "treasure", trap: "traps", crawler: "cave crawlers", wolf: "wolves" };
+    /** The subject as a plural noun ("caves", "cave crawlers"). */
+    function subjWord(s) { return NAMES[s] || s + "s"; }
+    
+    // ---- temperament ----
+    
+    /** A founder's (or an old save's) temperament: three hashed integers 0..100 of (seed, id). */
+    function hashTemper(seed, id) {
+      const h = mix32(seed >>> 0, id);
+      return { b: mix32(h, 0x62) % 101, c: mix32(h, 0x63) % 101, s: mix32(h, 0x73) % 101 };
+    }
+    /** A newborn: the mean of the parents still alive to be asked, plus a hashed jitter of +-15; a founder (no parents): the hash. */
+    function initTemper(sim, v) {
+      const ps = [];
+      for (const id of v.par || []) { const p = sim.ents.get(id); if (p && p.ps) ps.push(p.ps); }
+      if (!ps.length) return hashTemper(sim.seed, v.id);
+      const out = {};
+      for (const k of ["b", "c", "s"]) {
+        let sum = 0; for (const p of ps) sum += p[k];
+        out[k] = clamp(Math.round(sum / ps.length) + (mix32(v.id, 0x6a + k.charCodeAt(0)) % 31) - 15, 0, 100);
+      }
+      return out;
+    }
+    /** Fill what an older save or a hand-made villager lacks (additive; restore() calls it). */
+    function fillMemory(sim, v) {
+      if (!v.ps) v.ps = hashTemper(sim.seed, v.id);
+      if (!v.mem) v.mem = [];
+      if (!v.epi) v.epi = [];
+    }
+    
+    // ---- slots ----
+    
+    function find(v, subj) { const m = v.mem; for (let i = 0; i < m.length; i++) if (m[i][0] === subj) return m[i]; return null; }
+    /** The memory of a subject: {p, n} (zeros when there is none). */
+    function recall(v, subj) { const s = v.mem && find(v, subj); return s ? { p: s[1], n: s[2] } : { p: 0, n: 0 }; }
+    function slotFor(v, subj) {
+      let s = find(v, subj);
+      if (s) return s;
+      if (v.mem.length >= MEM_CAP) {                                  // full: the weakest (p + n, then the oldest) goes
+        let wi = 0;
+        for (let i = 1; i < v.mem.length; i++) { const a = v.mem[i], w = v.mem[wi]; if (a[1] + a[2] < w[1] + w[2] || (a[1] + a[2] === w[1] + w[2] && a[4] < w[4])) wi = i; }
+        v.mem.splice(wi, 1);
+      }
+      s = [subj, 0, 0, 0, 0];
+      v.mem.push(s);
+      return s;
+    }
+    
+    /**
+     * One experience. kind: "good" (found, won), "bad" (hurt, trapped, scared), "safe" (exposure with no harm). mag 1..100.
+     * good: liking grows with curiosity, and a little fear of the same thing melts. bad: fear grows with sensitivity, less with boldness, and a fear already
+     * high in a sensitive slime grows faster (sensitisation). safe: fear fades with boldness (a sensitive slime barely habituates) and curiosity enjoys the novelty (liking += mag * c / 50).
+     */
+    function feel(sim, v, subj, kind, mag) {
+      if (flags.off || v.kind !== "villager" || mag < 1) return;
+      if (!v.mem) fillMemory(sim, v);
+      mag = Math.round(mag);
+      const { b, c, s: sn } = v.ps, s = slotFor(v, subj), p0 = s[1], n0 = s[2];
+      if (kind === "good") {
+        s[1] += Math.floor(mag * (50 + c) * K / 100);
+        if (s[2] > 0) s[2] -= Math.floor(s[2] * c / 400);                                        // a win over a fear softens it a little, more in a curious slime
+      } else if (kind === "bad") {
+        let d = Math.floor(mag * (50 + sn - Math.floor(b / 2)) * K / 100);
+        if (n0 >= 300 && sn > 50) d = Math.floor(d * (100 + sn - 50) / 100);                      // sensitisation
+        s[2] += d;
+      } else {
+        s[2] -= Math.floor(mag * (b + 50) * (150 - sn) * K / 30000);
+        if (SUBJECTS.includes(subj) || s[1] > s[2]) s[1] += Math.floor(mag * c / 50);             // novelty is a place's charm; a creature is only enjoyed by one who already likes it more than they fear it (a win) (mere sight breeds habituation, not fondness)
+      }
+      s[1] = clamp(s[1], 0, 1000); s[2] = clamp(s[2], 0, 1000); s[3]++; s[4] = sim.tick;
+      if (mag >= EPI_MAG && kind !== "safe") { v.epi.push([sim.tick, subj, kind]); if (v.epi.length > EPI_CAP) v.epi.shift(); }
+      if (s[1] >= STRONG && p0 < STRONG && s[1] > s[2]) once(sim, "mem:" + v.id + ":" + subj + ":p", "MILESTONE", v.name + " is drawn to " + subjWord(subj) + ".", [v.id], { subj, k: "p" }, 1);
+      if (s[2] >= STRONG && n0 < STRONG && s[2] > s[1]) once(sim, "mem:" + v.id + ":" + subj + ":n", "MILESTONE", v.name + " is afraid of " + subjWord(subj) + ".", [v.id], { subj, k: "n" }, 1);
+    }
+    
+    /** Every DECAY_EVERY ticks per villager: p and n fade about 3% (a sensitive slime's fear 2%), at least 1; a spent slot is dropped. */
+    function decay(v) {
+      const m = v.mem;
+      for (let i = m.length - 1; i >= 0; i--) {
+        const s = m[i];
+        if (s[1] > 0) s[1] -= Math.max(1, Math.floor(s[1] * 3 / 100));
+        if (s[2] > 0) s[2] -= Math.max(1, Math.floor(s[2] * (v.ps.s >= 60 ? 2 : 3) / 100));
+        if (s[1] <= 0 && s[2] <= 0) m.splice(i, 1);
+      }
+    }
+    
+    // ---- what memory changes ----
+    
+    /** The p.mem score term for the subjects a candidate touches: (p - n) / 50, summed, clamped to +-MEM_CLAMP. 0 for an empty memory. */
+    function memBias(v, subjs) {
+      if (!v.mem || !v.mem.length || !subjs) return 0;
+      let t = 0;
+      for (const sj of subjs) { const s = find(v, sj); if (s) t += Math.trunc((s[1] - s[2]) / 50); }
+      return clamp(t, -MEM_CLAMP, MEM_CLAMP);
+    }
+    /** fearStep's multiplier on the scare a creature causes: 1 + n/1000 - p/2000, within 0.5..1.5. Exactly 1 with no memory of its kind. */
+    function fearMul(v, sp) {
+      const s = v.mem && v.mem.length ? find(v, sp) : null;
+      if (!s) return 1;
+      const d = s[2] - Math.floor(s[1] / 2);
+      return d > -FEAR_DEAD && d < FEAR_DEAD ? 1 : clamp(1000 + d, 500, 1100) / 1000;      // a graze or two changes nothing: the dead zone keeps small memories out of the fear rule
+    }
+    /** Does this slime keep clear of this subject (a fear that outweighs its liking)? */
+    function fears(v, subj) { const s = v.mem && v.mem.length ? find(v, subj) : null; return !!s && s[2] >= FEAR_AT && s[2] > s[1]; }
+    
+    const underRock = (w, x, y, z) => w.isSolid(x, y, z + 1) || w.isSolid(x, y, z + 2) || w.isSolid(x, y, z + 3);
+    /** The place-subject of a cell: "deep" in a labyrinth, "cave" under rock, else "" (open sky). */
+    function placeOf(sim, x, y, z) {
+      const w = sim.world;
+      if (w.flags(x, y, z) & F.DUNGEON) return "deep";
+      return underRock(w, x, y, z) ? "cave" : "";
+    }
+    
+    /** Wander asks: does this target cell lie on a feared subject (a cave they fear, or within 6 cells of a creature kind they fear)? Only a slime with a fear pays anything. */
+    function avoids(sim, v, x, y, z) {
+      const m = v.mem;
+      if (!m || !m.length) return false;
+      let any = false;
+      for (let i = 0; i < m.length; i++) if (m[i][2] >= FEAR_AT && m[i][2] > m[i][1]) { any = true; break; }
+      if (!any) return false;
+      const pl = placeOf(sim, x, y, z);
+      if (pl && fears(v, pl)) return true;
+      if (v.kind === "villager") for (const e of sim.ents.ofKind("fauna")) if (fears(v, e.sp) && Math.abs(e.x - x) <= 6 && Math.abs(e.y - y) <= 6 && Math.abs(e.z - z) <= 3) return true;
+      return false;
+    }
+    
+    // ---- the story (culture seam) ----
+    
+    /** a tells b, once: 10% of a's strongest memory (a feeling it has at STRONG or more) goes to b as a heard memory, never above HEARD_CAP and never an episode. Returns true if told. */
+    function tell(sim, a, b) {
+      if (!a.mem || !a.mem.length) return false;
+      let best = null, bk = 1, bv = STRONG - 1;
+      for (const s of a.mem) { if (s[1] > bv) { best = s; bk = 1; bv = s[1]; } if (s[2] > bv) { best = s; bk = 2; bv = s[2]; } }
+      if (!best) return false;
+      if (!b.mem) fillMemory(sim, b);
+      const have = find(b, best[0]);
+      if (have ? have[bk] >= HEARD_CAP : false) return false;
+      const give = Math.min(Math.floor(bv / 10), HEARD_CAP - (have ? have[bk] : 0));
+      if (give < 1) return false;
+      const s = have || slotFor(b, best[0]);
+      s[bk] = clamp(s[bk] + give, 0, HEARD_CAP); s[4] = sim.tick;
+      return true;
+    }
+    
+    // ---- cave exposure (seen.js watch: only when a look revealed new cells) ----
+    
+    const EXPOSE_GAP = 12;           // ticks between exposure events of one slime in one kind of place
+    /** A look from (x, y, z) just made dv cells known. Underground that is a safe exposure to caves (or the deep): curiosity enjoys it, fear fades. */
+    function exposure(sim, v, dv) {
+      if (dv < 6) return;
+      const pl = placeOf(sim, v.x, v.y, v.z);
+      if (!pl) return;
+      if (v.mem) { const s = find(v, pl); if (s && sim.tick - s[4] < EXPOSE_GAP) return; }
+      feel(sim, v, pl, "safe", clamp(dv >> 1, 4, 20));
+    }
+    
+    // ---- what a dig turned up ----
+    /** The subject of a mined material ("gem", "ore") or "" (plain rock, clay, grass). */
+    function mineSubject(m) {
+      if (m === M.GEM || m === M.CRYSTAL || m === M.COREORE) return "gem";
+      if (m === M.COAL || m === M.FLINT || m === M.MALACHITE || m === M.IRONORE) return "ore";
+      return "";
+    }
+    
+    /** The subjects a job candidate touches, for the p.mem term: an explore candidate names its own; a dig names its material; a job on a creature names its kind; disarming is traps in the deep. */
+    function candSubjects(sim, c) {
+      if (c.sj) return c.sj;
+      if (c.kind === "mine" && c.cell) { const s = mineSubject(sim.world.mat(c.cell[0], c.cell[1], c.cell[2])); return s ? [s] : null; }
+      if (c.kind === "disarm") return ["trap", "deep"];
+      if (c.tid) { const e = sim.ents.get(c.tid); if (e && e.kind === "fauna") return [e.sp]; }
+      return null;
+    }
+    
+    return { subjWord, hashTemper, initTemper, fillMemory, recall, feel, decay, memBias, fearMul, fears, placeOf, avoids, tell, exposure, mineSubject, candSubjects, MEM_CAP, K, STRONG, HEARD_CAP, DECAY_EVERY, EPI_MAG, MEM_CLAMP, EXPLORE_P, SCOUT_P, EXPLORE_LEASH, FEAR_DEAD, FEAR_AT, flags, SUBJECTS, EXPOSE_GAP };
+  })();
+  
   __mod["sim/seen.js"] = (function () {
     // Fog of knowledge (GDD §13.8): which cells has anybody laid eyes on?
     //
@@ -3284,6 +3529,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     const { D, M, World } = __mod["sim/world.js"];
     const { sightAt } = __mod["sim/light.js"];
     const { chunkKey, chunkKX, chunkKY } = __mod["sim/cellkey.js"];
+    const { exposure } = __mod["sim/memory.js"];
     
     const SIGHT = 3;
     const SURFACE_SIGHT = 14;     // S16: the surface is "seen" this far (a disc) round where a villager has been; the rest of the land is drawn dim as unexplored
@@ -3387,7 +3633,9 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
       const old = v.lk === undefined || v.lk === null ? null : World.xyz(v.lk);
       v.lk = i;
       if (!old || (old[0] >> 2) !== (v.x >> 2) || (old[1] >> 2) !== (v.y >> 2)) revealDisc(sim, v.x, v.y, SURFACE_SIGHT);     // S16: the land round where they have been becomes known
+      const ver0 = sim.seen.ver;
       look(sim, v.x, v.y, v.z, sightAt(sim, v.x, v.y, v.z, SIGHT, v));         // S12: in torchlight a tunnel is seen further
+      if (sim.seen.ver - ver0 >= 6) exposure(sim, v, sim.seen.ver - ver0);      // experiment: new cave cells seen is an exposure to caves (memory.js), at most one per few ticks
     }
     
     /** The edge of what is known (S8's "restricted cells"): an unseen cell with a seen 4-neighbour at the same level. */
@@ -3792,44 +4040,6 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     return { lairOf, lairHome, inTerritory, restricted, unsafeTask, TERR_MARGIN, TERR_UP };
   })();
   
-  __mod["sim/chronicle.js"] = (function () {
-    // Chronicle (GDD §18): a small consumer of sim events. Entries are factual
-    // one-liners built from templates, kept in sim.chron = {n, entries, recs, f}.
-    //
-    //   entry  = {id, t, y, d, kind, a:[villagerId], text, data:{...}, sev:0..2}
-    //   record = recs[villagerId] = {id, name, hue, par, gen, birth, death, cause, top}   (kept after death)
-    //   f      = one-shot flags ("firstBed", "firstWinter", ...) so firsts are logged once
-    //
-    // kinds used in S2: BIRTH, DEATH, BUILT_FIRST, DISASTER (hunger crisis), MILESTONE.
-    // Capped at MAX entries; the oldest severity-0 entries are dropped first.
-    const { dateOf } = __mod["sim/clock.js"];
-    
-    const MAX_ENTRIES = 300;
-    
-    function newChron() { return { n: 0, entries: [], recs: {}, f: {} }; }
-    
-    function log(sim, kind, text, actors = [], data = {}, sev = 0) {
-      const c = sim.chron, d = dateOf(sim.tick);
-      c.entries.push({ id: ++c.n, t: sim.tick, y: d.year, d: d.day, kind, a: actors, text, data, sev });
-      if (c.entries.length > MAX_ENTRIES) {
-        const i = c.entries.findIndex(e => e.sev === 0);
-        c.entries.splice(i < 0 ? 0 : i, 1);
-      }
-    }
-    
-    /** Log a one-shot milestone; returns true the first time. */
-    function once(sim, flag, kind, text, actors, data, sev) {
-      if (sim.chron.f[flag]) return false;
-      sim.chron.f[flag] = 1;
-      log(sim, kind, text, actors, data, sev);
-      return true;
-    }
-    
-    function yearDay(sim) { const d = dateOf(sim.tick); return "Year " + d.year + ", day " + d.day; }
-    
-    return { newChron, log, once, yearDay, MAX_ENTRIES };
-  })();
-  
   __mod["sim/wagon.js"] = (function () {
     // Wagons and animal carts (GDD §14.7 transport tiers, S15; hand -> basket -> backpack -> wagon -> animal cart; no belts or drones, D3).
     //
@@ -3949,6 +4159,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     // (NO_PATH, BLOCKED, ...) so the Why panel can say why (rule 4).
     const { World } = __mod["sim/world.js"];
     const { restricted } = __mod["sim/lair.js"];
+    const { avoids } = __mod["sim/memory.js"];
     const { wagonStep } = __mod["sim/wagon.js"];
     
     const TICKS_PER_CELL = 6;              // walking speed: 3.3 cells/s at 1x (placeholder until traits)
@@ -4002,7 +4213,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
                 ty = Math.max(sim.site.y - WANDER_LEASH, Math.min(sim.site.y + WANDER_LEASH, ty));
               }
               const tz = sim.world.standZ(tx, ty);
-              if (tz < 0 || (tx === ent.x && ty === ent.y) || (!ent.poss && restricted(sim, tx, ty, tz))) continue;      // S8: idle wandering keeps out of the thornback's ground too
+              if (tz < 0 || (tx === ent.x && ty === ent.y) || (!ent.poss && (restricted(sim, tx, ty, tz) || avoids(sim, ent, tx, ty, tz)))) continue;      // S8: idle wandering keeps out of the thornback's ground too
               const p = sim.path.find(World.idx(ent.x, ent.y, ent.z), World.idx(tx, ty, tz));
               if (!p.ok) continue;
               a.move = Move(tx, ty, tz, p.path, ent.mv || TICKS_PER_CELL);
@@ -4945,7 +5156,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
         hunger: o.hunger ?? 0.9, thirst: o.thirst ?? 0.9, energy: o.energy ?? 0.9, warm: 1, mood: 0.8, hp: 100, hard: 0,
         bed: 0, mate: 0, cd: 0, rest: 0, slp: 0, mv: 6, carry: null, action: null, job: null, why: null, order: null,
         sk: o.sk, ep: 0, bad: [], rp: 0, rpt: 0, lf: null, ws: "", wt: 0, tch: null, cl: 0, cg: o.cg ?? 0, fam: {},
-        g: o.g ?? null, gp: o.gp ?? [], inb: o.inb ?? 0, wk: o.wk ?? 0, aff: {}, mn: {}, rel: [], gr: null, hb: { xp: 0, n: 0 }, ti: [], hl: null,
+        g: o.g ?? null, gp: o.gp ?? [], inb: o.inb ?? 0, wk: o.wk ?? 0, aff: {}, mn: {}, rel: [], gr: null, hb: { xp: 0, n: 0 }, ti: [], hl: null, ps: null, mem: [], epi: [],
       };
     }
     
@@ -8087,6 +8298,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     const { SKILLS, level, PROFESSION } = __mod["sim/skills.js"];
     const { inZone } = __mod["sim/items.js"];
     const { restricted } = __mod["sim/lair.js"];
+    const { initTemper, tell } = __mod["sim/memory.js"];
     
     // ---- kinship and inbreeding (R16) ----------------------------------------------------------------------------------------
     
@@ -8157,6 +8369,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     /** Everything a villager gets when they are made (founder, birth, clone): alleles when missing, maybe an heirloom. */
     function initPerson(sim, v) {
       if (!v.g) v.g = genoFrom(v.t, v.id);
+      if (!v.ps) v.ps = initTemper(sim, v);                // experiment: temperament, the lens experience is appraised through (memory.js)
       if (mix32(v.id, 0x41ab) % HEIRLOOM_ODDS === 0) v.hl = newHeirloom(v, sim.tick);
       return v;
     }
@@ -8192,6 +8405,17 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
             const ch = chemistry(a, b);
             if (ch >= 0) bump(a, b, 0, 2 * ch); else bump(a, b, 2, 2 * ch);
           } else if (a.rest > 0 && b.rest > 0 && (a.warm < 0.6 || b.warm < 0.6)) bump(a, b, 1, 0.5);        // cold nights huddled together
+        }
+      }
+      // Experiment (memory.js): stories. A slime with a strong memory tells one friend, partner or close kin standing near; each hears at most one a call.
+      const told = new Set();
+      for (const a of vs) {
+        if (!a.mem || !a.mem.length) continue;
+        for (const b of vs) {
+          if (b === a || told.has(b.id) || !near3(a, b)) continue;
+          const r = relOf(a, b.id);
+          if (!((r && (r.k === "friend" || r.k === "partner")) || kinship(a, b) >= 0.25)) continue;
+          if (tell(sim, a, b)) { told.add(b.id); break; }
         }
       }
     }
@@ -9309,6 +9533,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     const { World } = __mod["sim/world.js"];
     const { wolf: wolfBehave, grazer: grazerBehave, TURN_TICKS } = __mod["sim/packs.js"];
     const { depthOn, dryAir, deposits } = __mod["sim/depth.js"];
+    const { feel, fearMul, placeOf } = __mod["sim/memory.js"];
     const { MONSTERS, monster: monsterBehave, monsterDrops, spawnPass, PERIOD: SPAWN_PERIOD, PHASE: SPAWN_PHASE } = __mod["sim/monsters.js"];
     
     const FAUNA = {
@@ -9642,16 +9867,17 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     
     /** Fear rises with how close a scary creature is and falls over time, faster in company (§13.7). Returns the new fear. */
     function fearStep(sim, v) {
-      let near = 1e9, rise = 0;
+      let near = 1e9, rise = 0, seen = "";
       for (const e of faunaOf(sim)) {
         const sc = FAUNA[e.sp].scare;
         if (!sc || Math.abs(e.z - v.z) > 3) continue;
         const d = cheb(e, v);
         if (d < near) near = d;
-        if (d <= FEAR_R) { let q = sc * (1 - d / FEAR_R); if (sc < ARMED_BOLD && v.eq && v.eq.item === "copper_spear") q *= ARMED_FEAR; if (q > rise) rise = q; }        // 7.22: a row's `scare` scales the fear it causes (1 = the thornback); the strongest creature in sight counts
+        if (d <= FEAR_R) { let q = sc * (1 - d / FEAR_R); if (sc < ARMED_BOLD && v.eq && v.eq.item === "copper_spear") q *= ARMED_FEAR; q *= fearMul(v, e.sp); if (q > rise) { rise = q; seen = e.sp; } }        // 7.22: a row's `scare` scales the fear it causes (1 = the thornback); the strongest creature in sight counts
       }
       let f = v.fear || 0;
       if (near === 1e9 && f === 0) return 0;
+      if (seen && f < FEAR_AT) feel(sim, v, seen, "safe", 3);                                  // experiment: a scary creature in sight that has not yet frightened them is exposure without harm (habituation)
       let company = false;
       if (f > 0) for (const o of sim.ents.ofKind("villager")) if (o !== v && Math.abs(o.x - v.x) <= 3 && Math.abs(o.y - v.y) <= 3 && Math.abs(o.z - v.z) <= 1) { company = true; break; }
       f += (near <= FEAR_R ? FEAR_RISE * rise : 0) - (company ? FEAR_COMPANY : FEAR_FALL);
@@ -9690,6 +9916,11 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
       } else {
         tgt.fear = Math.max(tgt.fear || 0, att.kind === "fauna" && FAUNA[att.sp].fearDmg !== undefined ? FAUNA[att.sp].fearDmg : 0.8);                   // damage is fear (§13.7); a grazer's blow frightens less than a beast's (hunters stand)
         once(sim, "firstWound", "DISASTER", tgt.name + " was wounded by the " + label(att) + ".", [tgt.id], {}, 2);
+        if (tgt.hp > 0 && att.kind === "fauna") {                                // experiment (memory.js): hurt by this kind, and where it happened
+          const mag = clamp(20 + dmg * 3, 20, 100), pl = placeOf(sim, tgt.x, tgt.y, tgt.z);
+          feel(sim, tgt, att.sp, "bad", mag);
+          if (pl) feel(sim, tgt, pl, "bad", mag >> 1);
+        }
       }
       if (att.kind === "villager" && att.eq && att.eq.item === "copper_spear" && --att.eq.u <= 0) {
         log(sim, "MILESTONE", att.name + "'s copper spear broke.", [att.id], {}, 0);
@@ -9701,6 +9932,11 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     function defeat(sim, att, tgt) {
       if (tgt.kind === "villager") { kill(sim, tgt, label(att)); return; }
       const row = FAUNA[tgt.sp];
+      if (att.kind === "villager") {                                           // experiment (memory.js): a win over this kind (a monster is a big one), and where it happened
+        const mag = row.mon ? 80 : tgt.sp === "hopper" ? 6 : 50, pl = placeOf(sim, tgt.x, tgt.y, tgt.z);
+        feel(sim, att, tgt.sp, "good", mag);
+        if (pl && row.mon) feel(sim, att, pl, "good", mag >> 1);
+      }
       if (row.mon) monsterDrops(sim, tgt, att);                                 // 7.22: core shards and parts, not meat
       if (row.meat) dropLoose(sim, "hopper_meat", row.meat, tgt.x, tgt.y, tgt.z);       // carrion / game: the baseline hauling brings it in
       if (row.hide) { dropLoose(sim, "hide", row.hide, tgt.x, tgt.y, tgt.z); sight(sim, "HIDE_WORKING", "skin", tgt.x, tgt.y, tgt.z, null); }     // S9: the skin comes off the carcass; whoever sees it worked may understand hide working
@@ -10162,6 +10398,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     const { noteKnown } = __mod["sim/cm.js"];
     const { CRAFT_IDS } = __mod["sim/phenomena.js"];
     const { mix32 } = __mod["sim/rng.js"];
+    const { feel } = __mod["sim/memory.js"];
     
     /** The trap rows. dmg = hit points; parts = what disarming gives; hard = how much harder than a plain task it is to disarm. */
     const TRAPS = {
@@ -10250,6 +10487,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     function springTrap(sim, v, x, y, z, k) {
       const row = TRAPS[k], w = sim.world;
       finish(sim, x, y, z);
+      feel(sim, v, "trap", "bad", 20 + row.dmg * 2); feel(sim, v, "deep", "bad", 10 + row.dmg);          // experiment (memory.js): caught, and in the deep
       if (k === "dart") hurt(sim, v, row.dmg, "a dart trap");
       else if (k === "gas") { sim.trp.gas.push([idx(x, y, z), sim.tick + GAS_TICKS]); sim.trp.n++; hurt(sim, v, row.dmg, "bad air"); }
       else if (k === "pit") {
@@ -10280,7 +10518,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
         if (!k) continue;
         const ci = idx(x, y, v.z);
         if (st.done.has(ci) || st.seen.has(ci)) continue;
-        if (mix32(mix32(ci, v.id), sim.tick) / 4294967296 < p) spot(sim, x, y, v.z);
+        if (mix32(mix32(ci, v.id), sim.tick) / 4294967296 < p) { spot(sim, x, y, v.z); feel(sim, v, "trap", "bad", 6); }
       }
       if ((sim.tick + v.id) % 20 === 0) {
         const r = roomAt(d, v.x, v.y, v.z);
@@ -10321,12 +10559,14 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     /** A sealed cache at (x, y, z) was dug open: its loot lands loose on the floor where it stood (the caller removed the cell). Returns the units. */
     function openCache(sim, v, x, y, z, into) {
       const loot = lootAt(sim.def, x, y, z);
-      let n = 0;
+      let n = 0, relic = false;
       for (const [item, c] of loot) {
         if (into) into[item] = (into[item] || 0) + c; else dropLoose(sim, item, c, x, y, z);       // 7.23: a delve party packs what it opens (`into`), a digger leaves it on the floor
         n += c;
+        if (item === "relic") relic = true;
         if (item === "relic") once(sim, "relic:" + x + "," + y + "," + z, "DISCOVERY", v.name + " brought up " + relicName(sim.def, x, y, z) + " from a sealed cache in the labyrinth.", [v.id], { x, y, z }, 2);
       }
+      feel(sim, v, "treasure", "good", relic ? 90 : 50);                        // experiment (memory.js)
       return n;
     }
     
@@ -10355,6 +10595,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     const { once } = __mod["sim/chronicle.js"];
     const { costOf, finishSite, unbuild, UNBUILD_DUR } = __mod["sim/build.js"];
     const { M, F, World } = __mod["sim/world.js"];
+    const { feel, mineSubject } = __mod["sim/memory.js"];
     const { INSPIRE } = __mod["sim/inspire.js"];
     const { DIG, diggable, diggableMarked, uproot, HARD_DIFFICULTY, toolNeeded } = __mod["sim/dig.js"];
     const { reveal } = __mod["sim/seen.js"];
@@ -10821,6 +11062,8 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
           gain(sim, v, "dig", VALUE[info.item], fresh, info.hard ? HARD_DIFFICULTY : undefined);   // hard rock teaches only past 0.8 (§10)
           sim.disc.dg = (sim.disc.dg || 0) + 1; if (info.hard) sim.disc.hd = 1;                    // S7b: tool_edge pressure counts the digging
           wearPick(sim, v);
+          const sj = mineSubject(m);
+          if (sj) feel(sim, v, sj, "good", sj === "gem" ? 30 : 8);                              // experiment (memory.js): what the dig turned up
           reveal(sim, s.cx, s.cy, s.cz);                                // the digger looks into the hole: its neighbours are now seen (fog, §13.8)
           if (s.did) mineDug(sim, s.did, m, got, s.cx, s.cy, s.cz);
           return "done";
@@ -12173,6 +12416,84 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     return { genFarm, genPens, captureMk, FARM_SHARE };
   })();
   
+  __mod["sim/explore.js"] = (function () {
+    // Curiosity as an autonomous job (experiment, MEMORY_SYSTEM.md): a free slime that has come to like caves, ore or gems goes and looks at some more of it.
+    // A leisure-class candidate, so any real work outranks it. It walks to a place on the edge of what is known and the walk's own `watch` does the mapping.
+    // A strongly curious slime (p >= SCOUT_P and curiosity above 50) may walk into unmapped cave; labyrinth ("dungeon"), bad air, unstable roofs and the
+    // thornback's territory stay forbidden for everyone (lair.js restricted, and the plan's unsafeTask check).
+    const { Task } = __mod["sim/tasks.js"];
+    const { World, M } = __mod["sim/world.js"];
+    const { isSeen } = __mod["sim/seen.js"];
+    const { restricted } = __mod["sim/lair.js"];
+    const { steadfast } = __mod["sim/possess.js"];
+    const { EXPLORE_P, SCOUT_P, EXPLORE_LEASH } = __mod["sim/memory.js"];
+    const { dist3 } = __mod["sim/util.js"];
+    
+    const EXPLORE_GAP = 150;        // ticks between one explore walk and the next (a slime does not trail back and forth)
+    const LOG_SCAN = 500;                  // the newest cells seen are where a cave's frontier is
+    const KNOWN = { ore: [M.COAL, M.FLINT, M.MALACHITE, M.IRONORE], gem: [M.GEM, M.CRYSTAL, M.COREORE] };
+    const SUBJ_ORDER = ["cave", "gem", "ore"];
+    
+    const inLeash = (sim, x, y) => Math.abs(x - sim.site.x) <= EXPLORE_LEASH && Math.abs(y - sim.site.y) <= EXPLORE_LEASH;
+    
+    /** A cell the slime could stand on at the edge of the known cave: {x, y, z, open} (open = the stand cell itself is unseen, a scout's target), nearest first. */
+    function caveFrontier(sim, v, scout) {
+      const w = sim.world, log = sim.seen.log;
+      let best = null, bd = 1e9;
+      for (let k = log.length - 1, n = 0; k >= 0 && n < LOG_SCAN; k--, n++) {
+        const [x, y, z] = World.xyz(log[k]);
+        if (!inLeash(sim, x, y) || !w.isWalkable(x, y, z) || !(w.isSolid(x, y, z + 1) || w.isSolid(x, y, z + 2) || w.isSolid(x, y, z + 3))) continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy;
+          if (isSeen(sim, nx, ny, z) || w.isSolid(nx, ny, z)) continue;                       // an open, unseen cell beside a cell we know
+          const open = scout && w.isWalkable(nx, ny, z), r = restricted(sim, open ? nx : x, open ? ny : y, z);
+          if (r && !(open && r === "unmapped")) continue;
+          const tx = open ? nx : x, ty = open ? ny : y, d = dist3(v.x, v.y, v.z, tx, ty, z);
+          if (d >= 2 && d < bd) { bd = d; best = { x: tx, y: ty, z, open }; }
+          break;
+        }
+      }
+      return best;
+    }
+    /** A walkable cell beside a known ore or gem cell, nearest first (at least 4 away from where the slime already is). */
+    function outcrop(sim, v, subj) {
+      const w = sim.world;
+      let best = null, bd = 1e9;
+      for (const m of KNOWN[subj]) for (const i of sim.seen.known[m] || []) {
+        const [x, y, z] = World.xyz(i);
+        if (!inLeash(sim, x, y)) continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (const dz of [0, 1, -1]) {
+          const sx = x + dx, sy = y + dy, sz = z + dz;
+          if (!w.isWalkable(sx, sy, sz) || restricted(sim, sx, sy, sz)) continue;
+          const d = dist3(v.x, v.y, v.z, sx, sy, sz);
+          if (d >= 4 && d < bd) { bd = d; best = { x: sx, y: sy, z: sz, open: false }; }
+        }
+      }
+      return best;
+    }
+    
+    /** The leisure candidate "explore" for the subject this slime is most drawn to (liking above EXPLORE_P and above its fear). H = jobs.js's {add, reach}. */
+    function genExplore(ctx, H) {
+      const { sim, v } = ctx;
+      if (!v.mem || !v.mem.length || steadfast(v) || (v.fear || 0) > 0.1) return;
+      const going = ctx.cur && ctx.cur.k === "explore";
+      if (!going && ctx.t - (v.ex || -1e9) < EXPLORE_GAP) return;
+      let subj = "", bs = 0;
+      for (const sj of SUBJ_ORDER) for (const s of v.mem) if (s[0] === sj && s[1] >= EXPLORE_P && s[1] > s[2] && s[1] - s[2] > bs) { bs = s[1] - s[2]; subj = sj; }
+      if (!subj) return;
+      const p = v.mem.find(s => s[0] === subj)[1], scout = subj === "cave" && p >= SCOUT_P && v.ps.c > 50;
+      const tg = subj === "cave" ? caveFrontier(sim, v, scout) : outcrop(sim, v, subj);
+      if (!tg) return;
+      H.add(ctx, { kind: "explore", cls: "leisure", urg: 0.8, grp: "explore", key: "explore:" + subj, sj: [subj], scout, d: dist3(v.x, v.y, v.z, tg.x, tg.y, tg.z), tid: 0, mk: () => {
+        if (!H.reach(ctx, tg)) return { blocker: "NO_PATH" };
+        v.ex = ctx.t;
+        return { task: Task("explore", [{ v: "goto", x: tg.x, y: tg.y, z: tg.z }]), res: [] };
+      } });
+    }
+    
+    return { genExplore, EXPLORE_GAP };
+  })();
+  
   __mod["sim/jobs.js"] = (function () {
     // The job board (GDD §09). One score pass produces BOTH the choice and the
     // explanation (v.why), so the Why panel cannot drift from behaviour.
@@ -12225,6 +12546,8 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     const { sickOnes, SICK_WORK } = __mod["sim/disease.js"];
     const { freeWagon, wagonReady, WAGON, WAGON_FAR, BATCH_R, BATCH_MAX } = __mod["sim/wagon.js"];
     const { kitchens, cookable, DISHES } = __mod["sim/kitchen.js"];
+    const { genExplore } = __mod["sim/explore.js"];
+    const { memBias, candSubjects } = __mod["sim/memory.js"];
     const { tinkerCandidates, pickCandidate, itchAt, askActive, cdKey, VERB_DUR, TINKER_WORK } = __mod["sim/discovery.js"];
     
     const GATHER_FIT = 15;       // gathering is skill-less (Appendix B) but everyone is a practised forager: a flat fit worth a 0.25 skill, nudged by speed (D21); forage, gather and sun-drying use it
@@ -13090,7 +13413,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
         c.blocker = noTool && !any ? "NO_TOOL" : any || !stuck ? (only ? "NO_TARGET" : "RESERVED") : stuck.why;
         c.mk = () => ({ blocker: c.blocker }); add(ctx, c); return;
       }
-      c.d = bd;
+      c.d = bd; c.cell = [best.x, best.y, best.z];
       if (!only && capped(ctx, "standing", "mine", mineCap(ctx))) c.blocker = "MAX_WORKERS";
       if (c.blocker) c.mk = () => ({ blocker: c.blocker });
       else c.mk = () => {
@@ -13591,9 +13914,10 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
         tmp: c.cls === "standing" || c.cls === "demand" || c.cls === "leisure" ? 5 * (2 * temper(v, c.kind) - 1) : 0,   // orders bypass temper (R5)
         sw: 0,
       };
+      if (c.cls !== "need" && c.cls !== "vcrit" && v.mem && v.mem.length) { const m = memBias(v, candSubjects(ctx.sim, c)); if (m) p.mem = m; }      // experiment: what the slime has lived through (memory.js), +-20, inside the clamp; absent for an empty memory
       const cur = ctx.cur;
       if (cur && c.key !== cur.key && ctx.t - cur.t0 < COMMIT && c.cls !== "vcrit" && !(c.cls === "need" && c.u > 0.5)) p.sw = -SWITCH_COST;
-      const within = clamp(p.urg + p.fit + p.prox + p.path + p.pref + p.soc + p.ill + p.crew + p.tmp + p.sw, -WITHIN_CLAMP, WITHIN_CLAMP);
+      const within = clamp(p.urg + p.fit + p.prox + p.path + p.pref + p.soc + p.ill + p.crew + p.tmp + p.sw + (p.mem || 0), -WITHIN_CLAMP, WITHIN_CLAMP);
       c.parts = p; c.score = c.cls === "vcrit" ? Math.min(VCRIT_CAP, base + within) : base + within;
       // Low mood pre-empts orders (§08) but not a hungry village: leisure may not outrank village-critical.
       if (c.cls === "need" && c.kind === "leisure") c.score = Math.min(c.score, MOOD_CAP);
@@ -13617,7 +13941,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
           return k ? { cls: "standing", kp: item } : { cls: "demand", kp: "" };
         });
       }
-      if (adult) genTinker(ctx);
+      if (adult) { genTinker(ctx); genExplore(ctx, HELP); }
       add(ctx, { kind: "leisure", cls: "leisure", urg: (1 - v.mood) * 0.5, grp: "leisure", d: 0, key: "leisure:0", mk: () => ({ task: Wander(), res: [] }) });
     
       for (const c of ctx.cands) scoreCand(ctx, c);
@@ -13634,6 +13958,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
         if (r.task && !steadfast(v)) {                                   // S8: autonomy refuses the thornback's ground and unmapped cave (a guided villager does not, K7)
           let why = unsafeTask(sim, r.task);
           if ((c.kind === "disarm" || c.clr || delving(sim, v)) && why === "dungeon") why = "";             // 7.21: the one job the player can send into a labyrinth by order; 7.23: and a delve party goes where its orders say
+          if (c.kind === "explore" && c.scout && why === "unmapped") why = "";                  // experiment: a scout (memory.js) maps unmapped cave; labyrinth, bad air, unstable ground and the lair stay forbidden
           if (c.kind === "build_site") {                                    // S12: shoring a cracking roof and fitting a vent in foul air are the only jobs allowed there
             const st = sim.ents.get(c.tid);
             if (st && ((why === "unstable" && st.w === "wall" && st.m === "support") || (why === "badair" && st.w === "vent"))) why = "";
@@ -14998,6 +15323,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     const { releaseJob, RES_EXPIRY } = __mod["sim/jobstate.js"];
     const { resetDay, rustDay } = __mod["sim/skills.js"];
     const { socialTick, peopleDaily } = __mod["sim/people.js"];
+    const { decay, DECAY_EVERY } = __mod["sim/memory.js"];
     const { ORDER_COMMANDS } = __mod["sim/orders.js"];
     const { Rooms } = __mod["sim/rooms.js"];
     const { BP_COMMANDS, newBps, autoBuild, instanceTick } = __mod["sim/blueprint.js"];
@@ -15135,6 +15461,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
         const vs = this.ents.ofKind("villager").slice();       // deaths/births change the live list
         for (const v of vs) {
           if (!this.ents.get(v.id)) continue;
+          if (v.mem && v.mem.length && (t + v.id) % DECAY_EVERY === 0) decay(v);       // experiment: memories fade, one staggered pass per slime (memory.js)
           watch(this, v);                                       // look around when they have moved (fog, §13.8)
           if (this.world.flags(v.x, v.y, v.z) & F.DUNGEON) { trapStep(this, v); if (!this.ents.get(v.id)) continue; }      // 7.21: a labyrinth's traps are spotted, or go off
           if ((t + v.id) % NEED_STEP === 0) {
@@ -17338,6 +17665,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     const { CRAFTS } = __mod["sim/phenomena.js"];
     const { FIRE_R, smokeFire, SMOKE_R } = __mod["sim/fire.js"];
     const { FAUNA, huntingPressure } = __mod["sim/fauna.js"];
+    const { subjWord } = __mod["sim/memory.js"];
     const { CROP, cropStage } = __mod["sim/farm.js"];
     const { DUR_DAY } = __mod["sim/clock.js"];
     const { crewOf, taskText } = __mod["sim/crews.js"];
@@ -17477,6 +17805,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
       make_tool: { now: "Making a tool at the bench", noun: "Make tool" },
       fetch_water: { now: "Fetching water for the jar", noun: "Fetch water" },
       tinker: { now: "Trying things out", noun: "Experiment" },
+      explore: { now: "Exploring", noun: "Explore" },
       cook: { now: "Cooking in the kitchen", noun: "Cook" },
       haul_wagon: { now: "Hauling a long load with a wagon", noun: "Haul by wagon" },
       flee: { now: "Running from danger", noun: "Run away" },
@@ -17507,7 +17836,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     };
     const PART_LABEL = {
       base: "Class base", urg: "Urgency", fit: "Skill fit", prox: "Closeness", path: "Walking cost",
-      pref: "Preferred craft", soc: "Company", crew: "Crew task", tmp: "Temperament", sw: "Switch penalty",
+      pref: "Preferred craft", soc: "Company", crew: "Crew task", tmp: "Temperament", mem: "Memories", sw: "Switch penalty",
     };
     
     // ---- skills and genes in plain words (GDD §08, §10) ----
@@ -17625,6 +17954,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
           return "the village wants it";
         default:
           if (job === "tinker") return "something is nagging at the village and they have time to try things out";
+          if (job === "explore") return "Curious: " + subjWord(((v.job && v.job.key) || "explore:cave").split(":")[1]);
           return "nothing more pressing to do";
       }
     }
@@ -18287,7 +18617,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
       eat: "Eating", drink: "Drinking", sleep: "Sleeping", huddle: "Huddling", leisure: "Resting", forage: "Foraging", dry: "Drying", build_bed: "Building", build_rack: "Building",
       build_site: "Building", craft_site: "Making", deconstruct: "Taking down", dig: "Digging", mine: "Mining", cut: "Gathering", chop: "Chopping", haul: "Hauling", store: "Storing",
       goto: "Walking", tend_fire: "Tending fire", fire_kiln: "Firing kiln", burn_charcoal: "Burning", smelt: "Smelting", smoke: "Smoking", make_tool: "Making", fetch_water: "Fetching water",
-      tinker: "Tinkering", cook: "Cooking", haul_wagon: "Hauling", flee: "Fleeing", defend: "Fighting", mend: "Resting", convalesce: "Resting", tend_sick: "Nursing", hunt: "Hunting",
+      tinker: "Tinkering", explore: "Exploring", cook: "Cooking", haul_wagon: "Hauling", flee: "Fleeing", defend: "Fighting", mend: "Resting", convalesce: "Resting", tend_sick: "Nursing", hunt: "Hunting",
       till: "Tilling", sow: "Sowing", water_field: "Watering", harvest: "Harvesting", fence: "Fencing", fodder: "Feeding", slaughter: "Butchering", capture: "Catching", scout: "Scouting", strike: "Striking", disarm: "Disarming",
     };
     /** A villager's current doing as one word ("" when walking about with nothing to say). */
@@ -18508,6 +18838,38 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     return { roomHtml, roomAct, proomHtml };
   })();
   
+  __mod["ui/memtext.js"] = (function () {
+    // The inspector's Memories words (experiment, MEMORY_SYSTEM.md): at most 3 chips ("Loves caves", "Fears cave crawlers") and the vivid episodes as 1-3 word lines. No sentences.
+    const { subjWord } = __mod["sim/memory.js"];
+    
+    const CHIP_AT = 150;           // a feeling this strong earns a chip
+    const LIKE = { cave: "Loves", gem: "Drawn to", ore: "Likes", treasure: "Loves", deep: "Drawn to", trap: "Curious about" };
+    const BAD_EPI = { cave: "Scared underground", deep: "Scared deep down", trap: "Caught by a trap" };
+    const GOOD_EPI = { cave: "Loved the dark", deep: "Delved deep", ore: "Struck ore", gem: "Found gems", treasure: "Found treasure", trap: "Sprang a trap" };
+    const short = (s) => (s === "crawler" ? "crawler" : s);
+    
+    /** [{text, tip}] strongest first, at most 3: what the slime likes (liking above fear) or fears (fear above liking). */
+    function memChips(v) {
+      const out = [];
+      for (const s of (v.mem || []).slice().sort((a, b) => Math.max(b[1], b[2]) - Math.max(a[1], a[2]))) {
+        const [sj, p, n] = s;
+        if (Math.max(p, n) < CHIP_AT || p === n) continue;
+        const text = p > n ? (LIKE[sj] || "Unafraid of") + " " + subjWord(sj) : "Fears " + subjWord(sj);
+        out.push({ text, tip: subjWord(sj)[0].toUpperCase() + subjWord(sj).slice(1) + ": liking " + p + ", fear " + n });
+        if (out.length === 3) break;
+      }
+      return out;
+    }
+    /** The vivid episodes, newest first, as short lines. */
+    function episodeLines(v) {
+      const out = [];
+      for (const [, sj, k] of (v.epi || []).slice().reverse()) { const t = k === "bad" ? (BAD_EPI[sj] || "Hurt by " + short(sj)) : (GOOD_EPI[sj] || "Beat " + short(sj)); if (!out.includes(t)) out.push(t); }
+      return out;
+    }
+    
+    return { memChips, episodeLines, CHIP_AT };
+  })();
+  
   __mod["ui/inspector.js"] = (function () {
     // The Why panel and the villager inspector (GDD §22). The Why panel is the
     // centrepiece: it turns v.why (written by the same scoring pass that chose the
@@ -18536,6 +18898,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     const { CELLAR_X, JAR_X, JAR_HOLD } = __mod["sim/items.js"];
     const { WAGON, WAGON_FAR, CART_FODDER, cartAnimal, wagonReady } = __mod["sim/wagon.js"];
     const { inTerritory } = __mod["sim/lair.js"];
+    const { memChips, episodeLines } = __mod["ui/memtext.js"];
     const { wagonLine, cellInfo, stationInfo, explain, jobNoun, JOB, CLASS, describe, stageText, bedText, itemName, pct, TRAIT_INFO, SKILL_INFO, traitWord, skillWord, professionText, shortBlocker } = __mod["ui/text.js"];
     
     const NEEDS = [["hunger", "Food"], ["thirst", "Water"], ["energy", "Energy"], ["warm", "Warmth"], ["mood", "Mood"]];
@@ -18546,7 +18909,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     const NEED_ICON = { hunger: "food", thirst: "water", energy: "energy", warm: "warmth" };
     const TRAIT_ICON = { strength: "haul", speed: "flee", stamina: "health", intelligence: "knowledge", drive: "bolt", leisure: "mood-hi", fertility: "people", longevity: "spoilage", hardiness: "warmth" };
     const SKILL_ICON = { dig: "dig", build: "build", craft: "craft" };
-    const JOB_ICON = { eat: "eat", drink: "drink", sleep: "sleep", huddle: "sleep", leisure: "mood-hi", forage: "forage", dry: "rack", build_bed: "bed", build_rack: "rack", build_site: "build", craft_site: "craft", deconstruct: "deconstruct", dig: "dig", mine: "dig", cut: "gather", chop: "chop", haul: "haul", store: "drop", goto: "move", tend_fire: "hearth", fire_kiln: "kiln", burn_charcoal: "mound", smelt: "forge", smoke: "smoker", make_tool: "workbench", fetch_water: "water", tinker: "knowledge", cook: "hearth", haul_wagon: "haul", flee: "flee", defend: "hunt", mend: "tend", convalesce: "tend", tend_sick: "tend", hunt: "hunt", till: "field", sow: "sprout", water_field: "water", harvest: "field", fence: "pen", fodder: "gather", slaughter: "hunt", capture: "capture", scout: "scout", strike: "hunt", disarm: "craft" };
+    const JOB_ICON = { eat: "eat", drink: "drink", sleep: "sleep", huddle: "sleep", leisure: "mood-hi", forage: "forage", dry: "rack", build_bed: "bed", build_rack: "rack", build_site: "build", craft_site: "craft", deconstruct: "deconstruct", dig: "dig", mine: "dig", cut: "gather", chop: "chop", haul: "haul", store: "drop", goto: "move", tend_fire: "hearth", fire_kiln: "kiln", burn_charcoal: "mound", smelt: "forge", smoke: "smoker", make_tool: "workbench", fetch_water: "water", tinker: "knowledge", explore: "scout", cook: "hearth", haul_wagon: "haul", flee: "flee", defend: "hunt", mend: "tend", convalesce: "tend", tend_sick: "tend", hunt: "hunt", till: "field", sow: "sprout", water_field: "water", harvest: "field", fence: "pen", fodder: "gather", slaughter: "hunt", capture: "capture", scout: "scout", strike: "hunt", disarm: "craft" };
     const RIM = { need: "circle", vcrit: "tri", order: "sq", standing: "hex", demand: "none", leisure: "none" };
     
     /** The "Now" section (UI_SPEC §3.2): why this villager is doing this, as a chain of icons. Words are in tips and in a hidden copy; "Say it in words" opens the table. */
@@ -18704,6 +19067,9 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
         for (const [o, r] of rel) one(o, r.k === "rival" ? "fear" : "check", TIER_WORD[r.k] + ": " + reasonLine(r, o.name));
         vr += `</div>`;
       }
+      // memories (experiment, memory.js): up to 3 chips and the vivid episodes, as words; nothing when the slime has lived through nothing yet
+      const chips = memChips(v), epis = episodeLines(v);
+      if (chips.length || epis.length) vr += `<div class="mem" data-test="memories"><div class="sub">Memories</div>` + (chips.length ? `<p class="ttls">` + chips.map(c => `<span class="ttl"${tipAttr(c.tip)}>${esc(c.text)}</span>`).join(" ") + `</p>` : "") + (epis.length ? `<p class="dim">` + epis.map(esc).join(" · ") + `</p>` : "") + `</div>`;
       // actions: teach / split
       const pupils = ui.sel.filter(id => id !== v.id).map(id => sim.ents.get(id)).filter(o => o && isAdult(sim, o));
       const acts = (isAdult(sim, v) && pupils.length ? pupils.slice(0, 2).map(o => `<button class="btn" data-act="teach:${o.id}"${tipAttr("Teach " + o.name + "\nWork the same craft beside them and they learn 3x faster; you work at 80%. Give you both the same order (e.g. dig) so you end up side by side.")}>${svg("knowledge", 14)}${avatar(o.hue, o.lin, 16)}<span class="bl">Teach ${esc(o.name.split(" ")[0])}</span></button>`).join("") : "")
@@ -19498,6 +19864,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
     const { cellXyz, chunkKX, chunkKY, chunkKey, cellIdx } = __mod["sim/cellkey.js"];
     const { packPlant, plantProps, isPackable } = __mod["sim/dormant.js"];
     const { newCm, applyCm } = __mod["sim/cm.js"];
+    const { fillMemory } = __mod["sim/memory.js"];
     
     const SAVE_VERSION = 15;       // 15 = 7.23: sim.cm (the core ledger: choices pending, cores left, cores harvested), delve expeditions (`kind` on an expedition record, `br` on a member): additive, a v14 save loads as it is. 14 = 7.22: monsters (fauna rows with `mon`, `ck`, `sf`, `hr`, `sh`; sim.wild.gk = slain guardians; item rows chitin, core_hide, venom_sac): additive, a v13 save loads as it is. 13 = 7.21: dungeons (the land round every core gains a labyrinth: far content only, nothing within 100 cells of a camp changes) and the trap ledger `trp` (additive: absent = empty), so a v12 save loads as it is; its edits sit on the same rock except inside a labyrinth's footprint, which nobody had dug yet. 12 = 7.20: magic cores and cave networks. Terrain changed (caves, ore weights, gems, outcrops, spires), so the cells a v11 save edited sit on different rock and it is REFUSED (OLD_TERRAIN), not migrated; a v12 save has the same shape as v11. 11 = S18b: the clock rebase (a game day is 12000 ticks, was 1800; a life 500 days): every tick-stamped field (born, nx, bt, cd, timers, chronicle) is on the new clock, so a v9/v10 save is REFUSED (OLD_CLOCK), not migrated. 10 = S17: compact (cell deltas per chunk, plants as arrays, the seen set as per-chunk bitsets, landmarks seen, chunk sleep state); a v9 save loads unchanged. 9 = S16: the endless world. Terrain is regrown from the seed (the spawn search is deterministic), so a save holds only the cells that differ from it (deltas), the list of active chunks (chunks: [key, active, changed, lastNear]) and the entities; seen = {c: revealed surface columns, l: other seen cells}. A save of the old fixed 128x128 map (v < 9) cannot be loaded: restore() refuses it with a message. 8 = S13: hidden genotype (g, gp, inb, wk), bonds (aff, mn, rel), grief (gr), hobby (hb), titles (ti), heirloom (hl), skill rust (rs, lu), grave entities. 7 = S12: biomes (sim.bio: 1 = the seed grows the biome map, 0 = a world made before it), cave-in state (ug). 6 = S7a: villager familiarity (fam), discovery state (disc), flames and hearths. 5 = 5 = S6: geology (new strata + ores), seen log, mining designations. 4 = S5: skills dig/build/craft, nine traits, clone and lesson fields
     
@@ -19668,6 +20035,7 @@ window.__BUILD = {"stage":"7.23","commit":"bc2aca2","dirty":true,"time":"2026-10
       sim.world.applyDeltas(data.dc ? unpackDeltas(data.dc) : data.deltas);
       sim.ents.load(unpackEnts(data.entities));
       sim.stock = data.stock; sim.board = data.board; sim.chron = data.chron;
+      for (const v of sim.ents.ofKind("villager")) fillMemory(sim, v);          // experiment: temperament from the hash and an empty memory for a save made before them (additive)
       sim.rng.restore(data.rng);
       sim.rooms.marks = data.rooms || {};
       sim.bps = data.bps || { n: 0, list: [] };

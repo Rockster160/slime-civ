@@ -18,6 +18,7 @@ import { can } from "../sim/knowledge.js";
 import { CRAFTS } from "../sim/phenomena.js";
 import { FIRE_R, smokeFire, SMOKE_R } from "../sim/fire.js";
 import { FAUNA, huntingPressure } from "../sim/fauna.js";
+import { subjWord } from "../sim/memory.js";
 import { CROP, cropStage } from "../sim/farm.js";
 import { DUR_DAY } from "../sim/clock.js";
 import { crewOf, taskText } from "../sim/crews.js";
@@ -157,6 +158,7 @@ export const JOB = {
   make_tool: { now: "Making a tool at the bench", noun: "Make tool" },
   fetch_water: { now: "Fetching water for the jar", noun: "Fetch water" },
   tinker: { now: "Trying things out", noun: "Experiment" },
+  explore: { now: "Exploring", noun: "Explore" },
   cook: { now: "Cooking in the kitchen", noun: "Cook" },
   haul_wagon: { now: "Hauling a long load with a wagon", noun: "Haul by wagon" },
   flee: { now: "Running from danger", noun: "Run away" },
@@ -187,7 +189,7 @@ export const CLASS = {
 };
 export const PART_LABEL = {
   base: "Class base", urg: "Urgency", fit: "Skill fit", prox: "Closeness", path: "Walking cost",
-  pref: "Preferred craft", soc: "Company", crew: "Crew task", tmp: "Temperament", sw: "Switch penalty",
+  pref: "Preferred craft", soc: "Company", crew: "Crew task", tmp: "Temperament", mem: "Memories", sw: "Switch penalty",
 };
 
 // ---- skills and genes in plain words (GDD §08, §10) ----
@@ -305,6 +307,7 @@ export function reasonText(sim, v, job, cls) {
       return "the village wants it";
     default:
       if (job === "tinker") return "something is nagging at the village and they have time to try things out";
+      if (job === "explore") return "Curious: " + subjWord(((v.job && v.job.key) || "explore:cave").split(":")[1]);
       return "nothing more pressing to do";
   }
 }
