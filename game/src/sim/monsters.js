@@ -16,7 +16,7 @@
 // `leash` from home; a ranged row (the spitter) stands off and spits; a hurt one retreats. It walks greedily like every creature and so is stopped by what stops a creature: WALLS (solid cells),
 // DOORS (a door cell is closed to monsters), and LIGHT (a `dark` row will not step into a lit cell). OD-49: it never steps onto a cell below band 1 (e.hr, a home radius, is the override a
 // hand-placed monster carries, as in the pre-situated fixtures). Villagers flee by the thornback's rules (fear.js: `scare`), so walls, doors and light are the defence; there is no tower defence.
-import { coresNear, manaOf, bandOf, MANA_R } from "./core.js";
+import { coresNear, manaOf, liveMana, bandOf, MANA_R } from "./core.js";
 import { guardianSlain } from "./cm.js";
 import { dungeonsIn } from "./dungeon.js";
 import { chambersIn } from "./caves.js";
@@ -91,7 +91,7 @@ export function pickSpecies(kind, band, h) {
 /** {cores, pts:[{k, x, y, z, m, h}], boss:[{x, y, z, key}]} for chunk (cx, cy). A pure function of the seed. */
 export function chunkInfo(def, cx, cy) {
   const X0 = cx << 4, Y0 = cy << 4, X1 = X0 + 15, Y1 = Y0 + 15, cores = coresNear(def, X0, Y0, X1, Y1, MANA_R), pts = [], boss = [];
-  const add = (k, x, y, z) => { const m = manaOf(cores, x, y, z, true); if (m >= 14) pts.push({ k, x, y, z, m, h: mix32(mix32(x, y), z + 77) }); };
+  const add = (k, x, y, z) => { const m = manaOf(cores, x, y, z); if (m >= 14) pts.push({ k, x, y, z, m, h: mix32(mix32(x, y), z + 77) }); };
   if (cores.length) {
     for (const dun of dungeonsIn(def, X0, Y0, X1, Y1)) {
       for (const r of dun.rooms) {
@@ -159,10 +159,10 @@ export function spawnPass(sim, H) {
     const tries = info.pts.slice();
     const X0 = ch.cx << 4, Y0 = ch.cy << 4, sh = mix32(mix32(sim.seed ^ 0x5f3d, key), period);          // one hashed surface column per chunk per pass
     const sx = X0 + (sh & 15), sy = Y0 + ((sh >>> 4) & 15), sz = w.standZ(sx, sy);
-    if (sz >= 0) { const m = manaOf(info.cores, sx, sy, sz); if (surfaceAllowed(m)) tries.push({ k: "surface", x: sx, y: sy, z: sz, m, h: sh }); }
+    if (sz >= 0) { const m = liveMana(info.cores, sx, sy, sz); if (surfaceAllowed(m)) tries.push({ k: "surface", x: sx, y: sy, z: sz, m, h: sh }); }
     for (const p of tries) {
       if (budget <= 0) break;
-      const mana = p.k === "surface" ? p.m : manaOf(info.cores, p.x, p.y, p.z);          // 7.23: the live field (a harvested core's fades), the point only remembers where it is
+      const mana = p.k === "surface" ? p.m : liveMana(info.cores, p.x, p.y, p.z);      // D48: a harvested core spawns nothing (the point only remembers where it is)
       if (mana < 14) continue;
       const roll = mix32(mix32(sim.seed ^ 0x6d6f6e, p.h), period) % 10000;
       if (roll >= spawnRate(mana, p.k, night)) continue;

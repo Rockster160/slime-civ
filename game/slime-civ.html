@@ -372,7 +372,7 @@
 <div id="helpOverlay"></div>
 <div id="settingsOverlay" data-test="settings"></div>
 <script>
-window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10-29 12:02"};
+window.__BUILD = {"stage":"7.23","commit":"d35e06d","dirty":true,"time":"2026-10-30 12:16"};
 (function () {
   "use strict";
   
@@ -978,25 +978,28 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     /** Band 0..4 of a mana value. */
     const bandOf = (m) => (m >= 200 ? 4 : m >= 130 ? 3 : m >= 60 ? 2 : m >= 14 ? 1 : 0);
     /**
-     * 7.23: a harvested core's field fades over FADE_TICKS (a flat tick duration, not days). `fadeMana(m, age)` is pure: m at age 0, 0 at FADE_TICKS, in between a straight integer line.
-     * A harvested core carries `gt` (the tick it went) and `fb` (the def's clock box, {now}); only a core that has gone reads them. `raw` = the field as generated (terrain, never faded).
+     * 7.23 (D48): a harvested core never changes the world: `manaFrom`/`manaOf` always read the field as generated, so ore, caves, dungeon loot and the danger display stay as they were (anything first generated later too).
+     * Only ongoing SPAWNING stops, at once: `liveMana` skips a core that has gone (it carries `gt`, the tick it went). Monsters already alive stay.
      */
-    const FADE_TICKS = 12000;
-    function fadeMana(m, age) { return age <= 0 ? m : age >= FADE_TICKS ? 0 : Math.floor((m * (FADE_TICKS - age)) / FADE_TICKS); }
-    /** Mana of one core at a cell. */
-    function manaFrom(c, x, y, z, raw) {
-      const d = oct(x - c.x, y - c.y) + DZ_W * (z < c.z ? c.z - z : z - c.z), m = d < MANA_R ? MANA_TAB[d] : 0;
-      return c.gt === undefined || raw ? m : fadeMana(m, c.fb.now - c.gt);
+    /** Mana of one core at a cell (as generated). */
+    function manaFrom(c, x, y, z) {
+      const d = oct(x - c.x, y - c.y) + DZ_W * (z < c.z ? c.z - z : z - c.z);
+      return d < MANA_R ? MANA_TAB[d] : 0;
     }
     /** The strongest mana over a list of cores. */
-    function manaOf(cores, x, y, z, raw) { let m = 0; for (let i = 0; i < cores.length; i++) { const v = manaFrom(cores[i], x, y, z, raw); if (v > m) m = v; } return m; }
+    function manaOf(cores, x, y, z) { let m = 0; for (let i = 0; i < cores.length; i++) { const v = manaFrom(cores[i], x, y, z); if (v > m) m = v; } return m; }
+    /** The field that drives new spawns: as `manaOf`, but a harvested core gives nothing. */
+    function liveMana(cores, x, y, z) { let m = 0; for (let i = 0; i < cores.length; i++) { if (cores[i].gt !== undefined) continue; const v = manaFrom(cores[i], x, y, z); if (v > m) m = v; } return m; }
     /** The key a core goes by (the guardian's `ck`, the harvest ledger). */
     const coreKey = (c) => c.x + "," + c.y;
-    /** A sim's own view of the (shared, memoised) world definition: reads fall through to it, but the harvested-core ledger (key -> tick) and the clock box `fb` are the sim's own, so one sim's harvest never leaks into another's. */
-    function ownDef(def) { const d = Object.create(def); d.gone = new Map(); d.fb = { now: 0 }; return d; }
-    /** A core has been harvested at `tick`: its field fades from now. */
+    /** A sim's own view of the (shared, memoised) world definition: reads fall through to it, but the harvested-core ledger (key -> tick) is the sim's own, so one sim's harvest never leaks into another's. */
+    function ownDef(def) { const d = Object.create(def); d.gone = new Map(); return d; }
+    /** A core has been harvested at `tick`: it stops spawning from now. */
     function goCore(def, c, tick) { def.gone.set(coreKey(c), tick); }
-    const goneView = (def, c) => { const t = def.gone.get(coreKey(c)); return t === undefined ? c : Object.assign(Object.create(c), { gt: t, fb: def.fb }); };
+    const goneView = (def, c) => { const t = def.gone.get(coreKey(c)); return t === undefined ? c : Object.assign(Object.create(c), { gt: t }); };
+    
+    /** A core as generated (a harvested core's view carries `gt`; anything cached in a pure structure keeps this copy, so what is cached never depends on when it was first asked for). */
+    const plainCore = (c) => { const o = { x: c.x, y: c.y, z: c.z, h: c.h, sh: c.sh, spire: c.spire }; if (c.home) o.home = true; return o; };
     
     function cache(def) { const c = def.rc || (def.rc = new Map()); if (c.size > 4096) c.clear(); return c; }
     
@@ -1042,7 +1045,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       }
       const s = def.spawnCore;
       if (s && s.x >= x0 - pad && s.x <= x1 + pad && s.y >= y0 - pad && s.y <= y1 + pad) out.push(s);
-      if (def.gone && def.gone.size) for (let i = 0; i < out.length; i++) out[i] = goneView(def, out[i]);       // 7.23: a harvested core reads as fading
+      if (def.gone && def.gone.size) for (let i = 0; i < out.length; i++) out[i] = goneView(def, out[i]);       // 7.23: a harvested core carries `gt`
       return out;
     }
     /** Cores whose centre lies in the box. */
@@ -1053,7 +1056,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     /** The band 0..4 at a cell. */
     const bandAt = (def, x, y, z) => bandOf(manaAt(def, x, y, z));
     
-    return { fadeMana, manaFrom, manaOf, ownDef, goCore, coreOfRegion, placeSpawnCore, coresNear, manaAt, CORE_RS, SAFE_R, MANA_R, DZ_W, SPAWN_CORE_MIN, SPAWN_CORE_SPAN, SHALLOW, BAND_MIN, BAND_NAME, MANA_TAB, oct, bandOf, FADE_TICKS, coreKey, coresIn, bandAt };
+    return { manaFrom, manaOf, liveMana, ownDef, goCore, coreOfRegion, placeSpawnCore, coresNear, manaAt, CORE_RS, SAFE_R, MANA_R, DZ_W, SPAWN_CORE_MIN, SPAWN_CORE_SPAN, SHALLOW, BAND_MIN, BAND_NAME, MANA_TAB, oct, bandOf, coreKey, plainCore, coresIn, bandAt };
   })();
   
   __mod["sim/worms.js"] = (function () {
@@ -1155,7 +1158,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     // carveChunk(def, X0, Y0, mats, flgs, hs) opens the air of one chunk (flagged NATURAL: its rock vault holds). Inside HOME_R of the camp the S16 home caves (worms.js) stand instead.
     const { hash2, hash3, vnoise } = __mod["sim/noise.js"];
     const { D, M, F } = __mod["sim/world.js"];
-    const { manaFrom, bandOf, coresIn } = __mod["sim/core.js"];
+    const { manaFrom, bandOf, coresIn, plainCore } = __mod["sim/core.js"];
     const { HOME_R } = __mod["sim/worms.js"];
     
     const CRS = 96;               // cave region
@@ -1178,8 +1181,8 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       if (core || hh % 100 < 76) {
         const x = rx * CRS + 14 + ((hh >>> 8) % 68), y = ry * CRS + 14 + ((hh >>> 16) % 68), z = ZMIN + ((hh >>> 24) % 7);
         let band = 0;
-        for (const c of coresIn(def, x - 84, y - 84, x + 84, y + 84)) band = Math.max(band, bandOf(manaFrom(c, x, y, z)));      // (a core may be a region away)
-        n = { x, y, z, band, core: core || null, rx, ry };
+        for (const c of coresIn(def, x - 84, y - 84, x + 84, y + 84)) band = Math.max(band, bandOf(manaFrom(c, x, y, z)));      // (a core may be a region away; RAW field: a harvest fades the field, never the ground, so the caves must not depend on when the node was first asked for)
+        n = { x, y, z, band, core: core ? plainCore(core) : null, rx, ry };
       }
       rc.set(key, n);
       return n;
@@ -1378,7 +1381,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     const { Stream } = __mod["sim/rng.js"];
     const { hash2, hash3 } = __mod["sim/noise.js"];
     const { D, M, F } = __mod["sim/world.js"];
-    const { coresNear, bandOf, manaFrom, MANA_R } = __mod["sim/core.js"];
+    const { coresNear, bandOf, manaFrom, plainCore, MANA_R } = __mod["sim/core.js"];
     const { nodeOf, tunnel, CRS, ZMIN, ZMAX } = __mod["sim/caves.js"];
     const { HOME_R } = __mod["sim/worms.js"];
     
@@ -1474,7 +1477,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
           if (j2 < 0 || j2 >= L) continue;
           const cands = [];
           for (let m = 0; m < Gx * Gy; m++) if (labels[j][m] === c && use[j2][m] && !usedM.has(m)) cands.push([hash3(seed ^ 0x57a1, m, j, j2), m]);
-          cands.sort((a, b) => a[0] - b[0]);
+          cands.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
           for (const [, m] of cands) {
             const c2 = labels[j2][m];
             if (reached.has(j2 + ":" + c2)) continue;
@@ -1486,7 +1489,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       for (let j = 0; j < L - 1; j++) {                            // a second stair between some levels: a loop
         const cands = [];
         for (let m = 0; m < Gx * Gy; m++) if (use[j][m] && use[j + 1][m] && reached.has(j + ":" + labels[j][m]) && reached.has((j + 1) + ":" + labels[j + 1][m]) && !usedM.has(m)) cands.push([hash3(seed ^ 0x57a2, m, j, 0), m]);
-        cands.sort((a, b) => a[0] - b[0]);
+        cands.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
         if (cands.length && cands[0][0] % 100 < 60) { usedM.add(cands[0][1]); stairs.push(stairAt(cands[0][1], j)); }
       }
       use = use.map((u, j) => Uint8Array.from(u, (v, m) => (v && reached.has(j + ":" + labels[j][m]) ? 1 : 0)));
@@ -1499,7 +1502,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       let nm = 0;
       for (const u of use) for (const v of u) nm += v;
       if (nm < 10) return null;
-      const dun = { core, seed, Gx, Gy, W, H, x0, y0, L, jc, s, use, mh, gcx, gcy, grid: [], ov: new Map(), rooms: [], stairs, traps: new Map(), caches: new Map(), doors: [], entrances: [], links: [], ramps: [], extra: new Set(), bb: null, zlo: s[0] - 1, zhi: s[L - 1] + 4 };
+      const dun = { core: plainCore(core), seed, Gx, Gy, W, H, x0, y0, L, jc, s, use, mh, gcx, gcy, grid: [], ov: new Map(), rooms: [], stairs, traps: new Map(), caches: new Map(), doors: [], entrances: [], links: [], ramps: [], extra: new Set(), bb: null, zlo: s[0] - 1, zhi: s[L - 1] + 4 };
       for (let j = 0; j < L; j++) dun.grid.push(new Uint8Array(W * H));      // bit 1 open, 2 route (a corridor / anchor line: never furnished), 4 corridor cell outside a room
       layout(def, dun, R);
       doors(def, dun, R);
@@ -1543,7 +1546,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
           if (gx + 1 < Gx && dun.use[j][mod(gx + 1, gy)]) edges.push([R.u32(), gx, gy, gx + 1, gy]);
           if (gy + 1 < Gy && dun.use[j][mod(gx, gy + 1)]) edges.push([R.u32(), gx, gy, gx, gy + 1]);
         }
-        edges.sort((a, b) => a[0] - b[0]);
+        edges.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3] || a[4] - b[4]);
         const uf = new Int32Array(Gx * Gy).map((_, i) => i), find = (a) => { while (uf[a] !== a) { uf[a] = uf[uf[a]]; a = uf[a]; } return a; };
         const take = [];
         for (const e of edges) { const a = find(mod(e[1], e[2])), b = find(mod(e[3], e[4])); if (a !== b) { uf[a] = b; take.push(e); } else if (e[0] % 100 < 9) take.push(e); }
@@ -1576,7 +1579,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
         if (!r.force) cand.push(r);
       }
       const wsN = Math.min(cand.length, 1 + R.int(2));
-      const byH = cand.map(r => [hash3(dun.seed, r.x0, r.y0, r.j), r]).sort((a, b) => a[0] - b[0]);
+      const byH = cand.map(r => [hash3(dun.seed, r.x0, r.y0, r.j), r]).sort((a, b) => a[0] - b[0] || a[1].j - b[1].j || a[1].y0 - b[1].y0 || a[1].x0 - b[1].x0);
       for (let k = 0; k < wsN; k++) { const r = byH[k][1]; r.kind = "workshop"; r.craft = byH[k][0] >>> 8; }
       for (const r of cand) {
         if (r.kind === "workshop") continue;
@@ -1634,7 +1637,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       const freeCells = (r, interior) => {
         const out = [];
         for (let y = r.y0 + (interior ? 1 : 0); y <= r.y1 - (interior ? 1 : 0); y++) for (let x = r.x0 + (interior ? 1 : 0); x <= r.x1 - (interior ? 1 : 0); x++) if (isFree(r.j, x, y)) out.push([x, y]);
-        return out.sort((a, b) => hash3(dun.seed ^ 0xf3a7, a[0], a[1], r.j) - hash3(dun.seed ^ 0xf3a7, b[0], b[1], r.j));
+        return out.sort((a, b) => hash3(dun.seed ^ 0xf3a7, a[0], a[1], r.j) - hash3(dun.seed ^ 0xf3a7, b[0], b[1], r.j) || a[1] - b[1] || a[0] - b[0]);
       };
       const corners = (r) => [[r.x0, r.y0], [r.x1, r.y0], [r.x0, r.y1], [r.x1, r.y1]].filter(([x, y]) => isFree(r.j, x, y) && (grid[r.j][(y - y0) * W + (x - x0)] & 8));
       const lowerOpen = (j, x, y) => j > 0 && (grid[j - 1][(y - y0) * W + (x - x0)] & 1) && !dun.ov.has((y - y0) * W + (x - x0));
@@ -1833,12 +1836,12 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     const LOOT_VALUE = { copper: 2, gem: 5, crystal: 4, core_shard: 8, ancient_tool: 10, tablet: 12, relic: 25, core_ore: 7 };
     const RELIC_A = ["Hollow", "Pale", "Last", "Sunken", "Quiet", "Bright", "Broken", "Old"];
     const RELIC_B = ["Crown", "Lamp", "Seal", "Ring", "Mask", "Chalice", "Key", "Comb"];
-    /** The loot of the cache at (x, y, z): [[item, n], ...]. Pure; the band is the mana at the cache. */
+    /** The loot of the cache at (x, y, z): [[item, n], ...]. Pure; the band is the mana at the cache, as generated. */
     function lootAt(def, x, y, z) {
       const dun = dungeonAt(def, x, y);
       if (!dun) return [];
       let mana = 0;
-      for (const c of coresNear(def, x, y, x, y)) mana = Math.max(mana, manaFrom(c, x, y, z));
+      for (const c of coresNear(def, x, y, x, y)) mana = Math.max(mana, manaFrom(c, x, y, z));      // as generated: a harvest never thins a cache
       const band = bandOf(mana), h0 = hash3(dun.seed ^ 0x100f, x, y, z);
       const rolls = 1 + (band >= 2 ? 1 : 0) + (band >= 4 ? 1 : 0) + (h0 % 4 === 0 ? 1 : 0), out = [];
       const rows = LOOT.filter(r => r.band <= band), tot = rows.reduce((a, r) => a + r.w, 0);
@@ -2142,7 +2145,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
         for (let z = h - dirtAt(seed, x, y) - 1; z >= 1; z--) {
           const i = L(lx, ly, z), m = mats[i];
           if (m !== M.SOFT && m !== M.STONE && m !== M.DEEP && m !== M.IRONORE && m !== M.COAL) continue;
-          const band = bandOf(manaOf(cores, x, y, z, true));
+          const band = bandOf(manaOf(cores, x, y, z));
           if (!band) continue;
           if (hash3(seed ^ 0x6e6d, x, y, z) % 10000 < GEM_P[band]) mats[i] = M.GEM;
           else if (band >= 2 && vnoise(seed, 81 + (z >> 1), x, y, 5) > CRY_T[band]) mats[i] = M.CRYSTAL;
@@ -2204,7 +2207,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
         }
         if (h < WATER_LEVEL + 3) continue;                                    // no ore under the lake and the river beds
         // iron and coal: flat veins in the first two layers of the hard rock band; richer, rarer ones in the deep rock under it
-        const bonus = cores.length ? manaOf(cores, x, y, sb - 2, true) >> 3 : 0;      // 7.20: ore is richer in a core's field (up to 31 off the threshold)
+        const bonus = cores.length ? manaOf(cores, x, y, sb - 2) >> 3 : 0;      // 7.20: ore is richer in a core's field (up to 31 off the threshold)
         if (vnoise(seed, 41, x, y, 9) > 214 - bonus) for (let z = sb - 1; z >= sb - 2 && z >= 1; z--) if (mats[L(lx, ly, z)] === M.STONE) mats[L(lx, ly, z)] = M.IRONORE;
         if (vnoise(seed, 42, x, y, 9) > 214 - bonus) for (let z = sb - 1; z >= sb - 2 && z >= 1; z--) if (mats[L(lx, ly, z)] === M.STONE) mats[L(lx, ly, z)] = M.COAL;
         for (let z = sb - 3; z >= 1; z--) {
@@ -2254,7 +2257,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       for (const c of cores) if (c.x >= X0 && c.x <= X0 + 15 && c.y >= Y0 && c.y <= Y0 + 15 && c.z < hs[(c.y - Y0) * 16 + c.x - X0]) { const i = L(c.x - X0, c.y - Y0, c.z); mats[i] = M.CORE; flgs[i] &= ~F.NATURAL; }
       if (cores.length) for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) {
         const c = ly * 16 + lx, h = hs[c];
-        mb[c] = bandOf(manaOf(cores, X0 + lx, Y0 + ly, h, true)); md[c] = bandOf(manaOf(cores, X0 + lx, Y0 + ly, Math.max(1, h - 8), true));
+        mb[c] = bandOf(manaOf(cores, X0 + lx, Y0 + ly, h)); md[c] = bandOf(manaOf(cores, X0 + lx, Y0 + ly, Math.max(1, h - 8)));
       }
       // ridges: the windy cells, local height maxima, for a draft furnace
       for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) {
@@ -4956,7 +4959,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     // A villager is an entity {kind:"villager", ...}: all plain JSON.
     //   t      the nine traits (multipliers around 1, §08): strength speed stamina intelligence drive leisure fertility longevity hardiness
     //   sk     skills {dig,build,craft: {xp, wk}}; ws/wt = skill last worked and when; tch = {p, u} lesson I am giving
-    //   cl     solo splits made (at most 1 per life); cg = clone generation depth (0 = born of two parents)
+    //   sp     split origin: the id of the slime this one was split from (0 = born, not split); splits of one slime share it and count as full siblings
     //   hue    colour (0..359), lin founder lineage, par parent ids, gen generation
     //   born   tick of birth (negative for founders), prime = age in days where decline starts
     //   needs  hunger thirst energy warm mood in 0..1 (1 = fine); hp health; hard = lifelong hardship
@@ -5158,12 +5161,12 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
         x, y, z, name: o.name, hue: o.hue, lin: o.lin, par: o.par, gen: o.gen, t: o.t, born: o.born, prime: o.prime,
         hunger: o.hunger ?? 0.9, thirst: o.thirst ?? 0.9, energy: o.energy ?? 0.9, warm: 1, mood: 0.8, hp: 100, hard: 0,
         bed: 0, mate: 0, cd: 0, rest: 0, slp: 0, mv: 6, carry: null, action: null, job: null, why: null, order: null,
-        sk: o.sk, ep: 0, bad: [], rp: 0, rpt: 0, lf: null, ws: "", wt: 0, tch: null, cl: 0, cg: o.cg ?? 0, fam: {},
+        sk: o.sk, ep: 0, bad: [], rp: 0, rpt: 0, lf: null, ws: "", wt: 0, tch: null, sp: o.sp ?? 0, fam: {},
         g: o.g ?? null, gp: o.gp ?? [], inb: o.inb ?? 0, wk: o.wk ?? 0, aff: {}, mn: {}, rel: [], gr: null, hb: { xp: 0, n: 0 }, ti: [], hl: null, ps: null, mem: [], epi: [],
       };
     }
     
-    /** Hidden alleles for a visible phenotype (R16): a pair that averages to the trait, split by a stable hash of (id, trait). Used for founders, clones and saves from before S13. */
+    /** Hidden alleles for a visible phenotype (R16): a pair that averages to the trait, split by a stable hash of (id, trait). Used for founders and saves from before S13. */
     const ALLELE_SPREAD = 0.06;
     function genoFrom(t, id) {
       const g = {};
@@ -5198,18 +5201,6 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     }
     const inheritTraits = inheritGeno;
     
-    /** A solo split's traits (R16 guard 3): the parent's own, regressed 25% toward the village mean, with stacking load per clone generation. */
-    function cloneTraits(r, a, mean) {
-      const t = {}, cg = a.cg + 1;
-      for (const k of TRAITS) {
-        let v = a.t[k] + 0.25 * (mean[k] - a.t[k]);
-        v *= 1 + (r.float() * 2 - 1) * 0.03;
-        if (k === "hardiness") v *= 1 - 0.06 * cg;      // -6% maxHealth per consecutive clone generation
-        if (k === "fertility") v *= 1 - 0.10 * cg;      // -10% fertility
-        t[k] = r3(settle(v, 1, TRAIT_SOFT[k] ?? 0.5));
-      }
-      return t;
-    }
     /** Hue: lean toward one parent with a little jitter; the 7% sport jumps 45-150 degrees (§08). */
     function inheritHue(r, a, b) {
       let d = ((b.hue - a.hue + 540) % 360) - 180;      // shortest signed arc a -> b
@@ -5219,7 +5210,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       return Math.round(((h % 360) + 360) % 360);
     }
     
-    return { pace, ageDays, childEnd, maturity, isAdult, isElder, lifeStage, fitness, maxHp, agingHarm, dailyNeed, foodUpkeep, energyUpkeep, moodSag, geneMul, stepTicks, workFactor, urgency, updateNeeds, worstUrgency, makeName, rollRange, villagerProps, genoFrom, inheritGeno, cloneTraits, inheritHue, LIFE_DAYS, NEED_DAY, NEED_STEP, TRAITS, FOUNDER_RANGE, TRAIT_SOFT, GENE_CAP, SPORT_P, THIRST_RATE, BED_WARMTH, HUDDLE_EACH, HUDDLE_MAX, ROOM_HUDDLE, ROOM_HUDDLE_MAX, COMFORT, COLD_DRAIN, AGE_DMG, WOUND_AT, GRIEF_OUT, GRIEF_MOOD, ELDER_DECAY, FRAIL_DAYS, SOFT, ALLELE_SPREAD, blend, inheritTraits };
+    return { pace, ageDays, childEnd, maturity, isAdult, isElder, lifeStage, fitness, maxHp, agingHarm, dailyNeed, foodUpkeep, energyUpkeep, moodSag, geneMul, stepTicks, workFactor, urgency, updateNeeds, worstUrgency, makeName, rollRange, villagerProps, genoFrom, inheritGeno, inheritHue, LIFE_DAYS, NEED_DAY, NEED_STEP, TRAITS, FOUNDER_RANGE, TRAIT_SOFT, GENE_CAP, SPORT_P, THIRST_RATE, BED_WARMTH, HUDDLE_EACH, HUDDLE_MAX, ROOM_HUDDLE, ROOM_HUDDLE_MAX, COMFORT, COLD_DRAIN, AGE_DMG, WOUND_AT, GRIEF_OUT, GRIEF_MOOD, ELDER_DECAY, FRAIL_DAYS, SOFT, ALLELE_SPREAD, blend, inheritTraits };
   })();
   
   __mod["sim/depth.js"] = (function () {
@@ -8316,10 +8307,10 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     
     /**
      * Kinship coefficient 0..0.5 from v.par / v.gp lineage: 0.5 parent-child, full siblings, or the same person; 0.25 half-siblings,
-     * grandparent and grandchild, uncle/aunt and nephew/niece; 0.125 first cousins; else 0. (Clones, par [p,p], count as the parent's child.)
+     * grandparent and grandchild, uncle/aunt and nephew/niece; 0.125 first cousins; else 0. (Selves split from one slime, same `sp`, are full siblings.)
      */
     function kinship(a, b) {
-      if (a.id === b.id) return 0.5;
+      if (a.id === b.id || (a.sp && a.sp === b.sp)) return 0.5;
       const pa = dedupe(ids(a.par || [])), pb = dedupe(ids(b.par || []));
       if (pa.includes(b.id) || pb.includes(a.id)) return 0.5;
       const shared = pa.filter(x => pb.includes(x)).length;
@@ -8369,7 +8360,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       return { n: "the " + H_ADJ[h % 8] + " " + H_THING[(h >>> 8) % 8], h: [{ n: v.name, t: tick }] };
     }
     
-    /** Everything a villager gets when they are made (founder, birth, clone): alleles when missing, maybe an heirloom. */
+    /** Everything a villager gets when they are made (founder, birth, split): alleles when missing, maybe an heirloom. */
     function initPerson(sim, v) {
       if (!v.g) v.g = genoFrom(v.t, v.id);
       if (!v.ps) v.ps = initTemper(sim, v);                // experiment: temperament, the lens experience is appraised through (memory.js)
@@ -8537,6 +8528,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       const pv = ids(v.par || []), po = ids(o.par || []);
       if (po.includes(v.id)) return v.par && v.par[0] === v.par[1] && v.par[0] === o.id ? "clone-parent" : "child";
       if (pv.includes(o.id)) return v.par[0] === v.par[1] ? "original (cloned from)" : "parent";
+      if (v.sp && v.sp === o.sp) return "split self";
       const shared = dedupe(pv).filter(x => po.includes(x)).length;
       if (shared >= 2) return "sibling";
       if (shared === 1) return "half-sibling";
@@ -8566,7 +8558,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     const { afterDeath } = __mod["sim/knowledge.js"];
     const { restricted } = __mod["sim/lair.js"];
     const { initPerson, kinship, grandparents, weakChance, makeWeak, pickPartner, onDeath } = __mod["sim/people.js"];
-    const { TRAITS, FOUNDER_RANGE, LIFE_DAYS, makeName, rollRange, villagerProps, inheritGeno, cloneTraits, inheritHue, ageDays, maturity, fitness, maxHp, stepTicks, dailyNeed, pace, isAdult, lifeStage } = __mod["sim/villager.js"];
+    const { TRAITS, FOUNDER_RANGE, LIFE_DAYS, makeName, rollRange, villagerProps, inheritGeno, inheritHue, ageDays, maturity, fitness, maxHp, stepTicks, dailyNeed, pace, isAdult, lifeStage } = __mod["sim/villager.js"];
     
     const BREED_P = 0.02 * DUR_DAY / DAY;   // per eligible adult per daily call (every 1800 ticks), before weights. Breeding is tied to AGE like a life is (S18b): 0.02 per CALENDAR day (0.025 on the 4-year life, x0.8 for the 5-year life), spread over the DAY/1800 daily calls in it
     const BREED_COOLDOWN = 56;        // CALENDAR days (x DAY ticks) * lifePace / fertility: 45 on the 4-year life x 1.25 for the 5-year life
@@ -8577,7 +8569,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       const r = sim.rng.stream("founders");
       const t = {};
       for (const k of TRAITS) t[k] = rollRange(r, FOUNDER_RANGE[k]);
-      const hue = Math.round((hueBase + lin * 120 + (r.float() * 2 - 1) * 14 + 360) % 360);
+      const hue = Math.round((hueBase + (r.float() * 2 - 1) * 9 + 360) % 360);   // founders share one colour: within +-9 deg (5% of the wheel) of the base; lin stays as the lineage mark
       const prime = Math.round(LIFE_DAYS * (0.4 + 0.3 * r.float()) * t.longevity);
       const e = sim.ents.add("villager", villagerProps(x, y, z, {
         name: makeName(r), hue, lin, par: [0, 0], gen: 1, t, born: -Math.round(ageFrac * LIFE_DAYS * DAY), prime,
@@ -8636,36 +8628,6 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     function sportText(sports, t) {
       const up = sports.filter(k => t[k] > 1.1);
       return up.length ? " Born unusually " + SPORT_WORD[up[0]] + " for this line." : "";
-    }
-    
-    /**
-     * Solo split (R16 guard 3, slime-village bearChild(a, a)): at most once per villager per life, the clone is a
-     * smaller copy 25% regressed toward the village mean, with stacking load per clone generation. Costs the parent.
-     */
-    const SPLIT_COOLDOWN = 75;         // CALENDAR days before a splitter may breed again (60 x 1.25)
-    function canSplit(sim, v) {
-      const age = ageDays(sim, v);
-      return v.cl === 0 && age >= maturity(v) && age <= v.prime && v.hp > 60 && v.hunger > 0.5 && v.energy > 0.4 && v.cd <= sim.tick;
-    }
-    function splitSolo(sim, v) {
-      if (!canSplit(sim, v)) return null;
-      const r = sim.rng.stream("birth");
-      const vs = sim.ents.ofKind("villager"), mean = {};
-      for (const k of TRAITS) mean[k] = vs.reduce((a, o) => a + o.t[k], 0) / vs.length;
-      const t = cloneTraits(r, v, mean);
-      const prime = Math.round(LIFE_DAYS * (0.4 + 0.3 * r.float()) * t.longevity);
-      const e = sim.ents.add("villager", villagerProps(v.x, v.y, v.z, {
-        name: makeName(r), hue: Math.round((v.hue + (r.float() * 2 - 1) * 6 + 360) % 360), lin: v.lin, par: [v.id, v.id], gen: v.gen + 1, t,
-        born: sim.tick, prime, hunger: 0.9, thirst: 0.9, energy: 0.9, sk: newSkills(r), cg: v.cg + 1, gp: grandparents(v, v),
-      }));
-      for (const s of SKILLS) e.sk[s].xp = 0;
-      v.cl = 1;
-      refreshDerived(sim, e);
-      initPerson(sim, e);
-      v.cd = sim.tick + Math.round(SPLIT_COOLDOWN * DAY * pace(v));
-      v.energy = Math.max(0, v.energy - 0.3); v.hunger = Math.max(0.05, v.hunger - 0.2); v.hp = Math.max(1, v.hp - 20);
-      log(sim, "BIRTH", e.name + " split off from " + v.name + " (a clone).", [e.id, v.id], { clone: 1 }, 1);
-      return e;
     }
     
     function eligible(sim, v) {
@@ -8776,7 +8738,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       return need > 0 ? s.rations / need : 99;
     }
     
-    return { addFounder, refreshDerived, foundColony, spawnChild, canSplit, splitSolo, breedDaily, breedGenerations, kill, deathContext, runway, BREED_P, BREED_COOLDOWN, SPLIT_COOLDOWN };
+    return { addFounder, refreshDerived, foundColony, spawnChild, breedDaily, breedGenerations, kill, deathContext, runway, BREED_P, BREED_COOLDOWN };
   })();
   
   __mod["sim/farm.js"] = (function () {
@@ -9128,8 +9090,8 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     //     known  a villager has stood in this core's labyrinth (the minimap draws its explored outline; the first one in it is a deed)
     //     pend   the guardian is slain and the choice has not been made: the UI offers two buttons until it is
     //     left   the player left the core as it is (it keeps its rich ores and its spawns for good; a core is only ever offered once)
-    //     gone   the core was harvested at that tick: its cell is open air, a large one-time haul of core shards went into the stockpile, and its mana field fades to nothing over
-    //            FADE_TICKS (a flat tick duration, core.js fadeMana), so spawns, danger bands and cache richness fall. OD-47: a harvested core is gone for good (it never regrows elsewhere).
+    //     gone   the core was harvested at that tick: its cell is open air, a large one-time haul of core shards went into the stockpile, and it stops spawning at once (core.js liveMana).
+    //            Ore, caves, loot and the danger display stay as generated (D48). OD-47: a harvested core is gone for good (it never regrows elsewhere).
     // The field is a pure function of (seed, coordinates) plus this ledger: sim.def is the sim's own view of the world definition and carries the harvest ticks (core.js ownDef).
     // Ore already in the rock stays (terrain is regrown from the seed, so it cannot depend on a game clock); what falls is everything that reads the live field.
     const { coresNear, goCore } = __mod["sim/core.js"];
@@ -9173,7 +9135,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     /** The shape of the prompt: [{key, name, x, y, z}] for each core waiting on a choice. */
     function pending(sim) { return sim.cm.pend.map(k => { const c = coreByKey(sim, k); return { key: k, name: c ? coreName(sim, c) : "a core", x: c ? c.x : 0, y: c ? c.y : 0, z: c ? c.z : 0 }; }); }
     
-    /** Harvest: the cell opens, the shards come home, the field starts to fade, the chronicle records it. */
+    /** Harvest: the cell opens, the shards come home, its spawning stops, the chronicle records it. */
     function harvest(sim, key) {
       const c = coreByKey(sim, key);
       if (!c || !sim.cm.pend.includes(key)) return false;
@@ -9211,7 +9173,6 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     function applyCm(sim) {
       sim.def.gone.clear();
       for (const [key, t] of sim.cm.gone) { const c = coreByKey(sim, key); if (c) goCore(sim.def, c, t); }
-      sim.def.fb.now = sim.tick;
       sim.cache.mi = null;
     }
     
@@ -9237,7 +9198,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     // `leash` from home; a ranged row (the spitter) stands off and spits; a hurt one retreats. It walks greedily like every creature and so is stopped by what stops a creature: WALLS (solid cells),
     // DOORS (a door cell is closed to monsters), and LIGHT (a `dark` row will not step into a lit cell). OD-49: it never steps onto a cell below band 1 (e.hr, a home radius, is the override a
     // hand-placed monster carries, as in the pre-situated fixtures). Villagers flee by the thornback's rules (fear.js: `scare`), so walls, doors and light are the defence; there is no tower defence.
-    const { coresNear, manaOf, bandOf, MANA_R } = __mod["sim/core.js"];
+    const { coresNear, manaOf, liveMana, bandOf, MANA_R } = __mod["sim/core.js"];
     const { guardianSlain } = __mod["sim/cm.js"];
     const { dungeonsIn } = __mod["sim/dungeon.js"];
     const { chambersIn } = __mod["sim/caves.js"];
@@ -9312,7 +9273,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     /** {cores, pts:[{k, x, y, z, m, h}], boss:[{x, y, z, key}]} for chunk (cx, cy). A pure function of the seed. */
     function chunkInfo(def, cx, cy) {
       const X0 = cx << 4, Y0 = cy << 4, X1 = X0 + 15, Y1 = Y0 + 15, cores = coresNear(def, X0, Y0, X1, Y1, MANA_R), pts = [], boss = [];
-      const add = (k, x, y, z) => { const m = manaOf(cores, x, y, z, true); if (m >= 14) pts.push({ k, x, y, z, m, h: mix32(mix32(x, y), z + 77) }); };
+      const add = (k, x, y, z) => { const m = manaOf(cores, x, y, z); if (m >= 14) pts.push({ k, x, y, z, m, h: mix32(mix32(x, y), z + 77) }); };
       if (cores.length) {
         for (const dun of dungeonsIn(def, X0, Y0, X1, Y1)) {
           for (const r of dun.rooms) {
@@ -9380,10 +9341,10 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
         const tries = info.pts.slice();
         const X0 = ch.cx << 4, Y0 = ch.cy << 4, sh = mix32(mix32(sim.seed ^ 0x5f3d, key), period);          // one hashed surface column per chunk per pass
         const sx = X0 + (sh & 15), sy = Y0 + ((sh >>> 4) & 15), sz = w.standZ(sx, sy);
-        if (sz >= 0) { const m = manaOf(info.cores, sx, sy, sz); if (surfaceAllowed(m)) tries.push({ k: "surface", x: sx, y: sy, z: sz, m, h: sh }); }
+        if (sz >= 0) { const m = liveMana(info.cores, sx, sy, sz); if (surfaceAllowed(m)) tries.push({ k: "surface", x: sx, y: sy, z: sz, m, h: sh }); }
         for (const p of tries) {
           if (budget <= 0) break;
-          const mana = p.k === "surface" ? p.m : manaOf(info.cores, p.x, p.y, p.z);          // 7.23: the live field (a harvested core's fades), the point only remembers where it is
+          const mana = p.k === "surface" ? p.m : liveMana(info.cores, p.x, p.y, p.z);      // D48: a harvested core spawns nothing (the point only remembers where it is)
           if (mana < 14) continue;
           const roll = mix32(mix32(sim.seed ^ 0x6d6f6e, p.h), period) % 10000;
           if (roll >= spawnRate(mana, p.k, night)) continue;
@@ -11466,6 +11427,174 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     return { possessed, steadfast, playerStep, stepCell, interact, collapseCheck, COLLAPSE_HP, POSSESS_COMMANDS };
   })();
   
+  __mod["sim/split.js"] = (function () {
+    // Splitting (replaces the old one-baby "clone"): a healthy adult divides into 2-5 smaller selves and the original is gone.
+    // It is not a death: no grave, no death entry, no mourning. The sim calls it through the "split" order (orders.js).
+    //
+    //   colour      exact copy.
+    //   genetics    traits t, hidden alleles g, prime, temperament ps, needs, memory strengths: each +-SPLIT_MUTATION, uniform, clamped.
+    //   mind        memories, episodes, bonds, beliefs (fam), hobby, titles, preferences: copied; a few memories/episodes are forgotten.
+    //   shares      skill xp (per skill, after SPLIT_LOSS), hp (after SPLIT_LOSS) and age are divided between the clones with weights
+    //               that are close but not equal (1 +- SPLIT_JITTER, normalised). The ages add up to the original's exactly.
+    //   how many    the largest N in 2..5 whose clones would likely live: hp share above a floor, an age share that is not newborn,
+    //               the original fed and rested enough. A weak slime makes 2; a very healthy one makes 5.
+    //   references  nothing may point at the old id: clone 1 inherits the job, reservations, bed, partner, possession, expedition
+    //               seat and the UI selection; every clone inherits the bonds others hold (copied) and a crew seat.
+    const { clamp, r3, settle } = __mod["sim/util.js"];
+    const { log } = __mod["sim/chronicle.js"];
+    const { SKILLS } = __mod["sim/skills.js"];
+    const { MAX_REL } = __mod["sim/bonds.js"];
+    const { refreshDerived } = __mod["sim/population.js"];
+    const { TRAITS, TRAIT_SOFT, makeName, ageDays, maturity, maxHp, fitness } = __mod["sim/villager.js"];
+    
+    const SPLIT_MIN = 2, SPLIT_MAX = 5;          // how many selves
+    const SPLIT_LOSS = 0.10;                     // share of skill xp and hp lost in the split
+    const SPLIT_JITTER = 0.15;                   // each share's weight is 1 +- this, then normalised (100 into 3 is about 30 each)
+    const SPLIT_MUTATION = 0.05;                 // every quantity moves by up to +-5%, uniformly
+    const SPLIT_FORGET = 0.15;                   // chance a clone loses any one memory or episode
+    // Who may split (the old clone gate, minus the once-per-life rule): an adult in their prime, roughly healthy, fed and rested.
+    const SPLIT_GATE = { hp: 60, hunger: 0.5, energy: 0.4 };
+    // How many are likely to survive (best guesses; the user tunes balance):
+    const SPLIT_HP_FLOOR = 20;                   // each clone needs at least this much hp (so 100 hp makes 4, 111+ makes 5, 67 makes 3)
+    const SPLIT_AGE_FRAC = 0.3;                  // each clone's age share must be at least this fraction of maturity (about 30 days)
+    const SPLIT_NEED_BASE = 0.45, SPLIT_NEED_STEP = 0.1;   // hunger and energy needed for N clones: 0.45 + 0.1 per clone past two (0.75 for five)
+    
+    /** Why this slime cannot split, in 1-3 words ("" when it can). */
+    function splitBlock(sim, v) {
+      if (!v || v.kind !== "villager") return "Gone";
+      const age = ageDays(sim, v);
+      if (age < maturity(v)) return "Too young";
+      if (age > v.prime) return "Too old";
+      if (v.hp <= SPLIT_GATE.hp) return "Hurt";
+      if (v.hunger <= SPLIT_GATE.hunger) return "Hungry";
+      if (v.energy <= SPLIT_GATE.energy) return "Tired";
+      return "";
+    }
+    const canSplit = (sim, v) => splitBlock(sim, v) === "";
+    
+    /** How many selves a split would make now: 0 when it cannot, else the largest of 5..2 whose clones would likely survive. */
+    function splitCount(sim, v) {
+      if (!canSplit(sim, v)) return 0;
+      const age = ageDays(sim, v), minAge = SPLIT_AGE_FRAC * maturity(v), hp = v.hp * (1 - SPLIT_LOSS);
+      for (let n = SPLIT_MAX; n > SPLIT_MIN; n--) {
+        const need = SPLIT_NEED_BASE + SPLIT_NEED_STEP * (n - SPLIT_MIN);
+        if (hp / n >= SPLIT_HP_FLOOR && age / n >= minAge && v.hunger >= need && v.energy >= need) return n;
+      }
+      return SPLIT_MIN;
+    }
+    
+    const copy = (x) => JSON.parse(JSON.stringify(x));
+    const mut = (r, x) => x * (1 + (r.float() * 2 - 1) * SPLIT_MUTATION);
+    const trait = (r, k, x) => r3(settle(mut(r, x), 1, TRAIT_SOFT[k] ?? 0.5));
+    const unit = (r, x) => r3(clamp(mut(r, x), 0, 1));
+    /** n weights of 1 +- SPLIT_JITTER, normalised to add up to `total`. */
+    function shares(r, n, total) {
+      const w = Array.from({ length: n }, () => 1 + (r.float() * 2 - 1) * SPLIT_JITTER), sum = w.reduce((a, b) => a + b, 0);
+      return w.map(x => total * x / sum);
+    }
+    const list = (names) => names.length < 2 ? names.join("") : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+    
+    /** Split v. Returns the clones (clone 1 first) or null when v cannot. */
+    function splitSlime(sim, v) {
+      const n = splitCount(sim, v);
+      if (!n) return null;
+      const r = sim.rng.stream("split"), old = v.id, now = sim.tick;
+      const hp = shares(r, n, v.hp * (1 - SPLIT_LOSS));
+      const lived = now - v.born, ageT = shares(r, n, lived).map(Math.round);
+      ageT[n - 1] += lived - ageT.reduce((a, b) => a + b, 0);                 // the ages add up to the original's exactly
+      const xp = {};
+      for (const s of SKILLS) xp[s] = shares(r, n, v.sk[s].xp * (1 - SPLIT_LOSS));
+    
+      const clones = [];
+      for (let i = 0; i < n; i++) {
+        const c = copy(v), first = i === 0;
+        delete c.id; delete c.kind;
+        c.name = first ? v.name : makeName(r);
+        for (const k of TRAITS) c.t[k] = trait(r, k, v.t[k]);
+        if (c.g) for (const k of TRAITS) c.g[k] = [trait(r, k, v.g[k][0]), trait(r, k, v.g[k][1])];
+        c.prime = Math.round(mut(r, v.prime));
+        if (c.ps) for (const k of ["b", "c", "s"]) c.ps[k] = Math.round(clamp(mut(r, v.ps[k]), 0, 100));
+        for (const k of ["hunger", "thirst", "energy", "warm", "mood"]) c[k] = unit(r, v[k]);
+        c.hard = r3(Math.max(0, mut(r, v.hard || 0)));
+        for (const k of Object.keys(c.fam || {})) c.fam[k] = unit(r, v.fam[k]);
+        if (c.hb) c.hb.xp = r3(Math.max(0, mut(r, v.hb.xp)));
+        c.mem = (v.mem || []).filter(() => !r.chance(SPLIT_FORGET)).map(m => [m[0], Math.round(clamp(mut(r, m[1]), 0, 1000)), Math.round(clamp(mut(r, m[2]), 0, 1000)), m[3], m[4]]);
+        c.epi = (v.epi || []).filter(() => !r.chance(SPLIT_FORGET)).map(e => e.slice());
+        c.born = now - ageT[i];
+        for (const s of SKILLS) c.sk[s].xp = r3(xp[s][i]);
+        if (!first) {                                  // the others start over: no job, no load, no bed, no partner, nothing held
+          c.action = null; c.job = null; c.why = null; c.order = null; c.carry = null; c.pk = ""; c.eq = null; c.hl = null;
+          c.bed = 0; c.mate = 0; c.tch = null; c.bad = []; c.rp = 0; c.rpt = 0; c.lf = null; c.ep = 0; c.cr = 0; c.rest = Math.min(c.rest || 0, 1);
+          delete c.xp; delete c.br; delete c.poss; delete c.pin;
+          c.rel = (c.rel || []).filter(q => q.k !== "partner");
+        }
+        const e = sim.ents.add("villager", c);
+        refreshDerived(sim, e);
+        e.hp = r3(clamp(hp[i], 1, maxHp(e, fitness(e, ageDays(sim, e)))));
+        clones.push(e);
+      }
+      for (const e of clones) e.sp = v.sp || clones[0].id;           // a group label: selves of one slime are full siblings (people.js kinship)
+      rewire(sim, v, clones);
+      sim.ents.remove(old);
+      sim.cache.iv++; sim.cache.kn = null;
+      const ids = clones.map(e => e.id);
+      log(sim, "MILESTONE", v.name + " split into " + list(clones.map(e => e.name)) + ".", ids, { split: n }, 1);
+      sim.lastSplit = { from: old, to: ids, tick: now };            // for the UI to move its selection (not saved)
+      return clones;
+    }
+    
+    /** Every reference to `old` now points at a clone (clone 1 where only one thing can hold it, all of them for bonds). */
+    function rewire(sim, v, clones) {
+      const old = v.id, c0 = clones[0], ids = clones.map(e => e.id);
+      const one = (x) => (x === old ? c0.id : x);
+      // what the old slime held
+      for (const e of sim.ents.list) {
+        if (e.kind === "villager") continue;
+        for (const k of ["rv", "owner", "by", "dr"]) if (e[k] === old) e[k] = c0.id;
+        if (e.kind === "fauna" && e.tg === old) e.tg = c0.id;
+      }
+      // what the others hold about it
+      for (const o of sim.ents.ofKind("villager")) {
+        if (ids.includes(o.id)) continue;
+        if (o.mate === old) o.mate = c0.id;
+        if (o.par) o.par = o.par.map(one);
+        if (o.gp) o.gp = o.gp.map(one);
+        if (o.tch && o.tch.p === old) o.tch.p = c0.id;
+        if (o.gr && o.gr.f === old) o.gr.f = c0.id;
+        for (const book of [o.aff, o.mn]) if (book && book[old] !== undefined) {
+          for (const id of ids) book[id] = Array.isArray(book[old]) ? book[old].slice() : book[old];
+          delete book[old];
+        }
+        if (o.rel && o.rel.some(q => q.o === old)) {
+          const out = [];
+          for (const q of o.rel) {
+            if (q.o !== old) { out.push(q); continue; }
+            for (const id of ids) if (q.k !== "partner" || id === c0.id) out.push({ ...q, o: id });
+          }
+          while (out.length > MAX_REL) { const j = out.map(q => ids.includes(q.o) && q.o !== c0.id).lastIndexOf(true); out.splice(j < 0 ? out.length - 1 : j, 1); }
+          o.rel = out;
+        }
+      }
+      // crews take every clone (an expedition crew only the first), expeditions the first
+      for (const cw of sim.crews.list) {
+        const i = cw.ids.indexOf(old);
+        if (i < 0) continue;
+        const all = !(cw.task && cw.task.t === "exp");
+        cw.ids.splice(i, 1, ...(all ? ids : [c0.id]));
+        if (all) for (const e of clones) e.cr = cw.id;
+      }
+      for (const x of sim.exp.list) x.ids = x.ids.map(one);
+      // history
+      for (const en of sim.chron.entries) if (en.a.includes(old)) en.a = en.a.flatMap(a => (a === old ? ids : [a]));
+      for (const rec of Object.values(sim.chron.recs)) {
+        if (rec.par) rec.par = rec.par.map(one);
+        if (rec.kids) rec.kids = rec.kids.flatMap(k => (k === old ? ids : [k]));
+      }
+    }
+    
+    return { splitBlock, splitCount, splitSlime, SPLIT_MIN, SPLIT_LOSS, SPLIT_JITTER, SPLIT_MUTATION, SPLIT_FORGET, SPLIT_GATE, SPLIT_HP_FLOOR, SPLIT_AGE_FRAC, SPLIT_NEED_BASE, canSplit };
+  })();
+  
   __mod["sim/orders.js"] = (function () {
     // Player commands (sim side). The UI calls sim.apply({type, ...}); each handler
     // returns true if it changed anything. Commands are tick-stamped and logged by
@@ -11481,13 +11610,13 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     //   {type:"keep", item, n}   standing order keep-N (refill below 80%, stop at 100%); n capped at stockpile capacity
     //   {type:"unkeep", item}
     //   {type:"teach", id, pupil}   villager `id` coaches `pupil` (0 stops): when they work the same craft side by side the pupil gains x3 XP and the teacher works at x0.8 (§10)
-    //   {type:"split", id}          solo split (R16): a clone, at most once per villager per life
+    //   {type:"split", id}          split into 2-5 selves; the original is gone (split.js)
     //   {type:"cancel", ids?:[...]}   clears orders (all villagers if ids omitted)
     const { isAdult } = __mod["sim/villager.js"];
     const { ITEMS, stockCapacity } = __mod["sim/items.js"];
     const { cancelAction } = __mod["sim/jobstate.js"];
     const { setTeach } = __mod["sim/skills.js"];
-    const { splitSolo } = __mod["sim/population.js"];
+    const { splitSlime } = __mod["sim/split.js"];
     const { can } = __mod["sim/knowledge.js"];
     
     const VERBS = ["forage", "chop", "gather", "haul", "move", "dig", "hunt", "clear", "capture", "scout", "disarm"];     // S17: scout = walk to unexplored land and reveal it (scout.js)
@@ -11542,7 +11671,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       },
       split(sim, c) {
         const v = sim.ents.get(c.id);
-        return !!(v && v.kind === "villager" && splitSolo(sim, v));
+        return !!(v && v.kind === "villager" && splitSlime(sim, v));
       },
       cancel(sim, c) {
         let n = 0;
@@ -15437,6 +15566,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
         this.pond = 0;                            // S17: 1 = this world has the pond at the camp (saved: terrain regrows from the seed)
         this.bio = 1;                             // S12: 1 = the world was grown with biomes (worldgen), 0 = a pre-biome save regrown without them (saved)
         this.ironman = false;                     // S12: a UI rule (single autosave slot, no manual load), saved with the game, never read by the sim itself
+        this.lastSplit = null;                    // {from, to:[ids], tick} of the latest split, for the UI to move its selection (not saved)
         this.lastBlocker = "";                    // why the last rejected command failed (UI feedback only; not saved)
       }
     
@@ -15454,7 +15584,6 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     
       step() {
         const t = this.tick;
-        this.def.fb.now = t;                                       // 7.23: a harvested core's field fades by this clock (core.js)
         if (t % 20 === 7) chunkTick(this);                       // S16: activate the land round the people, unload what is untouched and far
         this.rooms.update(this);
         if (t % 20 === 0) updateBoard(this);
@@ -18902,7 +19031,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     const { HOBBIES, hobbyOf, hobbyLevel, hobbyWord } = __mod["sim/hobby.js"];
     const { relOf, reasonLine, TIER_WORD } = __mod["sim/bonds.js"];
     const { kinship, relationWord } = __mod["sim/people.js"];
-    const { canSplit } = __mod["sim/population.js"];
+    const { splitCount, splitBlock } = __mod["sim/split.js"];
     const { ITEMS, survey, inZone, STACK_CAP, zoneCapacity, stockZoneAt, stockCapacity } = __mod["sim/items.js"];
     const { DUR_DAY } = __mod["sim/clock.js"];
     const { LEVEL_NAME } = __mod["sim/heat.js"];
@@ -19096,7 +19225,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       // actions: teach / split
       const pupils = ui.sel.filter(id => id !== v.id).map(id => sim.ents.get(id)).filter(o => o && isAdult(sim, o));
       const acts = (isAdult(sim, v) && pupils.length ? pupils.slice(0, 2).map(o => `<button class="btn" data-act="teach:${o.id}"${tipAttr("Teach " + o.name + "\nWork the same craft beside them and they learn 3x faster; you work at 80%. Give you both the same order (e.g. dig) so you end up side by side.")}>${svg("knowledge", 14)}${avatar(o.hue, o.lin, 16)}<span class="bl">Teach ${esc(o.name.split(" ")[0])}</span></button>`).join("") : "")
-        + (isAdult(sim, v) ? `<button class="btn" data-act="split" ${canSplit(sim, v) ? "" : "disabled"}${tipAttr("Split (clone)\nSplit off a clone of " + v.name + ": once per life, the clone regresses toward the village average and is frailer. Costs health, food and energy.")} aria-label="Split">${svg("plus", 14)}${svg("people", 14)}<span class="bl">Split</span></button>` : "");
+        + (isAdult(sim, v) ? splitButton(sim, v) : "");
       if (acts) vr += `<div class="actions">${acts}</div>`;
       // the old prose, hidden
       let w = `<div class="idrow"><b>${esc(stageText(sim, v))}</b>${elder ? " (past their prime)" : ""}<br><span>${esc(family(sim, v))}</span></div><div class="sub">Needs</div><div class="grid">`;
@@ -19155,7 +19284,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       const grand = !clone && (a || b) ? [a, b].map(id => id && sim.ents.get(id)).filter(Boolean).flatMap(p => p.par.filter(Boolean)).length : 0;
       const kids = sim.ents.ofKind("villager").filter(o => o.par[0] === v.id || o.par[1] === v.id).length;
       const mate = name(sim, v.mate);
-      return `${ps}. Generation ${v.gen}, line ${v.lin + 1}` + (v.cg ? `, ${v.cg} clone ${v.cg === 1 ? "generation" : "generations"} deep` : "") + (grand ? `, ${grand} known grandparent${grand === 1 ? "" : "s"}` : "") + (mate ? `. Partner: ${mate}` : "") + (kids ? `. ${kids} living ${kids === 1 ? "child" : "children"}` : "") + ".";
+      return `${ps}. Generation ${v.gen}, line ${v.lin + 1}` + (grand ? `, ${grand} known grandparent${grand === 1 ? "" : "s"}` : "") + (mate ? `. Partner: ${mate}` : "") + (kids ? `. ${kids} living ${kids === 1 ? "child" : "children"}` : "") + ".";
     }
     
     const isAdultV = (sim, v) => isAdult(sim, v);
@@ -19277,6 +19406,12 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
         h += `<span>Pulled by</span><b>${a ? "a grazer in pen " + a.pen.id : "nothing: no penned grazer"}</b><span>Fed</span><b>${a ? (r ? "no - the pen's trough is empty or its animals are hungry" : "yes (" + a.pen.fod + " in the trough; each trip eats " + CART_FODDER + ")") : "-"}</b>`;
       }
       return { title: row.label, html: h + `</div><p class="dim">Villagers use a free wagon on a long haul (a pile ${WAGON_FAR} or more cells from the stockpile), pick up several stacks and leave it at the store. ${e.t === "cart" ? "A cart is only used while its grazer is fed." : ""}</p>` };
+    }
+    
+    /** Split ×N with the predicted count, or the reason it cannot (1-3 words). */
+    function splitButton(sim, v) {
+      const n = splitCount(sim, v), why = splitBlock(sim, v);
+      return `<button class="btn" data-act="split" ${n ? "" : "disabled"}${tipAttr(n ? "Split ×" + n : "Cannot split\n" + why)} aria-label="Split">${svg("plus", 14)}${svg("people", 14)}<span class="bl">${n ? "Split ×" + n : "Split: " + why}</span></button>`;
     }
     
     return { createInspector, JOB_ICON };
@@ -19889,7 +20024,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     const { newCm, applyCm } = __mod["sim/cm.js"];
     const { fillMemory } = __mod["sim/memory.js"];
     
-    const SAVE_VERSION = 15;       // 15 = 7.23: sim.cm (the core ledger: choices pending, cores left, cores harvested), delve expeditions (`kind` on an expedition record, `br` on a member): additive, a v14 save loads as it is. 14 = 7.22: monsters (fauna rows with `mon`, `ck`, `sf`, `hr`, `sh`; sim.wild.gk = slain guardians; item rows chitin, core_hide, venom_sac): additive, a v13 save loads as it is. 13 = 7.21: dungeons (the land round every core gains a labyrinth: far content only, nothing within 100 cells of a camp changes) and the trap ledger `trp` (additive: absent = empty), so a v12 save loads as it is; its edits sit on the same rock except inside a labyrinth's footprint, which nobody had dug yet. 12 = 7.20: magic cores and cave networks. Terrain changed (caves, ore weights, gems, outcrops, spires), so the cells a v11 save edited sit on different rock and it is REFUSED (OLD_TERRAIN), not migrated; a v12 save has the same shape as v11. 11 = S18b: the clock rebase (a game day is 12000 ticks, was 1800; a life 500 days): every tick-stamped field (born, nx, bt, cd, timers, chronicle) is on the new clock, so a v9/v10 save is REFUSED (OLD_CLOCK), not migrated. 10 = S17: compact (cell deltas per chunk, plants as arrays, the seen set as per-chunk bitsets, landmarks seen, chunk sleep state); a v9 save loads unchanged. 9 = S16: the endless world. Terrain is regrown from the seed (the spawn search is deterministic), so a save holds only the cells that differ from it (deltas), the list of active chunks (chunks: [key, active, changed, lastNear]) and the entities; seen = {c: revealed surface columns, l: other seen cells}. A save of the old fixed 128x128 map (v < 9) cannot be loaded: restore() refuses it with a message. 8 = S13: hidden genotype (g, gp, inb, wk), bonds (aff, mn, rel), grief (gr), hobby (hb), titles (ti), heirloom (hl), skill rust (rs, lu), grave entities. 7 = S12: biomes (sim.bio: 1 = the seed grows the biome map, 0 = a world made before it), cave-in state (ug). 6 = S7a: villager familiarity (fam), discovery state (disc), flames and hearths. 5 = 5 = S6: geology (new strata + ores), seen log, mining designations. 4 = S5: skills dig/build/craft, nine traits, clone and lesson fields
+    const SAVE_VERSION = 16;       // 16 = splitting replaces cloning: `cl` and `cg` are dropped (migrate), `sp` (split origin) is additive. 15 = 7.23: sim.cm (the core ledger: choices pending, cores left, cores harvested), delve expeditions (`kind` on an expedition record, `br` on a member): additive, a v14 save loads as it is. 14 = 7.22: monsters (fauna rows with `mon`, `ck`, `sf`, `hr`, `sh`; sim.wild.gk = slain guardians; item rows chitin, core_hide, venom_sac): additive, a v13 save loads as it is. 13 = 7.21: dungeons (the land round every core gains a labyrinth: far content only, nothing within 100 cells of a camp changes) and the trap ledger `trp` (additive: absent = empty), so a v12 save loads as it is; its edits sit on the same rock except inside a labyrinth's footprint, which nobody had dug yet. 12 = 7.20: magic cores and cave networks. Terrain changed (caves, ore weights, gems, outcrops, spires), so the cells a v11 save edited sit on different rock and it is REFUSED (OLD_TERRAIN), not migrated; a v12 save has the same shape as v11. 11 = S18b: the clock rebase (a game day is 12000 ticks, was 1800; a life 500 days): every tick-stamped field (born, nx, bt, cd, timers, chronicle) is on the new clock, so a v9/v10 save is REFUSED (OLD_CLOCK), not migrated. 10 = S17: compact (cell deltas per chunk, plants as arrays, the seen set as per-chunk bitsets, landmarks seen, chunk sleep state); a v9 save loads unchanged. 9 = S16: the endless world. Terrain is regrown from the seed (the spawn search is deterministic), so a save holds only the cells that differ from it (deltas), the list of active chunks (chunks: [key, active, changed, lastNear]) and the entities; seen = {c: revealed surface columns, l: other seen cells}. A save of the old fixed 128x128 map (v < 9) cannot be loaded: restore() refuses it with a message. 8 = S13: hidden genotype (g, gp, inb, wk), bonds (aff, mn, rel), grief (gr), hobby (hb), titles (ti), heirloom (hl), skill rust (rs, lu), grave entities. 7 = S12: biomes (sim.bio: 1 = the seed grows the biome map, 0 = a world made before it), cave-in state (ug). 6 = S7a: villager familiarity (fam), discovery state (disc), flames and hearths. 5 = 5 = S6: geology (new strata + ores), seen log, mining designations. 4 = S5: skills dig/build/craft, nine traits, clone and lesson fields
     
     /** What a save of the old fixed-size world says when it is opened (S16 decision: the endless world does not emulate the 128 x 128 map). */
     const OLD_WORLD = "This save was made in the old fixed-size world, which no longer exists: the world is endless now. Start a new game.";
@@ -19904,7 +20039,10 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
      * start at average. Pure and deterministic: the same old save always migrates to the same new state.
      */
     function migrate(data) {
-      if (data.v >= 12) return data;
+      if (data.v >= 12) {
+        if (data.v < 16) for (const e of data.entities.list) if (e.kind === "villager") { delete e.cl; delete e.cg; }      // v16: cloning is gone (splitting is split.js)
+        return data;
+      }
       if (data.v >= 11) throw new Error(OLD_TERRAIN);     // v11 is the clock-rebased world on the old caves and ore: refused (7.20)
       if (data.v >= 9) throw new Error(OLD_CLOCK);     // v9 and v10 are the endless world on the 1800-tick day (v9 -> v10 was a change of shape only)
       if (data.v >= 2) throw new Error(OLD_WORLD);
@@ -19918,7 +20056,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
         e.sk = { dig: { xp: 0, wk: 0 }, build: { xp: e.sk.build ? e.sk.build.xp : 0, wk: 0 }, craft: { xp: 0, wk: 0 } };
         delete e.t.appetite;
         for (const k of ["stamina", "drive", "leisure"]) if (e.t[k] === undefined) e.t[k] = 1;
-        e.ws = ""; e.wt = 0; e.tch = null; e.cl = 0; e.cg = 0;
+        e.ws = ""; e.wt = 0; e.tch = null;
       }
       return v7to8(v6to7(v5to6(data)));
     }
@@ -20424,7 +20562,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
           const t = dateOf(tick), full = `Day ${t.day}, ${SEASON_NAMES[t.season]}, Year ${t.year}`;
           html(dialw, "dial", dialSvg(tick, state.paused && !game.skipper.active, performance.now() - (game.skipper.msgT || 0) < 900) + `<span class="sr">${full}</span>`);
           dialw.dataset.tip = full + (state.paused ? "\nPaused" : "");
-          put(dayEl, "d", SEASON_NAMES[t.season] + " · Day " + t.day);
+          put(dayEl, "d", SEASON_NAMES[t.season] + " · Year " + t.year + " · Day " + t.day);
           put(todEl, "tod", timeOfDay(tick));
           const pb = q(".tb-pause"), pi = state.paused ? "play" : "pause";
           if (last.pi !== pi) { last.pi = pi; pb.innerHTML = svg(pi, 16); pb.dataset.tip = state.paused ? "Play\nSpace resumes" : "Pause\nSpace pauses"; }
@@ -22531,7 +22669,6 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
     // The harvest-or-leave choice (7.23). When a labyrinth's guardian falls the core lies bare, and the game waits on the player: a small card with two buttons, Harvest and Leave. It is never
     // answered for them. The card shows while `sim.cm.pend` lists a core (in the map view and in first person), and all it does is send {type:"core", op:"harvest"|"leave", key}.
     const { pending, HARVEST_SHARDS } = __mod["sim/cm.js"];
-    const { FADE_TICKS } = __mod["sim/core.js"];
     const { esc } = __mod["ui/dom.js"];
     const { svg } = __mod["ui/icons.js"];
     const { tipAttr } = __mod["ui/kit.js"];
@@ -22550,7 +22687,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
           const list = pending(game.sim);
           const html = list.map(c => `<div class="cc-card" data-test="core-choice-card"><div class="cc-head">${svg("star", 18)}<b>The guardian is down</b></div>`
             + `<p>The core of ${esc(c.name)} lies bare. Take it, or let it be?</p>`
-            + `<div class="cc-btns"><button class="btn big" data-core="harvest|${c.key}" data-test="core-harvest"${tipAttr("Harvest\nA large one-time haul of core shards (" + HARVEST_SHARDS + ") to the stockpile. The core is gone for good, and its field fades over about " + (FADE_TICKS / 1200).toFixed(0) + " minutes at 1x: fewer monsters, poorer caches, a safer land.")}>${svg("gather", 16)}<span>Harvest</span></button>`
+            + `<div class="cc-btns"><button class="btn big" data-core="harvest|${c.key}" data-test="core-harvest"${tipAttr("Harvest\nA large one-time haul of core shards (" + HARVEST_SHARDS + ") to the stockpile. The core is gone for good, and it spawns no more monsters (ore and treasure stay where they are).")}>${svg("gather", 16)}<span>Harvest</span></button>`
             + `<button class="btn big" data-core="leave|${c.key}" data-test="core-leave"${tipAttr("Leave\nThe core stays as it is: rich caches, ores and monsters to match.")}>${svg("home", 16)}<span>Leave</span></button></div>`
             + `<p class="cc-sub"><b>Harvest</b>: shards now, a poorer and safer land. <b>Leave</b>: it stays rich and dangerous.</p></div>`).join("");
           if (html !== last) { last = html; root.innerHTML = html; root.style.display = html ? "block" : "none"; }
@@ -24218,6 +24355,16 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       if (!ui.sel.includes(ui.focus)) ui.focus = ui.sel[0] || 0;
       if (ui.sel.length) ui.other = null;
     }
+    /** A split replaces a slime with 2-5 selves: move the selection, focus and follow onto them (the sim notes the last split; it is not saved). */
+    let lastSplit = null;
+    function followSplit() {
+      const s = game.sim.lastSplit, ui = game.ui;
+      if (!s || s === lastSplit) return;
+      lastSplit = s;
+      if (ui.sel.includes(s.from)) { ui.sel = ui.sel.flatMap(id => (id === s.from ? s.to : [id])); if (ui.focus === s.from) ui.focus = s.to[0]; }
+      if (ui.follow === s.from) ui.follow = s.to[0];
+      sync();
+    }
     function reveal(v) {                    // bring a villager into view if it is off-screen
       const [sx, sy] = cam.toScreen(v.x + 0.5, v.y + 0.5, v.z);
       const top = renderer.view ? renderer.view.topZ(v.x, v.y, D - 1) : renderer.topAt(v.x, v.y), want = viewLevelFor(top, v.z, D);
@@ -24377,6 +24524,7 @@ window.__BUILD = {"stage":"7.23","commit":"3b4105a","dirty":true,"time":"2026-10
       if (ui.other && ui.other.kind === "entity" && !sim.ents.get(ui.other.id)) ui.other = null;
     
       panKeys(game, dtMs / 1000);
+      followSplit();
       possessCtl.frame();
       watch(game);
       orderEnds(sim);

@@ -4,11 +4,11 @@
 //      mean stays bounded (settle() is the soft cap) and no villager runs away.
 //   3. Convex upkeep: an everything-1.5 villager costs well over 1.5x an average one in food/energy terms, an average
 //      one pays nothing; no gene output is above +-25%.
-//   4. Clones regress toward the mean and stack load.
+//   4. (Splitting is tested in tests/split.js.)
 //   node tests/genetics.js
 import assert from "node:assert/strict";
 import { Rng } from "../src/sim/rng.js";
-import { TRAITS, FOUNDER_RANGE, inheritTraits, cloneTraits, rollRange, foodUpkeep, energyUpkeep, geneMul, SPORT_P } from "../src/sim/villager.js";
+import { TRAITS, FOUNDER_RANGE, inheritTraits, rollRange, foodUpkeep, energyUpkeep, geneMul, SPORT_P } from "../src/sim/villager.js";
 
 const r = new Rng(99).stream("test");
 const founders = () => { const t = {}; for (const k of TRAITS) t[k] = rollRange(r, FOUNDER_RANGE[k]); return { t }; };
@@ -50,13 +50,13 @@ const founders = () => { const t = {}; for (const k of TRAITS) t[k] = rollRange(
   assert.equal(geneMul(1.9), 1.25); assert.equal(geneMul(0.4), 0.75);
 }
 
-// 4. clones
-{
-  const mean = Object.fromEntries(TRAITS.map(k => [k, 1]));
-  const star = { cg: 0, t: Object.fromEntries(TRAITS.map(k => [k, 1.4])) };
-  const c1 = cloneTraits(r, star, mean);
-  assert.ok(c1.strength < 1.4 && c1.strength > 1.2, "clone regresses ~25% toward the mean: " + c1.strength);
-  const c2 = cloneTraits(r, { cg: 3, t: c1 }, mean);
-  assert.ok(c2.hardiness < c1.hardiness && c2.fertility < c1.fertility, "stacking clone load");
-}
 console.log("genetics ok");
+
+// 5. Starting slimes share one colour: every founder's hue is within +-9 deg (5% of the wheel) of the others around a base (wrap-safe).
+{
+  const { Sim } = await import("../src/sim/sim.js");
+  const hues = Sim.create(42).ents.ofKind("villager").map(v => v.hue);
+  const ref = hues[0], dev = hues.map(h => ((h - ref + 540) % 360) - 180);
+  assert.ok(hues.length >= 3 && Math.max(...dev) - Math.min(...dev) <= 18, "founder hues spread over " + hues);
+  console.log("founder hues " + hues.join(",") + " ok");
+}

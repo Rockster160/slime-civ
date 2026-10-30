@@ -7,7 +7,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const QUICK = ["oblique", "determinism", "save_roundtrip", "path_bench", "rooms", "build", "jobs", "possess", "deconstruct", "ui_text", "genetics", "property3", "geology", "mining", "heat", "events", "discovery", "chain", "discoveries", "property6", "bots/grind", "bots/k6", "creatures", "flora", "living", "command", "crowd", "underground", "migrate", "ui_s12", "people", "bots/breed", "bots/swap", "bots/expand", "depth", "settle", "endless", "cores", "dungeon", "monsters", "delve", "dormant", "spawn17", "s17", "fpv", "clock", "lifespan", "skill_pacing", "k3", "dayguard", "memory", "stepneed"];
+const QUICK = ["oblique", "determinism", "save_roundtrip", "path_bench", "rooms", "build", "jobs", "possess", "deconstruct", "ui_text", "genetics", "split", "property3", "geology", "mining", "heat", "events", "discovery", "chain", "discoveries", "property6", "bots/grind", "bots/k6", "creatures", "flora", "living", "command", "crowd", "underground", "migrate", "ui_s12", "people", "bots/breed", "bots/swap", "bots/expand", "depth", "settle", "endless", "cores", "dungeon", "dungeon_regrow", "monsters", "delve", "dormant", "spawn17", "s17", "fpv", "clock", "lifespan", "skill_pacing", "k3", "dayguard", "memory", "stepneed"];
 const FULL = ["crowd 100", "bots/chainrun", "bots/k6 --year", "bots/overorder", "bots/absent", "bots/shelter", "bots/keep999", "bots/possess"];
 const list = process.argv.includes("--full") ? [...QUICK, ...FULL] : QUICK;
 const HEAP = "--max-old-space-size=" + (process.env.SIM_HEAP_MB || 768);

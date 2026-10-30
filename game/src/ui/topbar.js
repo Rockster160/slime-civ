@@ -126,7 +126,7 @@ export function createTopBar(root, game) {
       const t = dateOf(tick), full = `Day ${t.day}, ${SEASON_NAMES[t.season]}, Year ${t.year}`;
       html(dialw, "dial", dialSvg(tick, state.paused && !game.skipper.active, performance.now() - (game.skipper.msgT || 0) < 900) + `<span class="sr">${full}</span>`);
       dialw.dataset.tip = full + (state.paused ? "\nPaused" : "");
-      put(dayEl, "d", SEASON_NAMES[t.season] + " · Day " + t.day);
+      put(dayEl, "d", SEASON_NAMES[t.season] + " · Year " + t.year + " · Day " + t.day);
       put(todEl, "tod", timeOfDay(tick));
       const pb = q(".tb-pause"), pi = state.paused ? "play" : "pause";
       if (last.pi !== pi) { last.pi = pi; pb.innerHTML = svg(pi, 16); pb.dataset.tip = state.paused ? "Play\nSpace resumes" : "Pause\nSpace pauses"; }

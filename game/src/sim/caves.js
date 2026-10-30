@@ -11,7 +11,7 @@
 // carveChunk(def, X0, Y0, mats, flgs, hs) opens the air of one chunk (flagged NATURAL: its rock vault holds). Inside HOME_R of the camp the S16 home caves (worms.js) stand instead.
 import { hash2, hash3, vnoise } from "./noise.js";
 import { D, M, F } from "./world.js";
-import { manaFrom, bandOf, coresIn } from "./core.js";
+import { manaFrom, bandOf, coresIn, plainCore } from "./core.js";
 import { HOME_R } from "./worms.js";
 
 export const CRS = 96;               // cave region
@@ -34,8 +34,8 @@ export function nodeOf(def, rx, ry) {
   if (core || hh % 100 < 76) {
     const x = rx * CRS + 14 + ((hh >>> 8) % 68), y = ry * CRS + 14 + ((hh >>> 16) % 68), z = ZMIN + ((hh >>> 24) % 7);
     let band = 0;
-    for (const c of coresIn(def, x - 84, y - 84, x + 84, y + 84)) band = Math.max(band, bandOf(manaFrom(c, x, y, z)));      // (a core may be a region away)
-    n = { x, y, z, band, core: core || null, rx, ry };
+    for (const c of coresIn(def, x - 84, y - 84, x + 84, y + 84)) band = Math.max(band, bandOf(manaFrom(c, x, y, z)));      // (a core may be a region away; RAW field: a harvest fades the field, never the ground, so the caves must not depend on when the node was first asked for)
+    n = { x, y, z, band, core: core ? plainCore(core) : null, rx, ry };
   }
   rc.set(key, n);
   return n;

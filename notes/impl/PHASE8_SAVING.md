@@ -87,8 +87,13 @@ On re-activation, the chunk is regrown from the seed and its deltas and entities
 - Split `snapshot`/`restore` into manifest, global and chunk records (pure, in `sim/save.js`).
 - A new `src/store/codec.js` with gzip, base64, sniffing and record hashes.
 - SAVE_VERSION 16 with a v12–15 → 16 migration.
+- **Batched seen knowledge (author, 2026-10-30: "save batches of information so that we don't have to store every seen block"):**
+  - drop `seen.log`, the per-cell list of every newly seen cell, which only grows;
+  - keep the per-chunk seen bitsets, RLE-packed, in each chunk record;
+  - replace the stored `known[mat]` cell lists with a per-chunk ore summary (counts per material plus a rough centre) and derive any exact list on load;
+  - prune the per-villager chronicle flags (`mem:<id>:…`) and records of long-dead villagers to a bounded tail.
 - `.slime` export and import, and the save code.
-- **Tests:** round-trip hash equality on every fixture; v15 fixtures still load; codec round-trip (Node `CompressionStream`); corrupt-record refusal with plain text; size report (raw / gz / b64) per fixture.
+- **Tests:** round-trip hash equality on every fixture; a regrow test proving a reloaded world rebuilds identically, dungeons included (see `tests/dungeon_regrow.js`); seen-size stays flat on a long walk; v15 fixtures still load; codec round-trip (Node `CompressionStream`); corrupt-record refusal with plain text; size report (raw / gz / b64) per fixture.
 
 ### 8.25 Chunked store and incremental autosave
 - IndexedDB backend with the localStorage fallback.

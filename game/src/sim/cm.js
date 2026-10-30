@@ -4,8 +4,8 @@
 //     known  a villager has stood in this core's labyrinth (the minimap draws its explored outline; the first one in it is a deed)
 //     pend   the guardian is slain and the choice has not been made: the UI offers two buttons until it is
 //     left   the player left the core as it is (it keeps its rich ores and its spawns for good; a core is only ever offered once)
-//     gone   the core was harvested at that tick: its cell is open air, a large one-time haul of core shards went into the stockpile, and its mana field fades to nothing over
-//            FADE_TICKS (a flat tick duration, core.js fadeMana), so spawns, danger bands and cache richness fall. OD-47: a harvested core is gone for good (it never regrows elsewhere).
+//     gone   the core was harvested at that tick: its cell is open air, a large one-time haul of core shards went into the stockpile, and it stops spawning at once (core.js liveMana).
+//            Ore, caves, loot and the danger display stay as generated (D48). OD-47: a harvested core is gone for good (it never regrows elsewhere).
 // The field is a pure function of (seed, coordinates) plus this ledger: sim.def is the sim's own view of the world definition and carries the harvest ticks (core.js ownDef).
 // Ore already in the rock stays (terrain is regrown from the seed, so it cannot depend on a game clock); what falls is everything that reads the live field.
 import { coresNear, goCore } from "./core.js";
@@ -49,7 +49,7 @@ export function guardianSlain(sim, key, att) {
 /** The shape of the prompt: [{key, name, x, y, z}] for each core waiting on a choice. */
 export function pending(sim) { return sim.cm.pend.map(k => { const c = coreByKey(sim, k); return { key: k, name: c ? coreName(sim, c) : "a core", x: c ? c.x : 0, y: c ? c.y : 0, z: c ? c.z : 0 }; }); }
 
-/** Harvest: the cell opens, the shards come home, the field starts to fade, the chronicle records it. */
+/** Harvest: the cell opens, the shards come home, its spawning stops, the chronicle records it. */
 export function harvest(sim, key) {
   const c = coreByKey(sim, key);
   if (!c || !sim.cm.pend.includes(key)) return false;
@@ -87,6 +87,5 @@ export const CM_COMMANDS = {
 export function applyCm(sim) {
   sim.def.gone.clear();
   for (const [key, t] of sim.cm.gone) { const c = coreByKey(sim, key); if (c) goCore(sim.def, c, t); }
-  sim.def.fb.now = sim.tick;
   sim.cache.mi = null;
 }

@@ -12,13 +12,13 @@
 //   {type:"keep", item, n}   standing order keep-N (refill below 80%, stop at 100%); n capped at stockpile capacity
 //   {type:"unkeep", item}
 //   {type:"teach", id, pupil}   villager `id` coaches `pupil` (0 stops): when they work the same craft side by side the pupil gains x3 XP and the teacher works at x0.8 (§10)
-//   {type:"split", id}          solo split (R16): a clone, at most once per villager per life
+//   {type:"split", id}          split into 2-5 selves; the original is gone (split.js)
 //   {type:"cancel", ids?:[...]}   clears orders (all villagers if ids omitted)
 import { isAdult } from "./villager.js";
 import { ITEMS, stockCapacity } from "./items.js";
 import { cancelAction } from "./jobstate.js";
 import { setTeach } from "./skills.js";
-import { splitSolo } from "./population.js";
+import { splitSlime } from "./split.js";
 import { can } from "./knowledge.js";
 
 const VERBS = ["forage", "chop", "gather", "haul", "move", "dig", "hunt", "clear", "capture", "scout", "disarm"];     // S17: scout = walk to unexplored land and reveal it (scout.js)
@@ -73,7 +73,7 @@ export const ORDER_COMMANDS = {
   },
   split(sim, c) {
     const v = sim.ents.get(c.id);
-    return !!(v && v.kind === "villager" && splitSolo(sim, v));
+    return !!(v && v.kind === "villager" && splitSlime(sim, v));
   },
   cancel(sim, c) {
     let n = 0;

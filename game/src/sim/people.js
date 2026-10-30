@@ -29,10 +29,10 @@ export function grandparents(a, b) { return dedupe(ids([...(a.par || []), ...(b.
 
 /**
  * Kinship coefficient 0..0.5 from v.par / v.gp lineage: 0.5 parent-child, full siblings, or the same person; 0.25 half-siblings,
- * grandparent and grandchild, uncle/aunt and nephew/niece; 0.125 first cousins; else 0. (Clones, par [p,p], count as the parent's child.)
+ * grandparent and grandchild, uncle/aunt and nephew/niece; 0.125 first cousins; else 0. (Selves split from one slime, same `sp`, are full siblings.)
  */
 export function kinship(a, b) {
-  if (a.id === b.id) return 0.5;
+  if (a.id === b.id || (a.sp && a.sp === b.sp)) return 0.5;
   const pa = dedupe(ids(a.par || [])), pb = dedupe(ids(b.par || []));
   if (pa.includes(b.id) || pb.includes(a.id)) return 0.5;
   const shared = pa.filter(x => pb.includes(x)).length;
@@ -82,7 +82,7 @@ export function newHeirloom(v, tick) {
   return { n: "the " + H_ADJ[h % 8] + " " + H_THING[(h >>> 8) % 8], h: [{ n: v.name, t: tick }] };
 }
 
-/** Everything a villager gets when they are made (founder, birth, clone): alleles when missing, maybe an heirloom. */
+/** Everything a villager gets when they are made (founder, birth, split): alleles when missing, maybe an heirloom. */
 export function initPerson(sim, v) {
   if (!v.g) v.g = genoFrom(v.t, v.id);
   if (!v.ps) v.ps = initTemper(sim, v);                // experiment: temperament, the lens experience is appraised through (memory.js)
@@ -250,6 +250,7 @@ export function relationWord(v, o) {
   const pv = ids(v.par || []), po = ids(o.par || []);
   if (po.includes(v.id)) return v.par && v.par[0] === v.par[1] && v.par[0] === o.id ? "clone-parent" : "child";
   if (pv.includes(o.id)) return v.par[0] === v.par[1] ? "original (cloned from)" : "parent";
+  if (v.sp && v.sp === o.sp) return "split self";
   const shared = dedupe(pv).filter(x => po.includes(x)).length;
   if (shared >= 2) return "sibling";
   if (shared === 1) return "half-sibling";

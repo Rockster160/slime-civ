@@ -68,7 +68,7 @@ A core sits at the heart of a **dungeon** (an authored-by-rules labyrinth with t
 
 ### 7.23 Delving gameplay and the core itself (BUILT, see DECISION_LOG D45; Phase 7 is complete)
 - **Expedition type "delve"** (extends S8/S17): a crew enters a dungeon, maps it, disarms seen traps, loots and returns, with recall rules tuned for danger (wounds, light running out). The stall summary names the trap or monster blocking them.
-- **The core chamber.** Defeating the guardian lets the player choose: **harvest** the core (a large one-time haul of core material; the field fades over seasons, so the region becomes poorer and safer), or **leave** it (keep rich ores and spawns). This is a real tradeoff.
+- **The core chamber.** Defeating the guardian lets the player choose: **harvest** the core (a large one-time haul of core material; new monsters stop spawning at once, but ore, caches and everything already there stay: the region becomes safer, not poorer), or **leave** it (keep rich ores and spawns). This is a real tradeoff.
 - **Map readability** (show, don't tell): danger pips on the minimap, mana shimmer, trap glyphs once seen, a dungeon outline drawn as explored.
 - **FPV (S18).** Dungeons are the natural home of first-person play: corridors, traps, a torch radius. Make sure the FPV renderer draws dungeon walls and traps.
 - **Chronicle.** Deeds such as "first to enter the labyrinth", "guardian slain", "the core of the north ridge was harvested".

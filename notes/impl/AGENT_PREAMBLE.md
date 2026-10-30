@@ -15,6 +15,14 @@ You are implementing one stage of the playable prototype in /Users/zoro/code/sli
 3. game/README.md (every stage section and its "seams") and game/tests/README.md (fixtures, quick and full).
 4. The GDD sections your stage names, in docs/GAME_DESIGN.md, plus docs/MVP_SCOPE.md for scope.
 
+## Small changes get small checks (user rule, 2026-10-30)
+A small change (a label, a layout tweak, one rule or constant) is checked with **only**:
+- `node tools/build.js`
+- `node tools/check.js` (about 2 s): it loads the game, fails on any console error, and can assert one selector's text or one `--eval` expression;
+- plus the one or two unit tests that cover the touched module, if any.
+
+**Never** run `tests/all.js` or any `ui_smoke*`/`ui_shots*` script for a small change. When an existing smoke check pins the changed text, update its pattern, but don't run that script. The full suite is for the end of a stage or phase only.
+
 ## Testing rules (summary; the plan file is authoritative)
 A previous session crashed the user's machine by running many sims in parallel.
 - **Every sim run ≤ 5 min wall clock** (user rule, 2026-10-28): each test, each fixture build, each probe. Fast-forward is fine; anything longer needs a real reason, stated in the report.

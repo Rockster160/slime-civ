@@ -202,7 +202,7 @@ function richen(def, cores, X0, Y0, mats, hs) {
     for (let z = h - dirtAt(seed, x, y) - 1; z >= 1; z--) {
       const i = L(lx, ly, z), m = mats[i];
       if (m !== M.SOFT && m !== M.STONE && m !== M.DEEP && m !== M.IRONORE && m !== M.COAL) continue;
-      const band = bandOf(manaOf(cores, x, y, z, true));
+      const band = bandOf(manaOf(cores, x, y, z));
       if (!band) continue;
       if (hash3(seed ^ 0x6e6d, x, y, z) % 10000 < GEM_P[band]) mats[i] = M.GEM;
       else if (band >= 2 && vnoise(seed, 81 + (z >> 1), x, y, 5) > CRY_T[band]) mats[i] = M.CRYSTAL;
@@ -264,7 +264,7 @@ export function genChunk(def, cx, cy) {
     }
     if (h < WATER_LEVEL + 3) continue;                                    // no ore under the lake and the river beds
     // iron and coal: flat veins in the first two layers of the hard rock band; richer, rarer ones in the deep rock under it
-    const bonus = cores.length ? manaOf(cores, x, y, sb - 2, true) >> 3 : 0;      // 7.20: ore is richer in a core's field (up to 31 off the threshold)
+    const bonus = cores.length ? manaOf(cores, x, y, sb - 2) >> 3 : 0;      // 7.20: ore is richer in a core's field (up to 31 off the threshold)
     if (vnoise(seed, 41, x, y, 9) > 214 - bonus) for (let z = sb - 1; z >= sb - 2 && z >= 1; z--) if (mats[L(lx, ly, z)] === M.STONE) mats[L(lx, ly, z)] = M.IRONORE;
     if (vnoise(seed, 42, x, y, 9) > 214 - bonus) for (let z = sb - 1; z >= sb - 2 && z >= 1; z--) if (mats[L(lx, ly, z)] === M.STONE) mats[L(lx, ly, z)] = M.COAL;
     for (let z = sb - 3; z >= 1; z--) {
@@ -314,7 +314,7 @@ export function genChunk(def, cx, cy) {
   for (const c of cores) if (c.x >= X0 && c.x <= X0 + 15 && c.y >= Y0 && c.y <= Y0 + 15 && c.z < hs[(c.y - Y0) * 16 + c.x - X0]) { const i = L(c.x - X0, c.y - Y0, c.z); mats[i] = M.CORE; flgs[i] &= ~F.NATURAL; }
   if (cores.length) for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) {
     const c = ly * 16 + lx, h = hs[c];
-    mb[c] = bandOf(manaOf(cores, X0 + lx, Y0 + ly, h, true)); md[c] = bandOf(manaOf(cores, X0 + lx, Y0 + ly, Math.max(1, h - 8), true));
+    mb[c] = bandOf(manaOf(cores, X0 + lx, Y0 + ly, h)); md[c] = bandOf(manaOf(cores, X0 + lx, Y0 + ly, Math.max(1, h - 8)));
   }
   // ridges: the windy cells, local height maxima, for a draft furnace
   for (let ly = 0; ly < 16; ly++) for (let lx = 0; lx < 16; lx++) {

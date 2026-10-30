@@ -27,25 +27,28 @@ export const oct = (dx, dy) => { const ax = dx < 0 ? -dx : dx, ay = dy < 0 ? -dy
 /** Band 0..4 of a mana value. */
 export const bandOf = (m) => (m >= 200 ? 4 : m >= 130 ? 3 : m >= 60 ? 2 : m >= 14 ? 1 : 0);
 /**
- * 7.23: a harvested core's field fades over FADE_TICKS (a flat tick duration, not days). `fadeMana(m, age)` is pure: m at age 0, 0 at FADE_TICKS, in between a straight integer line.
- * A harvested core carries `gt` (the tick it went) and `fb` (the def's clock box, {now}); only a core that has gone reads them. `raw` = the field as generated (terrain, never faded).
+ * 7.23 (D48): a harvested core never changes the world: `manaFrom`/`manaOf` always read the field as generated, so ore, caves, dungeon loot and the danger display stay as they were (anything first generated later too).
+ * Only ongoing SPAWNING stops, at once: `liveMana` skips a core that has gone (it carries `gt`, the tick it went). Monsters already alive stay.
  */
-export const FADE_TICKS = 12000;
-export function fadeMana(m, age) { return age <= 0 ? m : age >= FADE_TICKS ? 0 : Math.floor((m * (FADE_TICKS - age)) / FADE_TICKS); }
-/** Mana of one core at a cell. */
-export function manaFrom(c, x, y, z, raw) {
-  const d = oct(x - c.x, y - c.y) + DZ_W * (z < c.z ? c.z - z : z - c.z), m = d < MANA_R ? MANA_TAB[d] : 0;
-  return c.gt === undefined || raw ? m : fadeMana(m, c.fb.now - c.gt);
+/** Mana of one core at a cell (as generated). */
+export function manaFrom(c, x, y, z) {
+  const d = oct(x - c.x, y - c.y) + DZ_W * (z < c.z ? c.z - z : z - c.z);
+  return d < MANA_R ? MANA_TAB[d] : 0;
 }
 /** The strongest mana over a list of cores. */
-export function manaOf(cores, x, y, z, raw) { let m = 0; for (let i = 0; i < cores.length; i++) { const v = manaFrom(cores[i], x, y, z, raw); if (v > m) m = v; } return m; }
+export function manaOf(cores, x, y, z) { let m = 0; for (let i = 0; i < cores.length; i++) { const v = manaFrom(cores[i], x, y, z); if (v > m) m = v; } return m; }
+/** The field that drives new spawns: as `manaOf`, but a harvested core gives nothing. */
+export function liveMana(cores, x, y, z) { let m = 0; for (let i = 0; i < cores.length; i++) { if (cores[i].gt !== undefined) continue; const v = manaFrom(cores[i], x, y, z); if (v > m) m = v; } return m; }
 /** The key a core goes by (the guardian's `ck`, the harvest ledger). */
 export const coreKey = (c) => c.x + "," + c.y;
-/** A sim's own view of the (shared, memoised) world definition: reads fall through to it, but the harvested-core ledger (key -> tick) and the clock box `fb` are the sim's own, so one sim's harvest never leaks into another's. */
-export function ownDef(def) { const d = Object.create(def); d.gone = new Map(); d.fb = { now: 0 }; return d; }
-/** A core has been harvested at `tick`: its field fades from now. */
+/** A sim's own view of the (shared, memoised) world definition: reads fall through to it, but the harvested-core ledger (key -> tick) is the sim's own, so one sim's harvest never leaks into another's. */
+export function ownDef(def) { const d = Object.create(def); d.gone = new Map(); return d; }
+/** A core has been harvested at `tick`: it stops spawning from now. */
 export function goCore(def, c, tick) { def.gone.set(coreKey(c), tick); }
-const goneView = (def, c) => { const t = def.gone.get(coreKey(c)); return t === undefined ? c : Object.assign(Object.create(c), { gt: t, fb: def.fb }); };
+const goneView = (def, c) => { const t = def.gone.get(coreKey(c)); return t === undefined ? c : Object.assign(Object.create(c), { gt: t }); };
+
+/** A core as generated (a harvested core's view carries `gt`; anything cached in a pure structure keeps this copy, so what is cached never depends on when it was first asked for). */
+export const plainCore = (c) => { const o = { x: c.x, y: c.y, z: c.z, h: c.h, sh: c.sh, spire: c.spire }; if (c.home) o.home = true; return o; };
 
 function cache(def) { const c = def.rc || (def.rc = new Map()); if (c.size > 4096) c.clear(); return c; }
 
@@ -91,7 +94,7 @@ export function coresNear(def, x0, y0, x1, y1, pad = MANA_R) {
   }
   const s = def.spawnCore;
   if (s && s.x >= x0 - pad && s.x <= x1 + pad && s.y >= y0 - pad && s.y <= y1 + pad) out.push(s);
-  if (def.gone && def.gone.size) for (let i = 0; i < out.length; i++) out[i] = goneView(def, out[i]);       // 7.23: a harvested core reads as fading
+  if (def.gone && def.gone.size) for (let i = 0; i < out.length; i++) out[i] = goneView(def, out[i]);       // 7.23: a harvested core carries `gt`
   return out;
 }
 /** Cores whose centre lies in the box. */

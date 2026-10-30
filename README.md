@@ -41,7 +41,7 @@ Each slime is a person, not a unit.
 - **Temperament.** Three fixed numbers, bold, curious and sensitive, set at birth. They colour how the slime feels about events (see [Memories and experience](#memories-and-experience)).
 - **Hobbies.** In free time a slime follows a pastime its traits suit: carving, singing, stargazing, collecting stones or weaving grass. It is flavour only: a small mood lift and chronicle notes, no economic effect.
 - **Bonds.** Slimes who work or struggle together become friends; those who clash become rivals; some become partners (who share a bed) and some mentors. Each keeps at most six. Friends and rivals nudge where a slime chooses to work. When someone dies, those close to them grieve: worse mood and a little less output for a while.
-- **Families.** Slimes breed in pairs, more readily in spring and summer and when there is food and a free bed. Children inherit a blend of their parents' traits plus hidden alleles. Close kin pair less willingly, and their children are more likely to be weak. A slime can also **split** on its own, once per life: the clone is smaller, a little worse than the village average, and costs the parent. Lineages carry a colour mark.
+- **Families.** Slimes breed in pairs, more readily in spring and summer and when there is food and a free bed. Children inherit a blend of their parents' traits plus hidden alleles. Close kin pair less willingly, and their children are more likely to be weak. A healthy adult can also **split** into two to five smaller selves (more when it is strong, fed and rested) and the original is gone: the colour is copied exactly, traits and needs drift by up to 5%, memories and bonds come along (a few are forgotten), and skills, health and age are shared out almost evenly, minus a tenth of the skills and health. Lineages carry a colour mark.
 - **Ageing and death.** A life is about five game years: child, adult, then elder, when fitness fades. Slimes die of old age, cold, hunger, illness or wounds. The dead are buried with an inscription and may pass on an heirloom. Deeds earn titles ("first potter", "master digger") that appear in the notables strip.
 
 ### What they do on their own, and why
@@ -132,7 +132,7 @@ Past about 150 cells from your camp, the land holds **magic cores**. A core is a
 - **Caches.** Sealed stores with loot tables that are richer near the core. **Ancient workshops** teach: a slime standing in one gains evidence toward a craft.
 - **Monsters.** Spawned only in the dark, rising with mana: **cave crawlers** (swarms), **corebacks**, **spitters** (ranged), and one **core guardian** per labyrinth that never respawns. They drop core shards, chitin, core hide and venom sacs. They spawn from dens, dark cave chambers, the surface at night in high bands, and the core chamber. They are kept out by walls, doors and light, not by towers. A monster concern appears when they are near.
 - **Delving.** An expedition of kind "delve" goes into a labyrinth you have seen a ruin for, or one that a selected slime is standing in. The party scouts, disarms spotted traps, opens caches and maps rooms, then packs the loot. It turns back when a member is under 60% health, the torches burn low, someone is hungry, 14000 ticks pass, the labyrinth is mapped, or you press Recall. A delve party never fights: the core chamber is skipped until the guardian is slain, by a spear crew or by you.
-- **Harvest or Leave.** When the guardian falls, the game waits on a card that only you answer. **Harvest** gives 24 core shards to the stockpile and opens the core cell, and the field then fades over one game day: a poorer, safer land. **Leave** is final: the core stays, with its rich caches, ores and monsters. A core is offered once, and a harvested core is gone for good.
+- **Harvest or Leave.** When the guardian falls, the game waits on a card that only you answer. **Harvest** gives 24 core shards to the stockpile and opens the core cell, and new monsters stop spawning at once; ore, caches and treasure stay where they are. **Leave** is final: the core stays, with its rich caches, ores and monsters. A core is offered once, and a harvested core is gone for good.
 
 ### Memories and experience
 
@@ -294,7 +294,7 @@ Settings > Mouse sway makes the view lean toward the mouse. Without WebGL the gu
 - **Far pathing.** There is no region graph, so a far unreachable goal reports "budget" rather than "no path".
 - **Labyrinths** need a seen ruin, or a party already inside, to start a delve. Not every core has a labyrinth.
 - **No perception trait.** Spotting traps uses intelligence and craft skill only.
-- **Terrain does not fade with a harvest**: ore already in the rock, and the map tint, stay; spawns, danger and cache richness do fade.
+- **A harvest takes nothing away**: ore, caches, treasure and the map tint stay as generated; only new monster spawning stops.
 - **The map camera is fixed**: a 3/4 view, north-up, with no rotation.
 - **Seams that are left.** Hobbies, skills and traditions growing out of interests (a liking for caves as a future spelunker) are noted for later and not built.
 - **Larders** are thin on some seeds; cold still kills elders and children in the open; keep-N on a non-food item can reduce births a little because labour goes to it.

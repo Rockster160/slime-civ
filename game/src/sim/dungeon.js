@@ -16,7 +16,7 @@
 import { Stream } from "./rng.js";
 import { hash2, hash3 } from "./noise.js";
 import { D, M, F } from "./world.js";
-import { coresNear, bandOf, manaFrom, MANA_R } from "./core.js";
+import { coresNear, bandOf, manaFrom, plainCore, MANA_R } from "./core.js";
 import { nodeOf, tunnel, CRS, ZMIN, ZMAX } from "./caves.js";
 import { HOME_R } from "./worms.js";
 
@@ -112,7 +112,7 @@ function build(def, core) {
       if (j2 < 0 || j2 >= L) continue;
       const cands = [];
       for (let m = 0; m < Gx * Gy; m++) if (labels[j][m] === c && use[j2][m] && !usedM.has(m)) cands.push([hash3(seed ^ 0x57a1, m, j, j2), m]);
-      cands.sort((a, b) => a[0] - b[0]);
+      cands.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
       for (const [, m] of cands) {
         const c2 = labels[j2][m];
         if (reached.has(j2 + ":" + c2)) continue;
@@ -124,7 +124,7 @@ function build(def, core) {
   for (let j = 0; j < L - 1; j++) {                            // a second stair between some levels: a loop
     const cands = [];
     for (let m = 0; m < Gx * Gy; m++) if (use[j][m] && use[j + 1][m] && reached.has(j + ":" + labels[j][m]) && reached.has((j + 1) + ":" + labels[j + 1][m]) && !usedM.has(m)) cands.push([hash3(seed ^ 0x57a2, m, j, 0), m]);
-    cands.sort((a, b) => a[0] - b[0]);
+    cands.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
     if (cands.length && cands[0][0] % 100 < 60) { usedM.add(cands[0][1]); stairs.push(stairAt(cands[0][1], j)); }
   }
   use = use.map((u, j) => Uint8Array.from(u, (v, m) => (v && reached.has(j + ":" + labels[j][m]) ? 1 : 0)));
@@ -137,7 +137,7 @@ function build(def, core) {
   let nm = 0;
   for (const u of use) for (const v of u) nm += v;
   if (nm < 10) return null;
-  const dun = { core, seed, Gx, Gy, W, H, x0, y0, L, jc, s, use, mh, gcx, gcy, grid: [], ov: new Map(), rooms: [], stairs, traps: new Map(), caches: new Map(), doors: [], entrances: [], links: [], ramps: [], extra: new Set(), bb: null, zlo: s[0] - 1, zhi: s[L - 1] + 4 };
+  const dun = { core: plainCore(core), seed, Gx, Gy, W, H, x0, y0, L, jc, s, use, mh, gcx, gcy, grid: [], ov: new Map(), rooms: [], stairs, traps: new Map(), caches: new Map(), doors: [], entrances: [], links: [], ramps: [], extra: new Set(), bb: null, zlo: s[0] - 1, zhi: s[L - 1] + 4 };
   for (let j = 0; j < L; j++) dun.grid.push(new Uint8Array(W * H));      // bit 1 open, 2 route (a corridor / anchor line: never furnished), 4 corridor cell outside a room
   layout(def, dun, R);
   doors(def, dun, R);
@@ -181,7 +181,7 @@ function layout(def, dun, R) {
       if (gx + 1 < Gx && dun.use[j][mod(gx + 1, gy)]) edges.push([R.u32(), gx, gy, gx + 1, gy]);
       if (gy + 1 < Gy && dun.use[j][mod(gx, gy + 1)]) edges.push([R.u32(), gx, gy, gx, gy + 1]);
     }
-    edges.sort((a, b) => a[0] - b[0]);
+    edges.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3] || a[4] - b[4]);
     const uf = new Int32Array(Gx * Gy).map((_, i) => i), find = (a) => { while (uf[a] !== a) { uf[a] = uf[uf[a]]; a = uf[a]; } return a; };
     const take = [];
     for (const e of edges) { const a = find(mod(e[1], e[2])), b = find(mod(e[3], e[4])); if (a !== b) { uf[a] = b; take.push(e); } else if (e[0] % 100 < 9) take.push(e); }
@@ -214,7 +214,7 @@ function layout(def, dun, R) {
     if (!r.force) cand.push(r);
   }
   const wsN = Math.min(cand.length, 1 + R.int(2));
-  const byH = cand.map(r => [hash3(dun.seed, r.x0, r.y0, r.j), r]).sort((a, b) => a[0] - b[0]);
+  const byH = cand.map(r => [hash3(dun.seed, r.x0, r.y0, r.j), r]).sort((a, b) => a[0] - b[0] || a[1].j - b[1].j || a[1].y0 - b[1].y0 || a[1].x0 - b[1].x0);
   for (let k = 0; k < wsN; k++) { const r = byH[k][1]; r.kind = "workshop"; r.craft = byH[k][0] >>> 8; }
   for (const r of cand) {
     if (r.kind === "workshop") continue;
@@ -272,7 +272,7 @@ function layout(def, dun, R) {
   const freeCells = (r, interior) => {
     const out = [];
     for (let y = r.y0 + (interior ? 1 : 0); y <= r.y1 - (interior ? 1 : 0); y++) for (let x = r.x0 + (interior ? 1 : 0); x <= r.x1 - (interior ? 1 : 0); x++) if (isFree(r.j, x, y)) out.push([x, y]);
-    return out.sort((a, b) => hash3(dun.seed ^ 0xf3a7, a[0], a[1], r.j) - hash3(dun.seed ^ 0xf3a7, b[0], b[1], r.j));
+    return out.sort((a, b) => hash3(dun.seed ^ 0xf3a7, a[0], a[1], r.j) - hash3(dun.seed ^ 0xf3a7, b[0], b[1], r.j) || a[1] - b[1] || a[0] - b[0]);
   };
   const corners = (r) => [[r.x0, r.y0], [r.x1, r.y0], [r.x0, r.y1], [r.x1, r.y1]].filter(([x, y]) => isFree(r.j, x, y) && (grid[r.j][(y - y0) * W + (x - x0)] & 8));
   const lowerOpen = (j, x, y) => j > 0 && (grid[j - 1][(y - y0) * W + (x - x0)] & 1) && !dun.ov.has((y - y0) * W + (x - x0));
@@ -471,12 +471,12 @@ export const LOOT = [
 export const LOOT_VALUE = { copper: 2, gem: 5, crystal: 4, core_shard: 8, ancient_tool: 10, tablet: 12, relic: 25, core_ore: 7 };
 export const RELIC_A = ["Hollow", "Pale", "Last", "Sunken", "Quiet", "Bright", "Broken", "Old"];
 export const RELIC_B = ["Crown", "Lamp", "Seal", "Ring", "Mask", "Chalice", "Key", "Comb"];
-/** The loot of the cache at (x, y, z): [[item, n], ...]. Pure; the band is the mana at the cache. */
+/** The loot of the cache at (x, y, z): [[item, n], ...]. Pure; the band is the mana at the cache, as generated. */
 export function lootAt(def, x, y, z) {
   const dun = dungeonAt(def, x, y);
   if (!dun) return [];
   let mana = 0;
-  for (const c of coresNear(def, x, y, x, y)) mana = Math.max(mana, manaFrom(c, x, y, z));
+  for (const c of coresNear(def, x, y, x, y)) mana = Math.max(mana, manaFrom(c, x, y, z));      // as generated: a harvest never thins a cache
   const band = bandOf(mana), h0 = hash3(dun.seed ^ 0x100f, x, y, z);
   const rolls = 1 + (band >= 2 ? 1 : 0) + (band >= 4 ? 1 : 0) + (h0 % 4 === 0 ? 1 : 0), out = [];
   const rows = LOOT.filter(r => r.band <= band), tot = rows.reduce((a, r) => a + r.w, 0);

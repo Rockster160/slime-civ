@@ -1,8 +1,8 @@
 // 7.23 Delving gameplay and the core itself (quick set). Pre-situated fixtures, each run only until the event (capped):
 //   delve      three villagers on a labyrinth's first door  -> the delve expedition maps, disarms, opens caches, recalls on wounds and on light, names what stalls it, brings the haul home
 //   guardian   a slime beside a weakened guardian           -> the kill is a deed and offers the choice
-//   coreslain  the guardian slain, the choice pending       -> Harvest (shards, the core gone, the field fades) or Leave (nothing changes), answered only by the player
-// plus the pure rules: the fade is an integer line over a flat tick duration, a harvest in one sim never reaches another, and the fade survives a save.
+//   coreslain  the guardian slain, the choice pending       -> Harvest (shards, the core gone, spawning stops, nothing else changes) or Leave (nothing changes), answered only by the player
+// plus the pure rules: a harvest in one sim never reaches another, and it survives a save.
 //   node game/tests/delve.js
 import "./legacy.js";
 import assert from "node:assert/strict";
@@ -10,11 +10,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadFixture } from "./fixture.js";
-import { FADE_TICKS, fadeMana, manaAt, bandAt, coresNear } from "../src/sim/core.js";
+import { manaAt, liveMana, coresNear } from "../src/sim/core.js";
 import { HARVEST_SHARDS, pending, coreByKey, coreName, CHOICES } from "../src/sim/cm.js";
 import { DELVE_LIGHT, DELVE_TIME, DELVE_RECALL_HP } from "../src/sim/delve.js";
 import { spawnRate, regionCap } from "../src/sim/monsters.js";
-import { dungeonOf, lootAt, LOOT_VALUE } from "../src/sim/dungeon.js";
+import { dungeonOf, lootAt } from "../src/sim/dungeon.js";
 import { survey } from "../src/sim/items.js";
 import { M } from "../src/sim/world.js";
 import { toJSON, restore } from "../src/sim/save.js";
@@ -29,22 +29,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ok = (m) => console.log("ok  " + m);
 const adults = (sim) => sim.ents.ofKind("villager");
 
-// ---- 1. the pure rules: the fade ----
+// ---- 1. the pure rules ----
 {
   assert.ok(!/Math\.(exp|sin|cos|random|pow)|Date\.|performance/.test(readFileSync(join(here, "..", "src", "sim", "delve.js"), "utf8").replace(/\/\/.*$/gm, "")), "delve.js uses no exp / sin / random / clock");
   assert.ok(!/Math\.(exp|sin|cos|random|pow)|Date\.|performance/.test(readFileSync(join(here, "..", "src", "sim", "cm.js"), "utf8").replace(/\/\/.*$/gm, "")), "cm.js uses no exp / sin / random / clock");
-  assert.ok(Number.isInteger(FADE_TICKS) && FADE_TICKS > 0, "the fade is a flat tick duration");
-  let prev = 1e9;
-  for (let age = 0; age <= FADE_TICKS + 5; age += 97) {
-    const m = fadeMana(255, age);
-    assert.ok(Number.isInteger(m) && m <= prev && m >= 0, "fadeMana is an integer, never rises with age (age " + age + ")");
-    prev = m;
-  }
-  assert.equal(fadeMana(255, 0), 255); assert.equal(fadeMana(255, -50), 255); assert.equal(fadeMana(255, FADE_TICKS), 0); assert.equal(fadeMana(255, FADE_TICKS * 3), 0);
-  assert.equal(fadeMana(200, FADE_TICKS / 2), 100, "half way is half the field");
-  assert.ok(fadeMana(255, 1) < 255 && fadeMana(14, 0) === 14, "it starts falling at once");
   assert.deepEqual(Object.values(CHOICES).map(s => s.split(" ").length), [1, 1], "each choice has a 1-3 word label (" + Object.values(CHOICES).join(", ") + ")");
-  ok("fade: pure integer line over " + FADE_TICKS + " ticks, 255 -> " + fadeMana(255, FADE_TICKS / 2) + " -> 0; labels " + Object.values(CHOICES).join(" / "));
+  ok("labels " + Object.values(CHOICES).join(" / "));
 }
 
 // ---- 2. the guardian: a slime next to it, a kill, the deed, the choice (until the event) ----
@@ -83,7 +73,6 @@ const adults = (sim) => sim.ents.ofKind("villager");
   assert.ok(sim.apply({ type: "core", op: "leave", key }), "Leave is accepted");
   assert.deepEqual(sim.cm.pend, []); assert.deepEqual(sim.cm.left, [key]);
   assert.ok(!sim.apply({ type: "core", op: "harvest", key }), "and it is final: a left core cannot be harvested afterwards");
-  sim.def.fb.now = sim.tick + FADE_TICKS * 2;
   assert.equal(manaAt(sim.def, c.x, c.y, c.z), m0, "the field is untouched, however long it waits");
   assert.equal(sim.world.mat(c.x, c.y, c.z), M.CORE, "the core stands");
   assert.equal(survey(sim).stock.core_shard, stock0, "no shards");
@@ -91,7 +80,7 @@ const adults = (sim) => sim.ents.ofKind("villager");
   ok("leave: the field stays " + m0 + ", the core stands, no shards, final");
 }
 
-// ---- 4. Harvest: the haul, the core gone, the field fades (pure: moved by the clock box, no stepping) ----
+// ---- 4. Harvest: the haul, the core gone, it spawns nothing  ----
 {
   const sim = loadFixture("coreslain"), other = loadFixture("coreslain"), key = sim.cm.pend[0], c = coreByKey(sim, key), dun = dungeonOf(sim.def, c);
   const probes = [[c.x, c.y, c.z], [c.x + 10, c.y, c.z], [c.x, c.y + 20, c.z + 2], [c.x - 30, c.y, c.z]];
@@ -105,33 +94,27 @@ const adults = (sim) => sim.ents.ofKind("villager");
   assert.equal(s1.stock.core_shard + s1.loose.core_shard - shards0, HARVEST_SHARDS, "a large one-time haul of core shards (" + HARVEST_SHARDS + ")");
   assert.equal(sim.world.mat(c.x, c.y, c.z), M.AIR, "the core cell is open: the core is gone for good");
   assert.ok(sim.chron.entries.some(e => /The core of the .* ridge was harvested/.test(e.text)), "the chronicle: the core was harvested");
-  // the fade, read through the clock box (no sim stepping: a pure function of the ledger and the tick)
-  const at = (age) => { sim.def.fb.now = t0 + age; return probes.map(([x, y, z]) => manaAt(sim.def, x, y, z)); };
-  const a0 = at(0), aH = at(FADE_TICKS / 2), aF = at(FADE_TICKS), aX = at(FADE_TICKS * 4);
-  assert.deepEqual(a0, before, "at the moment of harvest the field is what it was");
-  probes.forEach((_, i) => { assert.ok(aH[i] < before[i] && aH[i] > 0 === before[i] > 1 || before[i] <= 1, "half way it has fallen (probe " + i + ")"); assert.equal(aF[i], 0, "after the duration it is nothing (probe " + i + ")"); assert.equal(aX[i], 0); });
-  let prev = 1e9;
-  for (let age = 0; age <= FADE_TICKS; age += FADE_TICKS / 12) { const m = at(age)[1]; assert.ok(m <= prev, "monotone fall"); prev = m; }
-  // what reads the field falls with it
-  assert.ok(bandAt(sim.def, c.x, c.y, c.z) === 0 && before[0] >= 200, "the band at the core went from heart to wild (read at the end of the fade)");
-  assert.ok(spawnRate(aH[1], "den", true) < spawnRate(before[1], "den", true) && spawnRate(aF[1], "den", true) === 0, "spawn rate falls with it, to nothing");
-  assert.ok(regionCap(aF[1]) === 0 && regionCap(before[1]) > 0, "and so does the region cap");
-  const meanLoot = () => { let s = 0, n = 0; for (let k = 0; k < 400; k++) { for (const [it, q] of lootAt(sim.def, c.x - 20 + (k % 20), c.y - 10 + ((k / 20) | 0), c.z)) s += (LOOT_VALUE[it] || 1) * q; n++; } return s / n; };
-  const lootF = (at(FADE_TICKS), meanLoot()), lootB = (sim.def.fb.now = t0, meanLoot());
-  assert.ok(lootF < lootB, "cache richness falls: mean " + lootB.toFixed(1) + " -> " + lootF.toFixed(1));
+  // D48: a harvest removes nothing. The field as generated, ore, caches and the danger display are exactly what they were; only new spawns stop (at once).
+  const lootGrid = (d) => { const o = []; for (let k = 0; k < 400; k++) o.push(JSON.stringify(lootAt(d, c.x - 20 + (k % 20), c.y - 10 + ((k / 20) | 0), c.z))); return o; };
+  assert.deepEqual(probes.map(([x, y, z]) => manaAt(sim.def, x, y, z)), before, "the field (and so the danger band shown) is unchanged by the harvest");
+  const lootB = lootGrid(other.def), lootA = lootGrid(sim.def);
+  assert.deepEqual(lootA, lootB, "cache loot near the core is exactly what it was");
+  assert.ok(lootA.some(q => q !== "[]"), "(and there is loot to compare)");
+  const live = (d, p) => liveMana(coresNear(d, p[0], p[1], p[0], p[1]), p[0], p[1], p[2]);
+  assert.ok(live(other.def, probes[1]) > 0 && live(other.def, probes[0]) >= 200, "before: the live (spawning) field is there");
+  assert.ok(probes.every(p => live(sim.def, p) === 0), "after: the live field is 0 at once, nowhere spawns from this core");
+  assert.ok(spawnRate(0, "den", true) === 0 && regionCap(0) === 0 && spawnRate(before[1], "den", true) > 0, "so spawn rate and region cap are 0");
   // another sim of the same seed never feels it (the harvest ledger is the sim's own)
   assert.deepEqual(probes.map(([x, y, z]) => manaAt(other.def, x, y, z)), before, "a second sim of the same world is untouched");
-  // the terrain is regrown from the seed and does not read the clock: the ore stays where it was
-  const w = sim.world, ore = [];
-  for (let k = 0; k < 60; k++) { const x = c.x - 12 + (k % 12), y = c.y - 12 + ((k / 12) | 0), z = c.z - 1; ore.push(w.mat(x, y, z)); }
-  sim.def.fb.now = t0 + FADE_TICKS * 3;
-  const w2 = other.world, ore2 = []; for (let k = 0; k < 60; k++) ore2.push(w2.mat(c.x - 12 + (k % 12), c.y - 12 + ((k / 12) | 0), c.z - 1));
-  assert.deepEqual(ore, ore2, "terrain does not depend on the clock (the rock round the core is as generated)");
+  // ore and rock round the core, including cells in chunks never generated before the harvest, equal the unharvested sim's
+  const w = sim.world, w2 = other.world, ore = [], ore2 = [];
+  for (let k = 0; k < 400; k++) { const x = c.x - 60 + (k % 20) * 6, y = c.y - 60 + ((k / 20) | 0) * 6; for (let z = c.z - 3; z <= c.z + 3; z++) { if (x === c.x && y === c.y && z === c.z) continue; ore.push(w.mat(x, y, z)); ore2.push(w2.mat(x, y, z)); } }
+  assert.deepEqual(ore, ore2, "ore and rock round the core are as generated (new chunks too)");
   assert.ok(dun && dun.rooms.length > 0, "the labyrinth itself stays");
-  ok("harvest: " + HARVEST_SHARDS + " shards, cell open, field " + before[0] + " -> " + aH[0] + " -> 0 over " + FADE_TICKS + " ticks, spawn rate " + spawnRate(before[1], "den", true) + " -> 0, loot " + lootB.toFixed(1) + " -> " + lootF.toFixed(1) + ", a second sim unaffected");
+  ok("harvest: " + HARVEST_SHARDS + " shards, cell open, field/loot/ore unchanged, spawning stopped, a second sim unaffected");
 }
 
-// ---- 5. the fade and the choice survive a save; two runs agree ----
+// ---- 5. the harvest and the choice survive a save; two runs agree ----
 {
   const a = loadFixture("coreslain"), key = a.cm.pend[0], c = coreByKey(a, key);
   a.apply({ type: "core", op: "harvest", key });
@@ -141,12 +124,11 @@ const adults = (sim) => sim.ents.ofKind("villager");
   assert.equal(b.hash(), a.hash(), "a restored sim hashes the same");
   for (let i = 0; i < 100; i++) { a.step(); b.step(); }
   assert.equal(b.hash(), a.hash(), "and runs on tick for tick");
-  a.def.fb.now = a.tick; b.def.fb.now = b.tick;
-  assert.equal(manaAt(b.def, c.x + 5, c.y, c.z), manaAt(a.def, c.x + 5, c.y, c.z), "the same field after a load, mid-fade");
-  assert.ok(manaAt(a.def, c.x + 5, c.y, c.z) < manaAt(loadFixture("coreslain").def, c.x + 5, c.y, c.z), "which is already lower than the unharvested one");
+  assert.equal(manaAt(b.def, c.x + 5, c.y, c.z), manaAt(a.def, c.x + 5, c.y, c.z), "the same field after a load");
+  assert.equal(liveMana(coresNear(b.def, c.x + 5, c.y, c.x + 5, c.y), c.x + 5, c.y, c.z), 0, "and the harvested core still spawns nothing after a load");
   const p = loadFixture("coreslain"), r = restore(toJSON(p));
   assert.deepEqual(r.cm.pend, p.cm.pend, "a pending choice survives a save");
-  ok("save: ledger, fade and a pending choice round-trip (hash " + a.hash() + ")");
+  ok("save: ledger, harvest and a pending choice round-trip (hash " + a.hash() + ")");
 }
 
 // ---- 6. the delve expedition ----

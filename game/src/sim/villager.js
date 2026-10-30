@@ -4,7 +4,7 @@
 // A villager is an entity {kind:"villager", ...}: all plain JSON.
 //   t      the nine traits (multipliers around 1, §08): strength speed stamina intelligence drive leisure fertility longevity hardiness
 //   sk     skills {dig,build,craft: {xp, wk}}; ws/wt = skill last worked and when; tch = {p, u} lesson I am giving
-//   cl     solo splits made (at most 1 per life); cg = clone generation depth (0 = born of two parents)
+//   sp     split origin: the id of the slime this one was split from (0 = born, not split); splits of one slime share it and count as full siblings
 //   hue    colour (0..359), lin founder lineage, par parent ids, gen generation
 //   born   tick of birth (negative for founders), prime = age in days where decline starts
 //   needs  hunger thirst energy warm mood in 0..1 (1 = fine); hp health; hard = lifelong hardship
@@ -206,12 +206,12 @@ export function villagerProps(x, y, z, o) {
     x, y, z, name: o.name, hue: o.hue, lin: o.lin, par: o.par, gen: o.gen, t: o.t, born: o.born, prime: o.prime,
     hunger: o.hunger ?? 0.9, thirst: o.thirst ?? 0.9, energy: o.energy ?? 0.9, warm: 1, mood: 0.8, hp: 100, hard: 0,
     bed: 0, mate: 0, cd: 0, rest: 0, slp: 0, mv: 6, carry: null, action: null, job: null, why: null, order: null,
-    sk: o.sk, ep: 0, bad: [], rp: 0, rpt: 0, lf: null, ws: "", wt: 0, tch: null, cl: 0, cg: o.cg ?? 0, fam: {},
+    sk: o.sk, ep: 0, bad: [], rp: 0, rpt: 0, lf: null, ws: "", wt: 0, tch: null, sp: o.sp ?? 0, fam: {},
     g: o.g ?? null, gp: o.gp ?? [], inb: o.inb ?? 0, wk: o.wk ?? 0, aff: {}, mn: {}, rel: [], gr: null, hb: { xp: 0, n: 0 }, ti: [], hl: null, ps: null, mem: [], epi: [],
   };
 }
 
-/** Hidden alleles for a visible phenotype (R16): a pair that averages to the trait, split by a stable hash of (id, trait). Used for founders, clones and saves from before S13. */
+/** Hidden alleles for a visible phenotype (R16): a pair that averages to the trait, split by a stable hash of (id, trait). Used for founders and saves from before S13. */
 export const ALLELE_SPREAD = 0.06;
 export function genoFrom(t, id) {
   const g = {};
@@ -246,18 +246,6 @@ export function inheritGeno(r, a, b, out) {
 }
 export const inheritTraits = inheritGeno;
 
-/** A solo split's traits (R16 guard 3): the parent's own, regressed 25% toward the village mean, with stacking load per clone generation. */
-export function cloneTraits(r, a, mean) {
-  const t = {}, cg = a.cg + 1;
-  for (const k of TRAITS) {
-    let v = a.t[k] + 0.25 * (mean[k] - a.t[k]);
-    v *= 1 + (r.float() * 2 - 1) * 0.03;
-    if (k === "hardiness") v *= 1 - 0.06 * cg;      // -6% maxHealth per consecutive clone generation
-    if (k === "fertility") v *= 1 - 0.10 * cg;      // -10% fertility
-    t[k] = r3(settle(v, 1, TRAIT_SOFT[k] ?? 0.5));
-  }
-  return t;
-}
 /** Hue: lean toward one parent with a little jitter; the 7% sport jumps 45-150 degrees (§08). */
 export function inheritHue(r, a, b) {
   let d = ((b.hue - a.hue + 540) % 360) - 180;      // shortest signed arc a -> b

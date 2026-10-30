@@ -127,6 +127,16 @@ function sync() {                       // keep focus inside the selection
   if (!ui.sel.includes(ui.focus)) ui.focus = ui.sel[0] || 0;
   if (ui.sel.length) ui.other = null;
 }
+/** A split replaces a slime with 2-5 selves: move the selection, focus and follow onto them (the sim notes the last split; it is not saved). */
+let lastSplit = null;
+function followSplit() {
+  const s = game.sim.lastSplit, ui = game.ui;
+  if (!s || s === lastSplit) return;
+  lastSplit = s;
+  if (ui.sel.includes(s.from)) { ui.sel = ui.sel.flatMap(id => (id === s.from ? s.to : [id])); if (ui.focus === s.from) ui.focus = s.to[0]; }
+  if (ui.follow === s.from) ui.follow = s.to[0];
+  sync();
+}
 function reveal(v) {                    // bring a villager into view if it is off-screen
   const [sx, sy] = cam.toScreen(v.x + 0.5, v.y + 0.5, v.z);
   const top = renderer.view ? renderer.view.topZ(v.x, v.y, D - 1) : renderer.topAt(v.x, v.y), want = viewLevelFor(top, v.z, D);
@@ -286,6 +296,7 @@ function frame(now) {
   if (ui.other && ui.other.kind === "entity" && !sim.ents.get(ui.other.id)) ui.other = null;
 
   panKeys(game, dtMs / 1000);
+  followSplit();
   possessCtl.frame();
   watch(game);
   orderEnds(sim);

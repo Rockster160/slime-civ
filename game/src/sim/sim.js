@@ -114,6 +114,7 @@ export class Sim {
     this.pond = 0;                            // S17: 1 = this world has the pond at the camp (saved: terrain regrows from the seed)
     this.bio = 1;                             // S12: 1 = the world was grown with biomes (worldgen), 0 = a pre-biome save regrown without them (saved)
     this.ironman = false;                     // S12: a UI rule (single autosave slot, no manual load), saved with the game, never read by the sim itself
+    this.lastSplit = null;                    // {from, to:[ids], tick} of the latest split, for the UI to move its selection (not saved)
     this.lastBlocker = "";                    // why the last rejected command failed (UI feedback only; not saved)
   }
 
@@ -131,7 +132,6 @@ export class Sim {
 
   step() {
     const t = this.tick;
-    this.def.fb.now = t;                                       // 7.23: a harvested core's field fades by this clock (core.js)
     if (t % 20 === 7) chunkTick(this);                       // S16: activate the land round the people, unload what is untouched and far
     this.rooms.update(this);
     if (t % 20 === 0) updateBoard(this);

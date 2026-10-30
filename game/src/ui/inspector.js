@@ -6,7 +6,7 @@ import { SKILLS, level, preferred, aptitude, rustOf, peakLevel } from "../sim/sk
 import { HOBBIES, hobbyOf, hobbyLevel, hobbyWord } from "../sim/hobby.js";
 import { relOf, reasonLine, TIER_WORD } from "../sim/bonds.js";
 import { kinship, relationWord } from "../sim/people.js";
-import { canSplit } from "../sim/population.js";
+import { splitCount, splitBlock } from "../sim/split.js";
 import { ITEMS, survey, inZone, STACK_CAP, zoneCapacity, stockZoneAt, stockCapacity } from "../sim/items.js";
 import { DUR_DAY } from "../sim/clock.js";
 import { LEVEL_NAME } from "../sim/heat.js";
@@ -200,7 +200,7 @@ function villagerHtml(game, v) {
   // actions: teach / split
   const pupils = ui.sel.filter(id => id !== v.id).map(id => sim.ents.get(id)).filter(o => o && isAdult(sim, o));
   const acts = (isAdult(sim, v) && pupils.length ? pupils.slice(0, 2).map(o => `<button class="btn" data-act="teach:${o.id}"${tipAttr("Teach " + o.name + "\nWork the same craft beside them and they learn 3x faster; you work at 80%. Give you both the same order (e.g. dig) so you end up side by side.")}>${svg("knowledge", 14)}${avatar(o.hue, o.lin, 16)}<span class="bl">Teach ${esc(o.name.split(" ")[0])}</span></button>`).join("") : "")
-    + (isAdult(sim, v) ? `<button class="btn" data-act="split" ${canSplit(sim, v) ? "" : "disabled"}${tipAttr("Split (clone)\nSplit off a clone of " + v.name + ": once per life, the clone regresses toward the village average and is frailer. Costs health, food and energy.")} aria-label="Split">${svg("plus", 14)}${svg("people", 14)}<span class="bl">Split</span></button>` : "");
+    + (isAdult(sim, v) ? splitButton(sim, v) : "");
   if (acts) vr += `<div class="actions">${acts}</div>`;
   // the old prose, hidden
   let w = `<div class="idrow"><b>${esc(stageText(sim, v))}</b>${elder ? " (past their prime)" : ""}<br><span>${esc(family(sim, v))}</span></div><div class="sub">Needs</div><div class="grid">`;
@@ -259,7 +259,7 @@ function family(sim, v) {
   const grand = !clone && (a || b) ? [a, b].map(id => id && sim.ents.get(id)).filter(Boolean).flatMap(p => p.par.filter(Boolean)).length : 0;
   const kids = sim.ents.ofKind("villager").filter(o => o.par[0] === v.id || o.par[1] === v.id).length;
   const mate = name(sim, v.mate);
-  return `${ps}. Generation ${v.gen}, line ${v.lin + 1}` + (v.cg ? `, ${v.cg} clone ${v.cg === 1 ? "generation" : "generations"} deep` : "") + (grand ? `, ${grand} known grandparent${grand === 1 ? "" : "s"}` : "") + (mate ? `. Partner: ${mate}` : "") + (kids ? `. ${kids} living ${kids === 1 ? "child" : "children"}` : "") + ".";
+  return `${ps}. Generation ${v.gen}, line ${v.lin + 1}` + (grand ? `, ${grand} known grandparent${grand === 1 ? "" : "s"}` : "") + (mate ? `. Partner: ${mate}` : "") + (kids ? `. ${kids} living ${kids === 1 ? "child" : "children"}` : "") + ".";
 }
 
 const isAdultV = (sim, v) => isAdult(sim, v);
@@ -381,4 +381,10 @@ function wagonCard(game, e) {
     h += `<span>Pulled by</span><b>${a ? "a grazer in pen " + a.pen.id : "nothing: no penned grazer"}</b><span>Fed</span><b>${a ? (r ? "no - the pen's trough is empty or its animals are hungry" : "yes (" + a.pen.fod + " in the trough; each trip eats " + CART_FODDER + ")") : "-"}</b>`;
   }
   return { title: row.label, html: h + `</div><p class="dim">Villagers use a free wagon on a long haul (a pile ${WAGON_FAR} or more cells from the stockpile), pick up several stacks and leave it at the store. ${e.t === "cart" ? "A cart is only used while its grazer is fed." : ""}</p>` };
+}
+
+/** Split ×N with the predicted count, or the reason it cannot (1-3 words). */
+function splitButton(sim, v) {
+  const n = splitCount(sim, v), why = splitBlock(sim, v);
+  return `<button class="btn" data-act="split" ${n ? "" : "disabled"}${tipAttr(n ? "Split ×" + n : "Cannot split\n" + why)} aria-label="Split">${svg("plus", 14)}${svg("people", 14)}<span class="bl">${n ? "Split ×" + n : "Split: " + why}</span></button>`;
 }

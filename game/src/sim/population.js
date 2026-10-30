@@ -13,7 +13,7 @@ import { afterDeath } from "./knowledge.js";
 import { restricted } from "./lair.js";
 import { initPerson, kinship, grandparents, weakChance, makeWeak, pickPartner, onDeath } from "./people.js";
 import {
-  TRAITS, FOUNDER_RANGE, LIFE_DAYS, makeName, rollRange, villagerProps, inheritGeno, cloneTraits, inheritHue,
+  TRAITS, FOUNDER_RANGE, LIFE_DAYS, makeName, rollRange, villagerProps, inheritGeno, inheritHue,
   ageDays, maturity, fitness, maxHp, stepTicks, dailyNeed, pace, isAdult, lifeStage,
 } from "./villager.js";
 
@@ -26,7 +26,7 @@ export function addFounder(sim, x, y, z, lin, hueBase, ageFrac) {
   const r = sim.rng.stream("founders");
   const t = {};
   for (const k of TRAITS) t[k] = rollRange(r, FOUNDER_RANGE[k]);
-  const hue = Math.round((hueBase + lin * 120 + (r.float() * 2 - 1) * 14 + 360) % 360);
+  const hue = Math.round((hueBase + (r.float() * 2 - 1) * 9 + 360) % 360);   // founders share one colour: within +-9 deg (5% of the wheel) of the base; lin stays as the lineage mark
   const prime = Math.round(LIFE_DAYS * (0.4 + 0.3 * r.float()) * t.longevity);
   const e = sim.ents.add("villager", villagerProps(x, y, z, {
     name: makeName(r), hue, lin, par: [0, 0], gen: 1, t, born: -Math.round(ageFrac * LIFE_DAYS * DAY), prime,
@@ -85,36 +85,6 @@ const SPORT_WORD = { strength: "strong", speed: "quick", stamina: "tireless", in
 function sportText(sports, t) {
   const up = sports.filter(k => t[k] > 1.1);
   return up.length ? " Born unusually " + SPORT_WORD[up[0]] + " for this line." : "";
-}
-
-/**
- * Solo split (R16 guard 3, slime-village bearChild(a, a)): at most once per villager per life, the clone is a
- * smaller copy 25% regressed toward the village mean, with stacking load per clone generation. Costs the parent.
- */
-export const SPLIT_COOLDOWN = 75;         // CALENDAR days before a splitter may breed again (60 x 1.25)
-export function canSplit(sim, v) {
-  const age = ageDays(sim, v);
-  return v.cl === 0 && age >= maturity(v) && age <= v.prime && v.hp > 60 && v.hunger > 0.5 && v.energy > 0.4 && v.cd <= sim.tick;
-}
-export function splitSolo(sim, v) {
-  if (!canSplit(sim, v)) return null;
-  const r = sim.rng.stream("birth");
-  const vs = sim.ents.ofKind("villager"), mean = {};
-  for (const k of TRAITS) mean[k] = vs.reduce((a, o) => a + o.t[k], 0) / vs.length;
-  const t = cloneTraits(r, v, mean);
-  const prime = Math.round(LIFE_DAYS * (0.4 + 0.3 * r.float()) * t.longevity);
-  const e = sim.ents.add("villager", villagerProps(v.x, v.y, v.z, {
-    name: makeName(r), hue: Math.round((v.hue + (r.float() * 2 - 1) * 6 + 360) % 360), lin: v.lin, par: [v.id, v.id], gen: v.gen + 1, t,
-    born: sim.tick, prime, hunger: 0.9, thirst: 0.9, energy: 0.9, sk: newSkills(r), cg: v.cg + 1, gp: grandparents(v, v),
-  }));
-  for (const s of SKILLS) e.sk[s].xp = 0;
-  v.cl = 1;
-  refreshDerived(sim, e);
-  initPerson(sim, e);
-  v.cd = sim.tick + Math.round(SPLIT_COOLDOWN * DAY * pace(v));
-  v.energy = Math.max(0, v.energy - 0.3); v.hunger = Math.max(0.05, v.hunger - 0.2); v.hp = Math.max(1, v.hp - 20);
-  log(sim, "BIRTH", e.name + " split off from " + v.name + " (a clone).", [e.id, v.id], { clone: 1 }, 1);
-  return e;
 }
 
 function eligible(sim, v) {

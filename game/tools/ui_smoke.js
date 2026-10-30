@@ -1464,7 +1464,7 @@ await G(() => { __game.fpvDevOff = false; });
     assert.match(await txt("[data-test=season-cap]"), /(Spring|Summer|Autumn|Winter).*(Winter|Spring) in \d+d/, "the season ribbon is named and says when winter comes");
     assert.match(await txt("[data-test=food-cap]"), /Food.*(\d+(\.\d)? days|plenty)/, "the food bar is named and has its value");
     assert.match(await txt("[data-test=beds]"), /Beds \d+\/\d+/); assert.match(await txt("[data-test=racks]"), /Racks \d+/); assert.match(await txt("[data-test=shelter]"), /Shelter \d+/);
-    assert.match(await txt("[data-test=topbar] .tb-day"), /^(Spring|Summer|Autumn|Winter) · Day \d+$/); assert.match(await txt("[data-test=tod]"), /Morning|Noon|Afternoon|Dusk|Night/);
+    assert.match(await txt("[data-test=topbar] .tb-day"), /^(Spring|Summer|Autumn|Winter) · Year \d+ · Day \d+$/); assert.match(await txt("[data-test=tod]"), /Morning|Noon|Afternoon|Dusk|Night/);
     assert.match(await txt("[data-test=minimap] .ptitle"), /^Map$/);
     assert.match(await txt("[data-test=orders]"), /\d+ selected/);
     const tile = await page.locator("[data-test=stock-tile] .nm").first().innerText().catch(() => ""); assert.ok(tile.length > 0, "a store tile names its item");
