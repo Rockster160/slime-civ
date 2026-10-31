@@ -147,7 +147,7 @@ function villagerHtml(game, v) {
   const { sim, ui } = game, age = ageDays(sim, v), fit = fitness(v, age), mh = maxHp(v, fit), kid = !isAdult(sim, v), elder = isElder(sim, v);
   let h = "", vr = "", selH = "";
   if (ui.sel.length > 1) {
-    selH += `<div class="kin" data-test="selection">`;
+    selH += `<div class="sub">Selected</div><div class="kin" data-test="selection">`;
     const CHIPS = 5;                                                          // S11: at 20-60 selected the chip list would fill the panel
     const shownIds = ui.sel.slice(0, CHIPS); if (ui.focus && !shownIds.includes(ui.focus)) shownIds.push(ui.focus);
     shownIds.forEach((id) => { const o = sim.ents.get(id); if (o) selH += `<button data-act="focus:${id}" class="${id === ui.focus ? "on" : ""}"${tipAttr(o.name)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}${id === ui.focus ? `<span class="nm">${esc(o.name.split(" ")[0])}</span>` : sr(o.name)}</button>`; });
@@ -190,7 +190,7 @@ function villagerHtml(game, v) {
   const kin = sim.ents.ofKind("villager").filter(o => o !== v).map(o => [o, kinship(v, o), relationWord(v, o)]).filter(k => k[1] > 0 && k[2]);
   const rel = (v.rel || []).map(r => [sim.ents.get(r.o), r]).filter(q => q[0]);
   if (kin.length || rel.length || v.mate) {
-    vr += `<div class="kin" data-test="kin">`;
+    vr += `<div class="sub">Friends</div><div class="kin" data-test="kin">`;
     const seen = new Set();
     const one = (o, glyph, tip) => { if (seen.has(o.id)) return; seen.add(o.id); vr += `<button data-act="focus:${o.id}"${tipAttr(o.name + "\n" + tip)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}<span class="nm">${esc(o.name.split(" ")[0].slice(0, 8))}</span><span class="rel">${svg(glyph, 12)}</span></button>`; };
     const mate = v.mate ? sim.ents.get(v.mate) : null;
@@ -303,11 +303,12 @@ function otherHtml(game, o) {
     for (const x of si.heat) h += `<span>With ${esc(x.fuelWord)}</span><b>${esc(x.levelName)} (level ${x.level}, P ${x.P.toFixed(2)})</b>`;
   }
   if (e.kind === "furniture" && e.f === "waterjar") h += `<span>Water</span><b>${e.fill} of 60 sips</b>`;
-  if (holder) h += `<span>Claimed by</span><b>${esc(holder.name)}</b>`;
+  if (e.kind === "furniture" && e.f === "board") h += `<span>Claimed by</span><b>${holder ? esc(holder.name) : "\u2014"}</b>`;
+  else if (holder) h += `<span>Claimed by</span><b>${esc(holder.name)}</b>`;
   h += `<span>Position</span><b>${e.x}, ${e.y}</b></div>`;
   if (e.kind === "furniture" && e.f === "board") {                                // 9.31: the notices as icon + count chips, a pin on a claimed one; nothing else
     const ch = noticeChips(e, sim.tick, (id) => name(sim, id));
-    h += `<div class="knows" data-test="board-notes"><div class="sub">Notices</div><p class="ttls">` + (ch.length ? ch.map(c => `<span class="ttl kn${c.claimed ? " claimed" : ""}${c.old ? " stale" : ""}"${tipAttr(c.tip)}>${svg(c.icon, 12)} ${esc(c.text)}${c.who ? " <small>" + esc(c.who) + "</small>" : ""}${c.claimed ? " " + svg("pin", 11) : ""}</span>`).join(" ") : `<span class="dim">-</span>`) + `</p></div>`;
+    h += `<div class="knows" data-test="board-notes"><div class="sub">Notices</div><div class="nrows">` + (ch.length ? ch.map(c => `<div class="ttl nrow kn${c.claimed ? " claimed" : ""}${c.old ? " stale" : ""}"${tipAttr(c.tip)}>${svg(c.icon, 12)} ${esc(c.text)}${c.who ? " <small>" + esc(c.who) + "</small>" : ""}${c.claimed ? " " + svg("pin", 11) : ""}</div>`).join("") : `<span class="dim">-</span>`) + `</div></div>`;
   }
   if (si || (e.kind === "furniture" && e.f === "hearth")) h += `<div class="btnrow"><button data-act="invest:${e.id}" title="Ask the selected villagers (or three adults) to try things out with what is in the stockpile, at this spot only. A standing job for three days.">Investigate here</button></div>`;
   if (si) {

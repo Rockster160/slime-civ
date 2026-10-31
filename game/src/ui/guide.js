@@ -32,7 +32,7 @@ export function createGuide(game, root) {
   const clearSpot = (p) => p.x > 330 && p.x < game.cam.vw - 340 && p.y > 130 && p.y < game.cam.vh - 130;
   document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("[data-test=concern-chip],[data-test=pointer]")) ui.chipClicked = 1; }, true);
   const HINTS = [
-    { id: "select", intro: 1, at: 0, words: "Click a slime", act: "click", when: () => !ui.sel.length, done: () => ui.sel.length > 0, target: () => { const v = ent("villager").find(v => game.renderer.isShown(v) && clearSpot(at(v))); return v && at(v); } },
+    { id: "select", intro: 1, at: 0, words: "Drag a box round slimes", act: "drag", when: () => !ui.sel.length, done: () => ui.sel.length > 0, target: () => { const v = ent("villager").find(v => game.renderer.isShown(v) && clearSpot(at(v))); return v && at(v); } },
     { id: "concern", intro: 1, at: 1, words: "Click to look", act: "click", when: () => (ui.concerns || []).some(c => c.sev >= 2) && !!document.querySelector("[data-test=concern-chip]"), done: () => !!ui.chipClicked, target: () => dom("[data-test=concern-chip]") },
     { id: "why", intro: 1, at: 1, words: "See why they act", act: "point", when: () => ui.sel.length > 0 && !!document.querySelector("[data-test=why-chain]"), done: () => !!ui.whyHover, target: () => dom("[data-test=why-chain]") },
     { id: "order", intro: 1, at: 1, words: "Right-click to order", act: "rclick", when: () => ui.sel.length > 0, done: () => game.sim.ents.ofKind("villager").some(v => v.order || v.as), target: () => { const t = ent("plant").find(p => p.species === "tree" && game.renderer.isShown(p) && clearSpot(at(p))); return t && at(t); } },

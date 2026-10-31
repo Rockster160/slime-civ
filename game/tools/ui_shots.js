@@ -64,7 +64,7 @@ const shots = {
     await page.keyboard.press("k"); await page.waitForTimeout(500); await page.screenshot({ path: out("book-story") });
     await page.locator('[data-test="book-tab"][data-tab="know"]').click(); await page.waitForTimeout(400); await page.screenshot({ path: out("book-know") });
     await page.locator('[data-test="book-tab"][data-tab="people"]').click(); await page.waitForTimeout(400); await page.screenshot({ path: out("book-people") });
-    await page.locator('[data-test="book-tab"][data-tab="keys"]').click(); await page.waitForTimeout(400); await page.screenshot({ path: out("book-keys") });
+    await page.keyboard.press("Escape"); await page.keyboard.press("h"); await page.waitForTimeout(400); await page.screenshot({ path: out("book-keys") });
   },
   async possess() {
     await load("settled");

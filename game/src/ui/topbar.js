@@ -1,4 +1,4 @@
-// Top bar (UI_SPEC §5, §11): the time dial and Day, pause/play, and on the right Build, Book, Layers and Menu. Nothing else is for the player: game speed, MAX and
+// Top bar (UI_SPEC §5, §11): the time dial and Day, pause/play, and on the right Book, Overlays and Menu. Nothing else is for the player: game speed, MAX and
 // skip-to are developer tools, shown only with ?debug=1 or Settings > Developer tools (keys 1-9 keep working either way). Plain DOM, built once;
 // update() writes only what changed.
 import { dateOf, SEASON_NAMES } from "../sim/clock.js";
@@ -33,9 +33,8 @@ export function createTopBar(root, game) {
     </span>
     <span class="tb-prog" data-test="skip-progress"></span>
     <span class="tb-spacer"></span>
-    ${btn({ icon: "build", label: "Build", tip: "Build\nPlan walls, floors, roofs, doors and beds", key: "", cls: "tb-build", test: "build-toggle", attrs: 'data-key="B"' })}
-    ${btn({ icon: "book", label: "Log", tip: "Log\nThe story, what the village knows, its people, the keys", cls: "tb-book", test: "book-btn", attrs: 'data-key="K"' })}
-    <span class="tb-menuwrap">${btn({ icon: "layers", tip: "Layers\nWhat to draw on the map", cls: "tb-layers", test: "layers" })}<div class="pop layers-pop" data-test="layers-pop"></div></span>
+    ${btn({ icon: "book", label: "Log", tip: "Log\nThe story, what the village knows, its people", cls: "tb-book", test: "book-btn", attrs: 'data-key="K"' })}
+    <span class="tb-menuwrap">${btn({ icon: "eye", tip: "Overlays\nBeds, job lines and warmth on the map", cls: "tb-layers", test: "layers" })}<div class="pop layers-pop" data-test="layers-pop"></div></span>
     <span class="tb-menuwrap">${btn({ icon: "menu", tip: "Menu\nSave, load, new game, settings, keys", cls: "tb-game", test: "menu" })}
       <div class="pop menu" data-test="menu-pop">
         <button data-m="save" data-test="m-save">${svg("save", 16)}Save to browser <kbd>Shift-S</kbd></button>
@@ -79,7 +78,7 @@ export function createTopBar(root, game) {
 
   // layers
   const ovBtns = {};
-  lay.innerHTML = `<div class="lbl">On the map</div><div class="layers"></div>`;
+  lay.innerHTML = `<div class="lbl">Overlays</div><div class="layers"></div>`;
   for (const [k, icon, tip, key] of OVERLAYS) {
     const b = document.createElement("button"); b.className = "btn ico"; b.dataset.test = "layer-" + k; b.dataset.tip = tip + "\n" + "Key " + key; b.innerHTML = svg(icon, 16); b.setAttribute("aria-label", tip);
     b.onclick = () => { ui.overlays[k] = !ui.overlays[k]; };
@@ -87,7 +86,6 @@ export function createTopBar(root, game) {
   }
   q(".tb-layers").onclick = (e) => { e.stopPropagation(); toggle(lay); };
   q(".tb-book").onclick = () => game.openBook();
-  q(".tb-build").onclick = () => game.setMode(ui.mode === "build" ? "select" : "build");
   q(".tb-game").onclick = (e) => {
     e.stopPropagation(); toggle(menu);
     const i = savedInfo();
@@ -131,7 +129,6 @@ export function createTopBar(root, game) {
       const pb = q(".tb-pause"), pi = state.paused ? "play" : "pause";
       if (last.pi !== pi) { last.pi = pi; pb.innerHTML = svg(pi, 16); pb.dataset.tip = state.paused ? "Play\nSpace resumes" : "Pause\nSpace pauses"; }
       pb.classList.toggle("on", state.paused);
-      q(".tb-build").classList.toggle("on", ui.mode === "build");
       q(".tb-book").classList.toggle("on", !!ui.book);
       const sk = game.skipper, poss = !!game.possessed();
       buttons.forEach(([b, sp]) => b.classList.toggle("on", !state.paused && !sk.active && state.speed === sp));

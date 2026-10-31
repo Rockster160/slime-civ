@@ -122,7 +122,7 @@
   details.parts { margin:8px 0 0; } details summary { cursor:pointer; color:var(--tx2); list-style:none; } details summary::-webkit-details-marker { display:none; }
   details table { margin:4px 0; border-collapse:collapse; width:100%; } details td { padding:1px 4px; } td.num { text-align:right; } td.neg { color:var(--danger); }
   a.lnk { color:var(--water); cursor:pointer; text-decoration:underline dotted; } ul.rej { margin:0 0 0 16px; } ul.rej li { margin:2px 0; } .warnline { color:var(--warm); } .fx { margin:4px 0; }
-  .ttl.stale { opacity:.5; }
+  .ttl.stale { opacity:.5; } .nrows { display:flex; flex-direction:column; gap:3px; } .ttl.nrow { display:flex; align-items:center; gap:6px; width:100%; box-sizing:border-box; min-height:26px; margin:0; padding:2px 8px; border-radius:var(--r1); font-size:12px; } .ttl.nrow:hover { background:var(--s2); }
   .ttl { display:inline-block; background:var(--s3); border:1px solid var(--know); border-radius:var(--rp); padding:0 7px; margin:1px 2px; font-size:11px; }
   i.rusty { font-style:normal; font-size:10px; color:var(--rot); border:1px solid var(--rot); border-radius:6px; padding:0 4px; margin-left:3px; } i.star { color:var(--sel); font-style:normal; }
   .alm-craft { padding:5px 0; border-bottom:1px solid var(--line); } .alm-holders { display:flex; flex-wrap:wrap; gap:3px; margin-top:3px; }
@@ -200,11 +200,11 @@
 
   /* ===== dock (§5, §7): orders / build / possess ===== */
   #dock { position:absolute; bottom:8px; left:calc(50% - 60px); transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:var(--sp2); width:calc(100vw / var(--ui) - var(--colL) - 168px - 120px); pointer-events:none; } #dock > * { pointer-events:auto; }
-  #dock > div { display:none; }
+  #dock > div { display:none; } #dock > #dkAct { display:flex; background:transparent; box-shadow:none; padding:0; }
   .dk { background:var(--s1); border-radius:var(--r3); box-shadow:var(--e1); padding:6px 8px; display:flex; gap:var(--sp1); align-items:center; flex-wrap:wrap; justify-content:center; }
   #dkOrders .ob-count { display:inline-flex; align-items:center; gap:4px; font-weight:600; margin-right:var(--sp1); } .dk .grp { display:inline-flex; gap:4px; align-items:center; } .dk .grp + .grp { margin-left:var(--sp2); padding-left:var(--sp2); border-left:1px solid var(--line); }
   #dkBuild { max-width:100%; } .bb-row { display:flex; gap:var(--sp1); align-items:center; flex-wrap:wrap; justify-content:center; margin-bottom:var(--sp1); } .bb-row:empty { display:none; }
-  .bb-lvl { color:var(--tx2); font-size:12px; min-width:18px; text-align:center; } .bb-status { min-height:20px; font-size:12.5px; display:flex; gap:var(--sp2); align-items:center; flex-wrap:wrap; justify-content:center; } .short { color:var(--danger); text-decoration:line-through; } .ccost { display:inline-flex; align-items:center; gap:3px; } .ccost.ok { color:var(--ok); } .ccost.no { color:var(--danger); }
+  .bb-lvl { color:var(--tx2); font-size:12px; min-width:18px; text-align:center; } .bb-status { height:26px; box-sizing:border-box; overflow:hidden; flex-wrap:nowrap !important; font-size:12.5px; display:flex; gap:var(--sp2); align-items:center; flex-wrap:wrap; justify-content:center; } .short { color:var(--danger); text-decoration:line-through; } .ccost { display:inline-flex; align-items:center; gap:3px; } .ccost.ok { color:var(--ok); } .ccost.no { color:var(--danger); }
   .bb-tools .btn.ico { width:36px; height:36px; } .bb-tools .btn.ico svg.ic { width:18px; height:18px; }
   .seg { display:inline-flex; } .seg > button { border-radius:0; margin-left:-1px; } .seg > button:first-child { border-radius:var(--r1) 0 0 var(--r1); margin-left:0; } .seg > button:last-child { border-radius:0 var(--r1) var(--r1) 0; }
   .pk-av { display:flex; align-items:center; gap:var(--sp2); } .pk-rings { display:flex; gap:var(--sp2); } .pk-act { display:flex; gap:var(--sp1); flex-wrap:wrap; }
@@ -243,12 +243,12 @@
   .ptr.l2 { border-color:var(--warm); } .ptr.l3 { border-color:var(--danger); } .ptr .pip-w { position:absolute; right:-6px; top:-6px; background:var(--bg); border-radius:50%; width:14px; height:14px; display:flex; align-items:center; justify-content:center; } .ptr .parr { position:absolute; left:9px; top:9px; margin:0; color:inherit; } .ptr.more { font-size:12px; } .ptr { color:var(--water); } .ptr.l2 { color:var(--warm); } .ptr.l3 { color:var(--danger); } .ptr svg.ic { color:var(--tx); } .sw { display:inline-block; width:12px; height:12px; border-radius:3px; border:1px solid rgba(255,255,255,.3); flex:none; }
   .ptr.l3 { animation:pulse 1.4s ease-in-out infinite; }
   #minimap { position:absolute; left:8px; bottom:8px; width:176px; overflow:hidden; padding:0; user-select:none; }
-  #minimap > header { cursor:default; padding:0 6px; height:24px; } #minimap .mm-btns { margin-left:auto; display:flex; gap:2px; } #minimap .mm-btns .btn { width:22px; height:22px; min-height:22px; }
+  #minimap > header { cursor:default; padding:0 6px; height:24px; } #minimap .mm-btns { margin-left:auto; display:flex; gap:2px; } #minimap .mm-btns .btn { width:22px; height:22px; min-height:22px; background:transparent; border-color:transparent; box-shadow:none; color:var(--tx2); } #minimap .mm-btns .btn:hover { color:var(--tx); }
   #minimap canvas { position:static; display:block; user-select:none; width:160px; height:160px; margin:4px; cursor:crosshair; image-rendering:pixelated; border-radius:var(--r1); }
   #minimap.closed canvas { display:none; } #minimap.closed > header { border-bottom:0; }
 
   /* ===== Book, digest, settings (sheets) ===== */
-  .book-tabs { display:flex; gap:2px; margin:0 0 var(--sp3); border-bottom:1px solid var(--line); padding-right:36px; } .book-tabs button { background:transparent; border:0; border-radius:0; color:var(--tx2); min-height:30px; padding:0 12px; } .book-tabs button.on { color:var(--tx); box-shadow:inset 0 -2px 0 var(--sel); background:transparent; }
+  .book-tabs { display:flex; gap:2px; border-bottom:1px solid var(--line); padding-right:36px; } .book-tabs button { background:transparent; border:0; border-radius:0; color:var(--tx2); min-height:30px; padding:0 12px; } .book-tabs button.on { color:var(--tx); box-shadow:inset 0 -2px 0 var(--sel); background:transparent; }
   .book-page { display:none; } .book-page.on { display:block; } .book-page .pn { box-shadow:none; background:transparent; } .book-page .pn > header { display:none; } .book-page .pbody { padding:0; }
   .people { display:grid; grid-template-columns:repeat(auto-fill, minmax(150px, 1fr)); gap:var(--sp2); } .people .nt { border-radius:var(--r2); height:auto; padding:6px 8px; flex-wrap:wrap; }
   #digest { position:fixed; left:50%; bottom:80px; transform:translateX(-50%); width:560px; max-width:92vw; max-height:42vh; overflow-y:auto; background:var(--s1); border-radius:var(--r2); box-shadow:var(--e2); padding:var(--sp3) var(--sp4); z-index:12; display:none; zoom:var(--ui); }
@@ -256,7 +256,8 @@
   .dg-row { display:flex; align-items:center; gap:6px; height:26px; padding:0 4px; border-radius:var(--r1); font-size:13px; } .dg-row[data-a] { cursor:pointer; } .dg-row[data-a]:hover { background:var(--s2); } .dg-row.big .ic { color:var(--danger); } .dg-t { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; } .dg-row .when { color:var(--tx2); font-size:11px; flex:none; } .dg-more { margin-top:var(--sp1); font-size:12px; }
   #corechoice { position:fixed; left:50%; top:30%; transform:translateX(-50%); width:380px; max-width:92vw; z-index:14; display:none; zoom:var(--ui); }
   .cc-card { background:var(--s1); border-radius:var(--r2); box-shadow:var(--e2); padding:var(--sp3) var(--sp4); border:1px solid #9a6bff; } .cc-head { display:flex; align-items:center; gap:var(--sp2); font-size:15px; } .cc-head .ic { color:#d68cff; } .cc-card p { margin:var(--sp2) 0; } .cc-btns { display:flex; gap:var(--sp2); } .cc-btns .btn { flex:1; justify-content:center; } .cc-sub { font-size:12px; color:var(--tx2); }
-  #helpOverlay { display:none; }
+  .sheet-head { position:sticky; top:calc(-1 * var(--sp4)); z-index:2; background:#12171e; margin:calc(-1 * var(--sp4)) 0 var(--sp3); padding-top:var(--sp4); } .sheet-head .xbtn { top:var(--sp3); right:0; }
+  .helpcard .sheet-head { display:flex; align-items:center; gap:var(--sp3); border-bottom:1px solid var(--line); padding-bottom:var(--sp2); } .helpcard .sheet-head h2 { margin:0; } .helpcard .hreplay { padding:4px 14px; min-height:28px; margin-right:36px; }
   .setcard h2, .helpcard h2 { margin-bottom:6px; } .setcard h3, .helpcard h3 { margin:14px 0 4px; color:var(--tx2); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
   .setcard table, .helpcard table { border-collapse:collapse; width:100%; } .setcard td, .helpcard td { padding:3px 10px 3px 0; vertical-align:middle; border-bottom:1px solid var(--line); } .setcard td.act { width:230px; }
   .setcard tr.hd td { color:var(--tx2); font-weight:600; padding-top:10px; border:0; } .setcard tr.cap td button.chg { border-color:var(--sel); color:var(--sel); }
@@ -264,7 +265,7 @@
   .setcard .msg { min-height:18px; color:var(--warm); margin-top:6px; } .helpcard ol { margin-left:20px; } .helpcard li { margin:3px 0; } .helpcard table td { vertical-align:top; }
   #settingsOverlay { display:none; position:fixed; inset:0; background:rgba(5,8,12,.6); z-index:13; align-items:center; justify-content:center; zoom:var(--ui); }
   .setcard { width:760px; max-width:94vw; max-height:90vh; overflow-y:auto; background:#12171e; border-radius:var(--r2); box-shadow:var(--e2); padding:var(--sp4) var(--sp5); position:relative; }
-  .setcard .sclose, .helpcard .hclose { position:absolute; top:12px; right:14px; }
+  .setcard .sclose { position:absolute; top:12px; right:14px; }
   #tip { position:fixed; display:none; z-index:6; pointer-events:none; background:rgba(10,14,19,.95); border-radius:var(--r1); box-shadow:var(--e0); padding:4px 8px; max-width:280px; }
   #footer { position:fixed; bottom:2px; right:12px; color:var(--tx3); font-size:11px; pointer-events:none; z-index:2; text-shadow:0 0 4px #000; } #footer #perf { display:none; } body.dev #footer #perf { display:inline; }
 
@@ -371,10 +372,10 @@
 <div id="tip"></div>
 <div id="footer"><span id="hint" class="sr"></span><span id="perf"></span></div>
 <div id="book" class="sheet" data-test="book"></div>
-<div id="helpOverlay"></div>
+<div id="helpOverlay" class="sheet"></div>
 <div id="settingsOverlay" data-test="settings"></div>
 <script>
-window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10-30 18:53"};
+window.__BUILD = {"stage":"7.23","commit":"92ca1ea","dirty":true,"time":"2026-10-30 20:35"};
 (function () {
   "use strict";
   
@@ -14870,7 +14871,7 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
         const cls = clsFor(v.carry.item);
         const c = { kind: "store", cls: cls.cls, kp: cls.kp, grp: cls.kp ? "kp:" + cls.kp : "haul", urg: Math.max(0.2, carryLoad(v) / cap), d: 0, key: "store:0" };
         const cell = storeCell(sim, v.carry.item, v.x, v.y);
-        if (!cell && ITEMS[v.carry.item].food === 0) {                  // the food-only cells are all that is left: set the load down rather than stand there with full hands
+        if (!cell && (ITEMS[v.carry.item].food === 0 || v.hunger > 0.8)) {                  // the food-only cells are all that is left: set the load down rather than stand there with full hands
           c.d = 0; c.key = "store:dump"; c.cls = "vcrit"; c.uv = 0; c.grp = "dump";     // full hands also block foraging, so setting the load down is as urgent as the food chain
           c.mk = () => ({ task: Task("store", [{ v: "dump", ...HERE }]), res: [] });
         } else if (!cell) { c.blocker = "NO_STORAGE"; c.mk = () => ({ blocker: "NO_STORAGE" }); }
@@ -21002,7 +21003,7 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
       const { sim, ui } = game, age = ageDays(sim, v), fit = fitness(v, age), mh = maxHp(v, fit), kid = !isAdult(sim, v), elder = isElder(sim, v);
       let h = "", vr = "", selH = "";
       if (ui.sel.length > 1) {
-        selH += `<div class="kin" data-test="selection">`;
+        selH += `<div class="sub">Selected</div><div class="kin" data-test="selection">`;
         const CHIPS = 5;                                                          // S11: at 20-60 selected the chip list would fill the panel
         const shownIds = ui.sel.slice(0, CHIPS); if (ui.focus && !shownIds.includes(ui.focus)) shownIds.push(ui.focus);
         shownIds.forEach((id) => { const o = sim.ents.get(id); if (o) selH += `<button data-act="focus:${id}" class="${id === ui.focus ? "on" : ""}"${tipAttr(o.name)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}${id === ui.focus ? `<span class="nm">${esc(o.name.split(" ")[0])}</span>` : sr(o.name)}</button>`; });
@@ -21045,7 +21046,7 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
       const kin = sim.ents.ofKind("villager").filter(o => o !== v).map(o => [o, kinship(v, o), relationWord(v, o)]).filter(k => k[1] > 0 && k[2]);
       const rel = (v.rel || []).map(r => [sim.ents.get(r.o), r]).filter(q => q[0]);
       if (kin.length || rel.length || v.mate) {
-        vr += `<div class="kin" data-test="kin">`;
+        vr += `<div class="sub">Friends</div><div class="kin" data-test="kin">`;
         const seen = new Set();
         const one = (o, glyph, tip) => { if (seen.has(o.id)) return; seen.add(o.id); vr += `<button data-act="focus:${o.id}"${tipAttr(o.name + "\n" + tip)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}<span class="nm">${esc(o.name.split(" ")[0].slice(0, 8))}</span><span class="rel">${svg(glyph, 12)}</span></button>`; };
         const mate = v.mate ? sim.ents.get(v.mate) : null;
@@ -21158,11 +21159,12 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
         for (const x of si.heat) h += `<span>With ${esc(x.fuelWord)}</span><b>${esc(x.levelName)} (level ${x.level}, P ${x.P.toFixed(2)})</b>`;
       }
       if (e.kind === "furniture" && e.f === "waterjar") h += `<span>Water</span><b>${e.fill} of 60 sips</b>`;
-      if (holder) h += `<span>Claimed by</span><b>${esc(holder.name)}</b>`;
+      if (e.kind === "furniture" && e.f === "board") h += `<span>Claimed by</span><b>${holder ? esc(holder.name) : "\u2014"}</b>`;
+      else if (holder) h += `<span>Claimed by</span><b>${esc(holder.name)}</b>`;
       h += `<span>Position</span><b>${e.x}, ${e.y}</b></div>`;
       if (e.kind === "furniture" && e.f === "board") {                                // 9.31: the notices as icon + count chips, a pin on a claimed one; nothing else
         const ch = noticeChips(e, sim.tick, (id) => name(sim, id));
-        h += `<div class="knows" data-test="board-notes"><div class="sub">Notices</div><p class="ttls">` + (ch.length ? ch.map(c => `<span class="ttl kn${c.claimed ? " claimed" : ""}${c.old ? " stale" : ""}"${tipAttr(c.tip)}>${svg(c.icon, 12)} ${esc(c.text)}${c.who ? " <small>" + esc(c.who) + "</small>" : ""}${c.claimed ? " " + svg("pin", 11) : ""}</span>`).join(" ") : `<span class="dim">-</span>`) + `</p></div>`;
+        h += `<div class="knows" data-test="board-notes"><div class="sub">Notices</div><div class="nrows">` + (ch.length ? ch.map(c => `<div class="ttl nrow kn${c.claimed ? " claimed" : ""}${c.old ? " stale" : ""}"${tipAttr(c.tip)}>${svg(c.icon, 12)} ${esc(c.text)}${c.who ? " <small>" + esc(c.who) + "</small>" : ""}${c.claimed ? " " + svg("pin", 11) : ""}</div>`).join("") : `<span class="dim">-</span>`) + `</div></div>`;
       }
       if (si || (e.kind === "furniture" && e.f === "hearth")) h += `<div class="btnrow"><button data-act="invest:${e.id}" title="Ask the selected villagers (or three adults) to try things out with what is in the stockpile, at this spot only. A standing job for three days.">Investigate here</button></div>`;
       if (si) {
@@ -22345,7 +22347,7 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
   })();
   
   __mod["ui/topbar.js"] = (function () {
-    // Top bar (UI_SPEC §5, §11): the time dial and Day, pause/play, and on the right Build, Book, Layers and Menu. Nothing else is for the player: game speed, MAX and
+    // Top bar (UI_SPEC §5, §11): the time dial and Day, pause/play, and on the right Book, Overlays and Menu. Nothing else is for the player: game speed, MAX and
     // skip-to are developer tools, shown only with ?debug=1 or Settings > Developer tools (keys 1-9 keep working either way). Plain DOM, built once;
     // update() writes only what changed.
     const { dateOf, SEASON_NAMES } = __mod["sim/clock.js"];
@@ -22380,9 +22382,8 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
         </span>
         <span class="tb-prog" data-test="skip-progress"></span>
         <span class="tb-spacer"></span>
-        ${btn({ icon: "build", label: "Build", tip: "Build\nPlan walls, floors, roofs, doors and beds", key: "", cls: "tb-build", test: "build-toggle", attrs: 'data-key="B"' })}
-        ${btn({ icon: "book", label: "Log", tip: "Log\nThe story, what the village knows, its people, the keys", cls: "tb-book", test: "book-btn", attrs: 'data-key="K"' })}
-        <span class="tb-menuwrap">${btn({ icon: "layers", tip: "Layers\nWhat to draw on the map", cls: "tb-layers", test: "layers" })}<div class="pop layers-pop" data-test="layers-pop"></div></span>
+        ${btn({ icon: "book", label: "Log", tip: "Log\nThe story, what the village knows, its people", cls: "tb-book", test: "book-btn", attrs: 'data-key="K"' })}
+        <span class="tb-menuwrap">${btn({ icon: "eye", tip: "Overlays\nBeds, job lines and warmth on the map", cls: "tb-layers", test: "layers" })}<div class="pop layers-pop" data-test="layers-pop"></div></span>
         <span class="tb-menuwrap">${btn({ icon: "menu", tip: "Menu\nSave, load, new game, settings, keys", cls: "tb-game", test: "menu" })}
           <div class="pop menu" data-test="menu-pop">
             <button data-m="save" data-test="m-save">${svg("save", 16)}Save to browser <kbd>Shift-S</kbd></button>
@@ -22426,7 +22427,7 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
     
       // layers
       const ovBtns = {};
-      lay.innerHTML = `<div class="lbl">On the map</div><div class="layers"></div>`;
+      lay.innerHTML = `<div class="lbl">Overlays</div><div class="layers"></div>`;
       for (const [k, icon, tip, key] of OVERLAYS) {
         const b = document.createElement("button"); b.className = "btn ico"; b.dataset.test = "layer-" + k; b.dataset.tip = tip + "\n" + "Key " + key; b.innerHTML = svg(icon, 16); b.setAttribute("aria-label", tip);
         b.onclick = () => { ui.overlays[k] = !ui.overlays[k]; };
@@ -22434,7 +22435,6 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
       }
       q(".tb-layers").onclick = (e) => { e.stopPropagation(); toggle(lay); };
       q(".tb-book").onclick = () => game.openBook();
-      q(".tb-build").onclick = () => game.setMode(ui.mode === "build" ? "select" : "build");
       q(".tb-game").onclick = (e) => {
         e.stopPropagation(); toggle(menu);
         const i = savedInfo();
@@ -22478,7 +22478,6 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
           const pb = q(".tb-pause"), pi = state.paused ? "play" : "pause";
           if (last.pi !== pi) { last.pi = pi; pb.innerHTML = svg(pi, 16); pb.dataset.tip = state.paused ? "Play\nSpace resumes" : "Pause\nSpace pauses"; }
           pb.classList.toggle("on", state.paused);
-          q(".tb-build").classList.toggle("on", ui.mode === "build");
           q(".tb-book").classList.toggle("on", !!ui.book);
           const sk = game.skipper, poss = !!game.possessed();
           buttons.forEach(([b, sp]) => b.classList.toggle("on", !state.paused && !sk.active && state.speed === sp));
@@ -22521,6 +22520,7 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
       slots.orders = mk("div", "dkOrders", "dk", "orders", slots.dock);
       slots.build = mk("div", "dkBuild", "dk", "build-dock", slots.dock);
       slots.possess = mk("div", "dkPossess", "dk", "possess-dock", slots.dock);
+      slots.act = mk("div", "dkAct", "dk", "act-dock", slots.dock);               // always visible: the common actions (Build)
       slots.guide = mk("div", "guide", "", "guide-slot");                           // 6.19b: onboarding hints
       slots.gauge = mk("div", "gauge", "", "gauge-slot");                           // 6.19b: the depth gauge
       slots.pointers = mk("div", "pointers", "", "pointers");
@@ -23741,9 +23741,69 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
     return { almanac, createAlmanacPanel };
   })();
   
-  __mod["ui/help.js"] = (function () {
-    // Help overlay (H or ?): the controls and a six-line "how to play".
+  __mod["ui/book.js"] = (function () {
+    // The Book (UI_SPEC §3.7, step a7): one sheet that merges the Almanac, the Chronicle, the villager roster and the Keys reference.
+    // Tabs: Story (the chronicle, an icon per event), Knowledge (the almanac), People (an avatar per villager, the graves). Keys live in their own sheet (Menu > Keys, H).
+    // Cut (reported): the separate World tab is part of Know ("This world" stays in the almanac page). Key K opens it; Esc closes it.
+    const { createChroniclePanel } = __mod["ui/chronicle.js"];
+    const { createAlmanacPanel } = __mod["ui/almanac.js"];
+    const { svg } = __mod["ui/icons.js"];
+    const { avatar, tipAttr, sr } = __mod["ui/kit.js"];
     const { esc } = __mod["ui/dom.js"];
+    const { isAdult, isElder, maxHp, fitness, ageDays } = __mod["sim/villager.js"];
+    
+    const TABS = [["story", "Story", "book"], ["know", "Knowledge", "knowledge"], ["people", "People", "people"]];
+    
+    function createBook(root, game) {
+      const { ui } = game;
+      root.innerHTML = `<div class="card" data-test="book-card"><div class="book-tabs sheet-head" data-test="book-tabs">`
+        + TABS.map(([k, l, ic]) => `<button data-test="book-tab" data-tab="${k}">${svg(ic, 16)}${l}</button>`).join("")
+        + `<button class="btn ico xbtn" data-test="book-close"${tipAttr("Close", "Esc")} aria-label="Close">${svg("close", 16)}</button></div>` + TABS.map(([k]) => `<div class="book-page" data-test="book-${k}" data-page="${k}"></div>`).join("") + `</div>`;
+      const page = (k) => root.querySelector(`[data-page="${k}"]`);
+      const chron = createChroniclePanel(page("story"), game, { flat: true });
+      const alm = createAlmanacPanel(page("know"), game, { flat: true });
+      const peopleEl = document.createElement("div"); peopleEl.className = "people"; page("people").appendChild(peopleEl);
+      ui.book = null;
+      game.openBook = (tab = "story") => { ui.book = tab; ui.help = false; };
+      game.closeBook = () => { ui.book = null; ui.help = false; };
+      game.openAlmanac = () => game.openBook("know");
+      root.addEventListener("click", (e) => {
+        if (e.target === root || e.target.closest(".xbtn")) { game.closeBook(); return; }
+        const t = e.target.closest("[data-tab]"); if (t) { ui.book = t.dataset.tab; return; }
+        const v = e.target.closest("[data-vid]"); if (v) { const id = Number(v.dataset.vid); if (game.sim.ents.get(id)) { game.selectOnly(id, true); game.closeBook(); } }
+      });
+      let lastPeople = "";
+      return {
+        update() {
+          const on = !!ui.book;
+          root.style.display = on ? "flex" : "none";
+          if (!on) return;
+          root.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === ui.book));
+          root.querySelectorAll(".book-page").forEach(p => p.classList.toggle("on", p.dataset.page === ui.book));
+          if (ui.book === "story") chron.update(); else if (ui.book === "know") alm.update();
+          else if (ui.book === "people") {
+            const { sim } = game;
+            let h = "";
+            for (const v of sim.ents.ofKind("villager")) {
+              const hurt = v.hp < 0.5 * maxHp(v, fitness(v, ageDays(sim, v)));
+              h += `<button class="nt ${ui.sel.includes(v.id) ? "on" : ""}" data-vid="${v.id}" data-test="people-card"${tipAttr(v.name + (v.ti && v.ti.length ? "\n" + v.ti.join("; ") : ""))}>${avatar(v.hue, v.lin, 26, !isAdult(sim, v))}<span class="nn">${esc(v.name)}</span>`
+                + (v.ti && v.ti.length ? `<span class="ti">${svg("star", 12)}</span>` : "") + (isElder(sim, v) ? svg("spoilage", 13) : "") + (hurt ? svg("hurt", 13) : "") + (v.ill ? svg("sick", 13) : "") + `</button>`;
+            }
+            for (const g of sim.ents.ofKind("grave")) h += `<span class="nt" data-test="grave"${tipAttr(g.name + "\nDied of " + g.cause)}>${svg("grave", 20)}<span class="nn">${esc(g.name)}</span></span>`;
+            if (h !== lastPeople) { lastPeople = h; peopleEl.innerHTML = h; }
+          }
+        },
+        chron, alm,
+      };
+    }
+    
+    return { createBook };
+  })();
+  
+  __mod["ui/help.js"] = (function () {
+    // Help sheet (H or ?, Menu > Keys): the controls and a six-line "how to play".
+    const { esc } = __mod["ui/dom.js"];
+    const { svg } = __mod["ui/icons.js"];
     
     const CONTROLS = [
       ["Click", "inspect a villager, plant, item, bed or the stockpile"],
@@ -23775,7 +23835,7 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
       ["Settings (top bar)", "every key can be changed (click Change, press a key; kept in this browser, not in the save), and: interface size, high contrast, colour-blind marks (letters and patterns beside colour) and reduced flashing. Game menu: New game has an Ironman option (one autosave slot, no loading), and every normal game autosaves once a game day into three slots"],
       ["Almanac (top bar)", "what the village knows and who holds it, Curiosities (things seen and not understood, with a hint), failed experiments, the era, and a debug trace of every discovery roll. Investigate sends 1-3 selected villagers to try things out for three days. Game menu > Force lightning makes the first fire happen now"],
       [(k) => k.label("panels"), "hide or show all panels"],
-      [(k) => k.label("book"), "open or close the Log: the story, what the village knows, its people, these keys"],
+      [(k) => k.label("book"), "open or close the Log: the story, what the village knows, its people"],
       ["Shift-S, Shift-O", "save to / load from this browser (Game menu: file download and upload)"],
     ];
     const HOW = [
@@ -23793,8 +23853,8 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
       const km = game.keymap, text = (v) => (typeof v === "function" ? v(km) : v);
       let last = "";
       const render = () => {
-        const h = `<div class="helpcard" data-test="keys"><button class="hclose">Close (${esc(km.label("help"))})</button> <button class="hreplay" data-test="replay-tips">Replay tips</button><h2>Keys</h2><details class="how"><summary>How to play</summary><ol>${HOW.map(t => `<li>${esc(t)}</li>`).join("")}</ol></details>
-          <h3>Controls</h3><div class="dim2">Keys shown are your current ones (Settings, top bar, changes them).</div><table>${CONTROLS.map(([k, d]) => `<tr><td><kbd>${esc(text(k))}</kbd></td><td>${esc(text(d))}</td></tr>`).join("")}</table></div>`;
+        const h = `<div class="card helpcard" data-test="keys"><div class="sheet-head"><h2>Keys</h2><button class="btn hreplay" data-test="replay-tips">Replay tips</button><button class="btn ico xbtn hclose" data-test="keys-close" data-tip="Close\n${esc(km.label("help"))}" aria-label="Close">${svg("close", 16)}</button></div><details class="how"><summary>How to play</summary><ol>${HOW.map(t => `<li>${esc(t)}</li>`).join("")}</ol></details>
+          <h3>Controls</h3><table>${CONTROLS.map(([k, d]) => `<tr><td><kbd>${esc(text(k))}</kbd></td><td>${esc(text(d))}</td></tr>`).join("")}</table></div>`;
         if (h !== last) { last = h; root.innerHTML = h; }
       };
       root.addEventListener("click", (e) => { if (e.target.closest(".hreplay")) { game.resetTips(); game.setTips(true); game.ui.help = false; game.toast("Tips will show again."); return; } if (e.target === root || e.target.closest(".hclose")) game.ui.help = false; });
@@ -23802,70 +23862,6 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
     }
     
     return { createHelp };
-  })();
-  
-  __mod["ui/book.js"] = (function () {
-    // The Book (UI_SPEC §3.7, step a7): one sheet that merges the Almanac, the Chronicle, the villager roster and the Keys reference.
-    // Tabs: Story (the chronicle, an icon per event), Know (the almanac), People (an avatar per villager, the graves), Keys (the controls table).
-    // Cut (reported): the separate World tab is part of Know ("This world" stays in the almanac page). Key K opens it; H opens it on Keys; Esc closes it.
-    const { createChroniclePanel } = __mod["ui/chronicle.js"];
-    const { createAlmanacPanel } = __mod["ui/almanac.js"];
-    const { createHelp } = __mod["ui/help.js"];
-    const { svg } = __mod["ui/icons.js"];
-    const { avatar, tipAttr, sr } = __mod["ui/kit.js"];
-    const { esc } = __mod["ui/dom.js"];
-    const { isAdult, isElder, maxHp, fitness, ageDays } = __mod["sim/villager.js"];
-    
-    const TABS = [["story", "Story", "book"], ["know", "Know", "knowledge"], ["people", "People", "people"], ["keys", "Keys", "help"]];
-    
-    function createBook(root, game) {
-      const { ui } = game;
-      root.innerHTML = `<div class="card" data-test="book-card"><button class="btn ico xbtn" data-test="book-close"${tipAttr("Close", "Esc")} aria-label="Close">${svg("close", 16)}</button><div class="book-tabs" data-test="book-tabs">`
-        + TABS.map(([k, l, ic]) => `<button data-test="book-tab" data-tab="${k}">${svg(ic, 16)}${l}</button>`).join("")
-        + `</div>` + TABS.map(([k]) => `<div class="book-page" data-test="book-${k}" data-page="${k}"></div>`).join("") + `</div>`;
-      const page = (k) => root.querySelector(`[data-page="${k}"]`);
-      const chron = createChroniclePanel(page("story"), game, { flat: true });
-      const alm = createAlmanacPanel(page("know"), game, { flat: true });
-      const keysInner = document.createElement("div"); page("keys").appendChild(keysInner);
-      const help = createHelp(keysInner, game);
-      const peopleEl = document.createElement("div"); peopleEl.className = "people"; page("people").appendChild(peopleEl);
-      ui.book = null;
-      game.openBook = (tab = "story") => { ui.book = tab; ui.help = tab === "keys"; };
-      game.closeBook = () => { ui.book = null; ui.help = false; };
-      game.openAlmanac = () => game.openBook("know");
-      root.addEventListener("click", (e) => {
-        if (e.target === root || e.target.closest(".xbtn") || e.target.closest(".hclose")) { game.closeBook(); return; }
-        const t = e.target.closest("[data-tab]"); if (t) { ui.book = t.dataset.tab; ui.help = ui.book === "keys"; return; }
-        const v = e.target.closest("[data-vid]"); if (v) { const id = Number(v.dataset.vid); if (game.sim.ents.get(id)) { game.selectOnly(id, true); game.closeBook(); } }
-      });
-      let lastPeople = "";
-      return {
-        update() {
-          if (ui.help && ui.book !== "keys") ui.book = "keys";          // H / the Help action opens the Book on Keys
-          if (!ui.help && ui.book === "keys") ui.book = null;
-          const on = !!ui.book;
-          root.style.display = on ? "flex" : "none";
-          if (!on) return;
-          root.querySelectorAll("[data-tab]").forEach(b => b.classList.toggle("on", b.dataset.tab === ui.book));
-          root.querySelectorAll(".book-page").forEach(p => p.classList.toggle("on", p.dataset.page === ui.book));
-          if (ui.book === "story") chron.update(); else if (ui.book === "know") alm.update(); else if (ui.book === "keys") help.update();
-          else if (ui.book === "people") {
-            const { sim } = game;
-            let h = "";
-            for (const v of sim.ents.ofKind("villager")) {
-              const hurt = v.hp < 0.5 * maxHp(v, fitness(v, ageDays(sim, v)));
-              h += `<button class="nt ${ui.sel.includes(v.id) ? "on" : ""}" data-vid="${v.id}" data-test="people-card"${tipAttr(v.name + (v.ti && v.ti.length ? "\n" + v.ti.join("; ") : ""))}>${avatar(v.hue, v.lin, 26, !isAdult(sim, v))}<span class="nn">${esc(v.name)}</span>`
-                + (v.ti && v.ti.length ? `<span class="ti">${svg("star", 12)}</span>` : "") + (isElder(sim, v) ? svg("spoilage", 13) : "") + (hurt ? svg("hurt", 13) : "") + (v.ill ? svg("sick", 13) : "") + `</button>`;
-            }
-            for (const g of sim.ents.ofKind("grave")) h += `<span class="nt" data-test="grave"${tipAttr(g.name + "\nDied of " + g.cause)}>${svg("grave", 20)}<span class="nn">${esc(g.name)}</span></span>`;
-            if (h !== lastPeople) { lastPeople = h; peopleEl.innerHTML = h; }
-          }
-        },
-        chron, alm, help,
-      };
-    }
-    
-    return { createBook };
   })();
   
   __mod["ui/pick.js"] = (function () {
@@ -26149,7 +26145,7 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
       const clearSpot = (p) => p.x > 330 && p.x < game.cam.vw - 340 && p.y > 130 && p.y < game.cam.vh - 130;
       document.addEventListener("click", (e) => { if (e.target.closest && e.target.closest("[data-test=concern-chip],[data-test=pointer]")) ui.chipClicked = 1; }, true);
       const HINTS = [
-        { id: "select", intro: 1, at: 0, words: "Click a slime", act: "click", when: () => !ui.sel.length, done: () => ui.sel.length > 0, target: () => { const v = ent("villager").find(v => game.renderer.isShown(v) && clearSpot(at(v))); return v && at(v); } },
+        { id: "select", intro: 1, at: 0, words: "Drag a box round slimes", act: "drag", when: () => !ui.sel.length, done: () => ui.sel.length > 0, target: () => { const v = ent("villager").find(v => game.renderer.isShown(v) && clearSpot(at(v))); return v && at(v); } },
         { id: "concern", intro: 1, at: 1, words: "Click to look", act: "click", when: () => (ui.concerns || []).some(c => c.sev >= 2) && !!document.querySelector("[data-test=concern-chip]"), done: () => !!ui.chipClicked, target: () => dom("[data-test=concern-chip]") },
         { id: "why", intro: 1, at: 1, words: "See why they act", act: "point", when: () => ui.sel.length > 0 && !!document.querySelector("[data-test=why-chain]"), done: () => !!ui.whyHover, target: () => dom("[data-test=why-chain]") },
         { id: "order", intro: 1, at: 1, words: "Right-click to order", act: "rclick", when: () => ui.sel.length > 0, done: () => game.sim.ents.ofKind("villager").some(v => v.order || v.as), target: () => { const t = ent("plant").find(p => p.species === "tree" && game.renderer.isShown(p) && clearSpot(at(p))); return t && at(t); } },
@@ -26219,6 +26215,8 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
     const { createWhisper } = __mod["ui/whisper.js"];
     const { createVillageHud } = __mod["ui/village_hud.js"];
     const { createBook } = __mod["ui/book.js"];
+    const { createHelp } = __mod["ui/help.js"];
+    const { btn } = __mod["ui/kit.js"];
     const { concernPlaces } = __mod["ui/concernplace.js"];
     const { pickAt } = __mod["ui/pick.js"];
     const { LABEL } = __mod["ui/village_hud.js"];
@@ -26424,11 +26422,15 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
     const orderbar = createOrderBar(slots.orders, game);
     const minimap = createMinimap(slots.minimap, game);
     const buildbar = createBuildMode(game, slots.build);
+    slots.act.innerHTML = btn({ icon: "build", label: "Build", tip: "Build\nPlan walls, floors, roofs, doors and beds", cls: "big lab", test: "build-toggle", attrs: 'data-key="B"' });
+    const buildBtn = slots.act.querySelector("button");
+    buildBtn.onclick = () => game.setMode(game.ui.mode === "build" ? "select" : "build");
     const pointers = createPointers(slots.pointers, game);
     const levels = createLevels(game, slots.gauge);
     const guide = createGuide(game, slots.guide);
     const digest = createDigest($("digest"), game);
     const book = createBook($("book"), game);
+    const help = createHelp($("helpOverlay"), game);
     const settings = createSettings($("settingsOverlay"), game);
     const tip = $("tip");
     document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("button"); if (b && !(b instanceof HTMLInputElement)) b.blur(); });   // so Space pauses, not "presses" the last button
@@ -26523,9 +26525,10 @@ window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10
         panelT = now;
         bar.update({ tick: sim.tick });
         possessCtl.update();
-        revealer.update(); levels.update(); guide.update(); village.update(); bps.update(); expd.update(); cchoice.update(); buildbar.update(); inspector.update(); notables.update(); orderbar.update(); digest.update(); book.update(); settings.update(); pointers.update();
+        revealer.update(); levels.update(); guide.update(); village.update(); bps.update(); expd.update(); cchoice.update(); buildbar.update(); inspector.update(); notables.update(); orderbar.update(); digest.update(); book.update(); help.update(); settings.update(); pointers.update();
         slots.popover.style.display = ui.mode === "build" && ui.bpOpen && game.unlocked("blueprints") ? "block" : "none";
-        slots.dock.style.display = (ui.mode === "build" || ui.sel.length || game.possessed()) ? "flex" : "none";
+        slots.dock.style.display = game.possessed() ? "none" : "flex";
+        buildBtn.classList.toggle("on", game.ui.mode === "build");
         $("perf").textContent = `${state.fps.toFixed(0)} fps · ${state.msPerTick.toFixed(2)} ms/tick · seed ${sim.seed} · tick ${sim.tick} · z ${renderer.z}`;
         $("hint").textContent = game.possessed() ? "Guiding a villager: WASD walk · E / click use what is next to you · Esc release" : ui.mode === "build" ? "Build mode: drag to plan, R rotates a stamp, [ ] changes level, Esc leaves" : ui.targeting ? "Click the map to place the order" : ui.sel.length ? "Right-click to order · Tab next · F follow · Esc deselect" : "Click a villager to see what it is doing and why · H: help";
         document.body.classList.toggle("building", ui.mode === "build");

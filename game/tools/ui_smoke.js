@@ -1482,7 +1482,7 @@ await G(() => { __game.fpvDevOff = false; });
   await shot(page, "ui-s19a-smoke-hud");
   // the Book has its tabs; K opens it and Esc closes it
   await page.keyboard.press("k"); await page.waitForTimeout(300);
-  assert.equal(await page.locator("[data-test=book-tab]").count(), 4); assert.ok(await page.locator("[data-test=book]").isVisible());
+  assert.equal(await page.locator("[data-test=book-tab]").count(), 3); assert.ok(await page.locator("[data-test=book]").isVisible());
   await page.keyboard.press("Escape"); await page.waitForTimeout(200); assert.ok(!(await page.locator("[data-test=book]").isVisible())); ok("K opens the Book (Story, Know, People, Keys) and Esc closes it");
   // a concern chip per concern and a pointer for an off-screen one; the 1920x1080 composition
   await G(() => { const g = __game; g.sim.board.fc = 1; window.__cam0 = [g.cam.x, g.cam.y]; g.cam.x += 80; }); await page.waitForTimeout(600);
@@ -1577,10 +1577,10 @@ await G(() => { __game.fpvDevOff = false; });
   await G(() => { __game.ui.settings = true; }); await page.waitForTimeout(300); assert.ok(await page.locator("[data-test=opt-tips]").isVisible(), "Settings has Show tips"); await G(() => { __game.ui.settings = false; });
   await G(() => { const g = __game; g.setTips(true); g.resetTips(); g.guide.t0 = performance.now() - 5000; g.clearSelection(); g.renderer.setZ(g.D - 1); g.cam.zoom = 18; g.cam.x = g.sim.site.x + 8; g.cam.y = g.sim.site.y; g.ui.mode = "select"; });
   await page.waitForTimeout(900);
-  assert.equal((await page.locator("[data-test=guide-caption]").innerText()).trim(), "Click a slime"); assert.ok(await page.locator("[data-test=guide-ring]").isVisible() && await page.locator("[data-test=guide-hand]").isVisible());
+  assert.equal((await page.locator("[data-test=guide-caption]").innerText()).trim(), "Drag a box round slimes"); assert.ok(await page.locator("[data-test=guide-ring]").isVisible() && await page.locator("[data-test=guide-hand]").isVisible());
   await shot(page, "ui-s19b-onboarding");
   const gv = await G(() => { const g = __game, id = g.guide.cur && g.guide.cur.id, v = g.sim.ents.ofKind("villager")[0]; g.selectOnly(v.id); return id; }); await page.waitForTimeout(700);
-  assert.equal(gv, "select"); assert.ok(!(await page.locator("[data-test=guide-caption]").isVisible()) || (await page.locator("[data-test=guide-caption]").innerText()).trim() !== "Click a slime"); ok("the first hint (\"Click a slime\") shows a pulse, a hand and a caption, and ends when you do it");
+  assert.equal(gv, "select"); assert.ok(!(await page.locator("[data-test=guide-caption]").isVisible()) || (await page.locator("[data-test=guide-caption]").innerText()).trim() !== "Drag a box round slimes"); ok("the first hint (\"Click a slime\") shows a pulse, a hand and a caption, and ends when you do it");
   await G(() => { __game.setTips(false); __game.clearSelection(); __game.setLevel(__game.D - 1); });
 }
 

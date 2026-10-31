@@ -677,3 +677,8 @@ Phase 9 stage 6, the last (`notes/impl/PHASE9_KNOWLEDGE.md`). Slimes learn from 
 - **Map blips** show the same tip as their Village pill (main.js `tooltip`, via `concernPlaces`).
 - **Minimap wheel** zooms about the cursor (the camera moves, the map repaints at once, so the next click maps to what is drawn).
 - **Building height**: in the Surface view a placement and its ghost sit on top of the clicked block (`cellOf` in ui/build.js); layer and underground views keep the viewed level.
+
+## Playtest UI fixes
+- Map header buttons borderless; build bar status row fixed at 26 px (no jump); slime card rows headed "Selected" and "Friends"; notice board keeps "Claimed by" ("—" when free) and lists notices as full-width rows.
+- Log has three tabs (Story, Knowledge, People) with a sticky header and one close button. Keys and Replay tips are their own sheet (Menu > Keys, or H / ?).
+- "Layers" is now "Overlays" (eye icon). Build is a persistent button at the bottom of the dock (key B). First tip reads "Drag a box round slimes"; click, box or strip chip all finish it.

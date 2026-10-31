@@ -1,5 +1,6 @@
-// Help overlay (H or ?): the controls and a six-line "how to play".
+// Help sheet (H or ?, Menu > Keys): the controls and a six-line "how to play".
 import { esc } from "./dom.js";
+import { svg } from "./icons.js";
 
 const CONTROLS = [
   ["Click", "inspect a villager, plant, item, bed or the stockpile"],
@@ -31,7 +32,7 @@ const CONTROLS = [
   ["Settings (top bar)", "every key can be changed (click Change, press a key; kept in this browser, not in the save), and: interface size, high contrast, colour-blind marks (letters and patterns beside colour) and reduced flashing. Game menu: New game has an Ironman option (one autosave slot, no loading), and every normal game autosaves once a game day into three slots"],
   ["Almanac (top bar)", "what the village knows and who holds it, Curiosities (things seen and not understood, with a hint), failed experiments, the era, and a debug trace of every discovery roll. Investigate sends 1-3 selected villagers to try things out for three days. Game menu > Force lightning makes the first fire happen now"],
   [(k) => k.label("panels"), "hide or show all panels"],
-  [(k) => k.label("book"), "open or close the Log: the story, what the village knows, its people, these keys"],
+  [(k) => k.label("book"), "open or close the Log: the story, what the village knows, its people"],
   ["Shift-S, Shift-O", "save to / load from this browser (Game menu: file download and upload)"],
 ];
 const HOW = [
@@ -49,8 +50,8 @@ export function createHelp(root, game) {
   const km = game.keymap, text = (v) => (typeof v === "function" ? v(km) : v);
   let last = "";
   const render = () => {
-    const h = `<div class="helpcard" data-test="keys"><button class="hclose">Close (${esc(km.label("help"))})</button> <button class="hreplay" data-test="replay-tips">Replay tips</button><h2>Keys</h2><details class="how"><summary>How to play</summary><ol>${HOW.map(t => `<li>${esc(t)}</li>`).join("")}</ol></details>
-      <h3>Controls</h3><div class="dim2">Keys shown are your current ones (Settings, top bar, changes them).</div><table>${CONTROLS.map(([k, d]) => `<tr><td><kbd>${esc(text(k))}</kbd></td><td>${esc(text(d))}</td></tr>`).join("")}</table></div>`;
+    const h = `<div class="card helpcard" data-test="keys"><div class="sheet-head"><h2>Keys</h2><button class="btn hreplay" data-test="replay-tips">Replay tips</button><button class="btn ico xbtn hclose" data-test="keys-close" data-tip="Close\n${esc(km.label("help"))}" aria-label="Close">${svg("close", 16)}</button></div><details class="how"><summary>How to play</summary><ol>${HOW.map(t => `<li>${esc(t)}</li>`).join("")}</ol></details>
+      <h3>Controls</h3><table>${CONTROLS.map(([k, d]) => `<tr><td><kbd>${esc(text(k))}</kbd></td><td>${esc(text(d))}</td></tr>`).join("")}</table></div>`;
     if (h !== last) { last = h; root.innerHTML = h; }
   };
   root.addEventListener("click", (e) => { if (e.target.closest(".hreplay")) { game.resetTips(); game.setTips(true); game.ui.help = false; game.toast("Tips will show again."); return; } if (e.target === root || e.target.closest(".hclose")) game.ui.help = false; });

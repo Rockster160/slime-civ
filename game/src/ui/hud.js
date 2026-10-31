@@ -24,6 +24,7 @@ export function createHud(game, params) {
   slots.orders = mk("div", "dkOrders", "dk", "orders", slots.dock);
   slots.build = mk("div", "dkBuild", "dk", "build-dock", slots.dock);
   slots.possess = mk("div", "dkPossess", "dk", "possess-dock", slots.dock);
+  slots.act = mk("div", "dkAct", "dk", "act-dock", slots.dock);               // always visible: the common actions (Build)
   slots.guide = mk("div", "guide", "", "guide-slot");                           // 6.19b: onboarding hints
   slots.gauge = mk("div", "gauge", "", "gauge-slot");                           // 6.19b: the depth gauge
   slots.pointers = mk("div", "pointers", "", "pointers");
