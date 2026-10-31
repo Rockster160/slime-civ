@@ -9,6 +9,7 @@ import { restricted } from "./lair.js";
 import { steadfast } from "./possess.js";
 import { EXPLORE_P, SCOUT_P, EXPLORE_LEASH } from "./memory.js";
 import { dist3 } from "./util.js";
+import { oreCells } from "./know.js";
 
 export const EXPLORE_GAP = 150;        // ticks between one explore walk and the next (a slime does not trail back and forth)
 const LOG_SCAN = 500;                  // the newest cells seen are where a cave's frontier is
@@ -37,11 +38,10 @@ function caveFrontier(sim, v, scout) {
   return best;
 }
 /** A walkable cell beside a known ore or gem cell, nearest first (at least 4 away from where the slime already is). */
-function outcrop(sim, v, subj) {
-  const w = sim.world;
+function outcrop(ctx, v, subj) {
+  const sim = ctx.sim, w = sim.world;
   let best = null, bd = 1e9;
-  for (const m of KNOWN[subj]) for (const i of sim.seen.known[m] || []) {
-    const [x, y, z] = World.xyz(i);
+  for (const [x, y, z] of oreCells(ctx, KNOWN[subj])) {              // 9.29: only the ore this slime has seen or dug into (its ore:<mat> patches), not the village's whole map
     if (!inLeash(sim, x, y)) continue;
     for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) for (const dz of [0, 1, -1]) {
       const sx = x + dx, sy = y + dy, sz = z + dz;
@@ -63,7 +63,7 @@ export function genExplore(ctx, H) {
   for (const sj of SUBJ_ORDER) for (const s of v.mem) if (s[0] === sj && s[1] >= EXPLORE_P && s[1] > s[2] && s[1] - s[2] > bs) { bs = s[1] - s[2]; subj = sj; }
   if (!subj) return;
   const p = v.mem.find(s => s[0] === subj)[1], scout = subj === "cave" && p >= SCOUT_P && v.ps.c > 50;
-  const tg = subj === "cave" ? caveFrontier(sim, v, scout) : outcrop(sim, v, subj);
+  const tg = subj === "cave" ? caveFrontier(sim, v, scout) : outcrop(ctx, v, subj);
   if (!tg) return;
   H.add(ctx, { kind: "explore", cls: "leisure", urg: 0.8, grp: "explore", key: "explore:" + subj, sj: [subj], scout, d: dist3(v.x, v.y, v.z, tg.x, tg.y, tg.z), tid: 0, mk: () => {
     if (!H.reach(ctx, tg)) return { blocker: "NO_PATH" };

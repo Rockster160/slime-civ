@@ -46,7 +46,14 @@ export function cartAnimal(sim, w, assign = true) {
   if (!ok(e)) {
     e = null;
     const taken = new Set(wagons(sim).filter(q => q !== w && q.an).map(q => q.an));
-    for (const g of sim.ents.ofKind("fauna")) if (g.sp === "grazer" && ok(g) && !taken.has(g.id)) { e = g; break; }
+    // 9.32: the grazers standing in a finished pen (the player's own pens, read cell by cell), not a scan of every creature in the world; the lowest id wins, as the old id-order scan did
+    for (const p of sim.farm.pens) {
+      if (!p.built) continue;
+      for (let y = p.y0; y <= p.y1; y++) for (let x = p.x0; x <= p.x1; x++) for (let dz = -1; dz <= 1; dz++) {
+        const ids = sim.ents.at(x, y, p.z + dz);
+        for (let i = 0; i < ids.length; i++) { const g = sim.ents.get(ids[i]); if (g && g.kind === "fauna" && g.sp === "grazer" && ok(g) && !taken.has(g.id) && (!e || g.id < e.id)) e = g; }
+      }
+    }
     if (e && assign) w.an = e.id; else if (!e && assign) w.an = 0;
   }
   return e ? { e, pen: penById(sim, e.pen) } : null;
@@ -59,9 +66,9 @@ export function wagonReady(sim, w) {
   return a.pen.fod >= CART_FODDER && !a.pen.hg ? "" : "NO_FODDER";
 }
 /** The wagon a villager on a long haul would take: the nearest free, ready one within WAGON_NEAR (carts before wagons at equal distance). null when none. */
-export function freeWagon(sim, v, reservedByOther) {
+export function freeWagon(sim, v, reservedByOther, list = wagons(sim)) {
   let best = null, bd = 1e9;
-  for (const w of wagons(sim)) {
+  for (const w of list) {
     if ((w.dr && w.dr !== v.id) || reservedByOther(sim, w, v.id) || wagonReady(sim, w)) continue;
     const d = Math.abs(w.x - v.x) + Math.abs(w.y - v.y) + 2 * Math.abs(w.z - v.z) - (w.t === "cart" ? 3 : 0);
     if (d < bd && d <= WAGON_NEAR) { bd = d; best = w; }

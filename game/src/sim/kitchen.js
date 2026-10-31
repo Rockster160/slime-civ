@@ -16,10 +16,10 @@ for (const k of Object.keys(DISHES)) DISH_OF[DISHES[k].from] = k;
 export const COOK_DIFF = 0.3;                        // craft XP difficulty of a cook batch
 
 /** [{room, hearth}] of every closed Kitchen with a fire ring in it, in hearth order. */
-export function kitchens(sim) {
+export function kitchens(sim, hearths) {       // 9.29: a planner passes the hearths it believes in; no list = every furnace in the world (the HUD, tests)
   const out = [];
   if (!sim.rooms.list.size) return out;
-  for (const h of sim.ents.ofKind("furniture")) {
+  for (const h of hearths || sim.ents.ofKind("furniture")) {
     if (h.f !== "hearth") continue;
     const room = kitchenAt(sim, h);
     if (room) out.push({ room, hearth: h });

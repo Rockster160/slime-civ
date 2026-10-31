@@ -13,6 +13,11 @@ import { JOB_ICON } from "../ui/inspector.js";
 import { seenTraps, gasClouds, TRAP_LABEL } from "../sim/traps.js";
 import { dungeonsIn, isAir } from "../sim/dungeon.js";
 import { isSeen } from "../sim/seen.js";
+import { boardsOf } from "../sim/notices.js";
+import { noticeChips } from "../ui/boardtext.js";
+import { factMark } from "../ui/beltext.js";
+import { STALE } from "../sim/belief.js";
+import { ROLE } from "../sim/orders.js";
 
 const TAU = Math.PI * 2;
 const ALERT_ICON = { hungry: "food", thirsty: "water", cold: "cold", tired: "energy", sick: "sick", hurt: "hurt", stuck: "blocked" };
@@ -140,6 +145,41 @@ export function drawDecor(game, ctx) {
     flash(e, sx, sy);
     if ((ui.hover && ui.hover.ents && ui.hover.ents.includes(e)) || (e.mon && e.st === "attack" && ts >= 10)) tag(ctx, faunaWord(e), sx, sy - ts * 1.2 - 6);       // 7.22: a monster in a fight says what it is doing ("Crawler: Biting")
   }
+  // 9.31: a board hovered or selected shows its notices as icon + count chips (a request: the amount short; a pin on a claimed one)
+  for (const b of boardsOf(sim)) {
+    if (!inView(b.x, b.y) || !renderer.isShown(b) || !((ui.hover && ui.hover.ents && ui.hover.ents.includes(b)) || ui.sel.includes(b.id))) continue;
+    const [sx, sy] = cam.toScreen(...renderer.drawPos(b), b.z), ch = noticeChips(b, sim.tick, (id) => { const o = sim.ents.get(id); return o ? o.name : ""; }).slice(0, 7);
+    ctx.font = "700 11px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+    let x = sx - ch.length * 21, y = sy - ts * 1.5;
+    for (const c of ch) {
+      const w = 22 + ctx.measureText(c.text).width + (c.claimed ? 10 : 0);
+      ctx.globalAlpha = c.old ? 0.55 : 1;                                   // 9.32: an old notice is faded
+      ctx.fillStyle = "rgba(10,14,20,.82)"; ctx.strokeStyle = c.claimed ? TOKENS.warm : "#c9a468"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y - 10, w, 20, 10) : ctx.rect(x, y - 10, w, 20); ctx.fill(); ctx.stroke();
+      drawIcon(ctx, c.icon, x + 4, y - 7, 14, TOKENS.tx); ctx.fillStyle = "#fff"; ctx.fillText(c.text, x + 20, y + 1);
+      if (c.claimed) drawIcon(ctx, "pin", x + w - 13, y - 6, 11, TOKENS.warm);
+      if (c.who) { ctx.font = "600 9px system-ui, sans-serif"; ctx.fillStyle = "#e6d9b8"; ctx.fillText(c.who, x + 4, y + 17); ctx.font = "700 11px system-ui, sans-serif"; }      // 9.32: whose hand wrote it
+      ctx.globalAlpha = 1;
+      x += w + 3;
+    }
+  }
+  // 9.32: the one selected slime's beliefs as faint marks where it thinks things are (fresh = green, ageing = amber, stale = grey with a "?"): the map it carries in its head, not the map that is
+  if (ui.sel.length === 1 && ts >= 6) {
+    const bv = sim.ents.get(ui.sel[0]);
+    if (bv && bv.kind === "villager" && bv.bel) {
+      ctx.font = "700 10px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      for (const f of bv.bel) {
+        const m = factMark(f, sim.tick);
+        if (!m || !inView(f[1], f[2])) continue;
+        const [sx, sy] = cam.toScreen(f[1] + 0.5, f[2] + 0.5, f[3]), r = Math.max(6, ts * 0.3), col = m.stale ? "#9aa3b2" : m.age > STALE / 2 ? "#e0b24a" : "#6fbf73";
+        ctx.globalAlpha = m.stale ? 0.6 : 0.9; ctx.fillStyle = "rgba(10,14,20,.8)"; ctx.beginPath(); ctx.arc(sx, sy - ts * 0.5, r, 0, TAU); ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,.75)"; ctx.lineWidth = 4; ctx.stroke();                              // a dark outer line so the ring reads on green grass
+        ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.setLineDash([3, 2]); ctx.stroke(); ctx.setLineDash([]);
+        drawIcon(ctx, m.icon, sx - r * 0.62, sy - ts * 0.5 - r * 0.62, r * 1.24, col, 1.5);
+        if (m.stale) { ctx.fillStyle = "#fff"; ctx.fillText("?", sx + r * 0.7, sy - ts * 0.5 - r * 0.7); }
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
   // slimes: a class dot above each, the job chip and a short label for the selected / hovered, a need badge when something is wrong
   const sel = new Set(ui.sel), hov = ui.hover && ui.hover.villager;
   let n = 0;
@@ -150,8 +190,17 @@ export function drawDecor(game, ctx) {
     const focus = sel.has(v.id) || v === hov;
     const cls = v.job && CLASS[v.job.c] ? CLASS[v.job.c].color : null;
     if (!focus && cls && ts >= 6 && n++ < 140) { ctx.fillStyle = cls; ctx.strokeStyle = "rgba(0,0,0,.7)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(sx, head, Math.max(2, ts * 0.12), 0, TAU); ctx.fill(); ctx.stroke(); }
+    if (v.job && v.job.rq && ts >= 6) { const r = Math.max(6, ts * 0.32), ax = sx - ts * 0.42, ay = head + 2; ctx.fillStyle = TOKENS.s2; ctx.strokeStyle = "#c9a468"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ax, ay, r, 0, TAU); ctx.fill(); ctx.stroke(); drawIcon(ctx, v.job.rq === "grass" ? "gather" : "chop", ax - r * 0.62, ay - r * 0.62, r * 1.24, TOKENS.tx); }     // 9.31: off to fill a request from the board: the request's icon
     const al = ts >= 8 ? alerts(sim, v).filter(a => ALERT_ICON[a.k]) : [];
     if (!focus && al.length) { const r = Math.max(6, ts * 0.32), ax = sx + ts * 0.42, ay = head + 2; ctx.fillStyle = TOKENS.s2; ctx.strokeStyle = TOKENS.warm; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(ax, ay, r, 0, TAU); ctx.fill(); ctx.stroke(); drawIcon(ctx, ALERT_ICON[al[0].k], ax - r * 0.6, ay - r * 0.6, r * 1.2, TOKENS.tx, 1.5); }
+    if (v.as && ROLE[v.as.task] && ts >= 8) {                       // D58: the role under the slime, as an icon and one word (the icon alone when zoomed out)
+      const ro = ROLE[v.as.task], word = ts >= 12 ? ro.name : "";
+      ctx.font = "700 10px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+      const w = 20 + (word ? ctx.measureText(word).width + 4 : 0), x0 = sx - w / 2, y0 = sy + ts * 0.5;
+      ctx.fillStyle = "rgba(10,14,20,.82)"; ctx.strokeStyle = CLASS.order.color; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x0, y0, w, 16, 8) : ctx.rect(x0, y0, w, 16); ctx.fill(); ctx.stroke();
+      drawIcon(ctx, ro.icon, x0 + 3, y0 + 2, 12, TOKENS.tx);
+      if (word) { ctx.fillStyle = "#fff"; ctx.fillText(word, x0 + 17, y0 + 9); }
+    }
     if (focus) {
       const icon = JOB_ICON[v.job && v.job.k] || (v.slp === 1 ? "sleep" : "idle"), r = 11;
       ctx.fillStyle = TOKENS.s2; ctx.strokeStyle = cls || "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(sx, head - 6, r, 0, TAU); ctx.fill(); ctx.stroke();

@@ -26,6 +26,9 @@ import { CELLAR_X, JAR_X, JAR_HOLD } from "../sim/items.js";
 import { WAGON, WAGON_FAR, CART_FODDER, cartAnimal, wagonReady } from "../sim/wagon.js";
 import { inTerritory } from "../sim/lair.js";
 import { memChips, episodeLines } from "./memtext.js";
+import { knowChips } from "./beltext.js";
+import { noticeChips } from "./boardtext.js";
+import { ROLE } from "../sim/orders.js";
 import { wagonLine, cellInfo, stationInfo, explain, jobNoun, JOB, CLASS, describe, stageText, bedText, itemName, pct, TRAIT_INFO, SKILL_INFO, traitWord, skillWord, professionText, shortBlocker } from "./text.js";
 
 const NEEDS = [["hunger", "Food"], ["thirst", "Water"], ["energy", "Energy"], ["warm", "Warmth"], ["mood", "Mood"]];
@@ -36,7 +39,7 @@ const SKILL_CAP = { dig: "Dig", build: "Build", craft: "Craft" };
 const NEED_ICON = { hunger: "food", thirst: "water", energy: "energy", warm: "warmth" };
 const TRAIT_ICON = { strength: "haul", speed: "flee", stamina: "health", intelligence: "knowledge", drive: "bolt", leisure: "mood-hi", fertility: "people", longevity: "spoilage", hardiness: "warmth" };
 const SKILL_ICON = { dig: "dig", build: "build", craft: "craft" };
-export const JOB_ICON = { eat: "eat", drink: "drink", sleep: "sleep", huddle: "sleep", leisure: "mood-hi", forage: "forage", dry: "rack", build_bed: "bed", build_rack: "rack", build_site: "build", craft_site: "craft", deconstruct: "deconstruct", dig: "dig", mine: "dig", cut: "gather", chop: "chop", haul: "haul", store: "drop", goto: "move", tend_fire: "hearth", fire_kiln: "kiln", burn_charcoal: "mound", smelt: "forge", smoke: "smoker", make_tool: "workbench", fetch_water: "water", tinker: "knowledge", explore: "scout", cook: "hearth", haul_wagon: "haul", flee: "flee", defend: "hunt", mend: "tend", convalesce: "tend", tend_sick: "tend", hunt: "hunt", till: "field", sow: "sprout", water_field: "water", harvest: "field", fence: "pen", fodder: "gather", slaughter: "hunt", capture: "capture", scout: "scout", strike: "hunt", disarm: "craft" };
+export const JOB_ICON = { eat: "eat", drink: "drink", sleep: "sleep", huddle: "sleep", leisure: "mood-hi", forage: "forage", dry: "rack", build_bed: "bed", build_rack: "rack", build_site: "build", craft_site: "craft", deconstruct: "deconstruct", dig: "dig", mine: "dig", cut: "gather", chop: "chop", haul: "haul", store: "drop", goto: "move", tend_fire: "hearth", fire_kiln: "kiln", burn_charcoal: "mound", smelt: "forge", smoke: "smoker", make_tool: "workbench", fetch_water: "water", tinker: "knowledge", explore: "scout", post: "board", check_board: "board", look: "scout", search_food: "scout", search: "scout", grub: "cleararea", cook: "hearth", haul_wagon: "haul", flee: "flee", defend: "hunt", mend: "tend", convalesce: "tend", tend_sick: "tend", hunt: "hunt", till: "field", sow: "sprout", water_field: "water", harvest: "field", fence: "pen", fodder: "gather", slaughter: "hunt", capture: "capture", scout: "scout", strike: "hunt", disarm: "craft" };
 const RIM = { need: "circle", vcrit: "tri", order: "sq", standing: "hex", demand: "none", leisure: "none" };
 
 /** The "Now" section (UI_SPEC §3.2): why this villager is doing this, as a chain of icons. Words are in tips and in a hidden copy; "Say it in words" opens the table. */
@@ -151,6 +154,8 @@ function villagerHtml(game, v) {
     if (ui.sel.length > CHIPS) selH += `<span class="rel">+${ui.sel.length - CHIPS}</span>`;
     selH += `</div>`;
   }
+  if (v.order && v.order.verb === "clear_area") h += `<div class="ins-head" data-sec="role" data-test="role"${tipAttr("Clear area\nJust following your instructions (X cancels)")}>${svg("cleararea", 16)}<b class="rl">Clear area</b></div>`;
+  else if (v.as && ROLE[v.as.task]) h += `<div class="ins-head" data-sec="role" data-test="role"${tipAttr(ROLE[v.as.task].name + "\nKeeps at it until you reassign or cancel (X)")}>${svg(ROLE[v.as.task].icon, 16)}<b class="rl">${ROLE[v.as.task].name}</b>${v.as.done ? `<span class="rel">${v.as.done}</span>` : ""}</div>`;
   // life bar: child / adult / elder segments, a marker where they are
   const lifeFrac = Math.min(1, age / LIFE_DAYS);
   h += `<div class="ins-head" data-sec="life"><span class="cap lifecap">${{ child: "Child", adult: "Adult", elder: "Elder" }[lifeStage(sim, v)]}</span><span class="mt" style="flex:1;height:10px"${tipAttr(stageText(sim, v) + (elder ? " (past their prime)" : "") + "\n" + family(sim, v))}><i style="width:20%;background:var(--water);opacity:.55"></i><i style="left:20%;width:60%;background:var(--ok);opacity:.55"></i><i style="left:80%;width:20%;background:var(--cold);opacity:.55"></i><b class="mk" style="left:${(lifeFrac * 100).toFixed(1)}%;background:#fff;width:3px"></b></span>`
@@ -197,6 +202,9 @@ function villagerHtml(game, v) {
   // memories (experiment, memory.js): up to 3 chips and the vivid episodes, as words; nothing when the slime has lived through nothing yet
   const chips = memChips(v), epis = episodeLines(v);
   if (chips.length || epis.length) vr += `<div class="mem" data-test="memories"><div class="sub">Memories</div>` + (chips.length ? `<p class="ttls">` + chips.map(c => `<span class="ttl"${tipAttr(c.tip)}>${esc(c.text)}</span>`).join(" ") + `</p>` : "") + (epis.length ? `<p class="dim">` + epis.map(esc).join(" · ") + `</p>` : "") + `</div>`;
+  // what it believes (9.28, belief.js): icon + label + count per kind; a stale belief is faded and marked "?"
+  const know = knowChips(v, sim.tick);
+  if (know.length) vr += `<div class="knows" data-test="knows"><div class="sub">Knows</div><p class="ttls">` + know.map(c => `<span class="ttl kn${c.stale ? " stale" : ""}"${tipAttr(c.tip)}>${svg(c.icon, 12)} ${esc(c.label)} ${c.n}${c.stale ? "?" : ""}</span>`).join(" ") + `</p></div>`;
   // actions: teach / split
   const pupils = ui.sel.filter(id => id !== v.id).map(id => sim.ents.get(id)).filter(o => o && isAdult(sim, o));
   const acts = (isAdult(sim, v) && pupils.length ? pupils.slice(0, 2).map(o => `<button class="btn" data-act="teach:${o.id}"${tipAttr("Teach " + o.name + "\nWork the same craft beside them and they learn 3x faster; you work at 80%. Give you both the same order (e.g. dig) so you end up side by side.")}>${svg("knowledge", 14)}${avatar(o.hue, o.lin, 16)}<span class="bl">Teach ${esc(o.name.split(" ")[0])}</span></button>`).join("") : "")
@@ -216,7 +224,7 @@ function villagerHtml(game, v) {
   if (!known.length) w += `<p>Nothing beyond foraging, gathering and knapping flint.</p>`;
   else for (const c of known) { const f = famOf(v, c), only = holders(sim, c).length === 1; w += `<p>${esc(CRAFTS[c].name)}: ${esc(famWord(f))} ${f.toFixed(2)}${only ? " (the only living villager who knows it)" : ""}. ${esc(CRAFTS[c].opens.join(", "))}</p>`; }
   if (v.tch) { const pu = sim.ents.get(v.tch.p); if (pu && v.tch.u > sim.tick) w += `<p>Teaching ${esc(pu.name)}: when they work the same craft side by side, ${esc(pu.name)} learns 3x faster and ${esc(v.name)} works at 80%.</p>`; }
-  w += `<div class="kv"><span>Carrying</span><b>${v.carry ? v.carry.n + " " + esc(itemName(v.carry.item)) : "nothing"}</b><span>Bed</span><b>${esc(bedText(sim, v))}</b><span>Doing</span><b>${v.slp === 1 ? "sleeping" : v.job ? esc(v.job.k.replace("_", " ")) : "deciding"}</b><span>Order</span><b>${v.order ? esc(v.order.verb) + (v.order.done ? " (" + v.order.done + " done)" : "") : "none"}</b></div>`;
+  w += `<div class="kv"><span>Carrying</span><b>${v.carry ? v.carry.n + " " + esc(itemName(v.carry.item)) : "nothing"}</b><span>Bed</span><b>${esc(bedText(sim, v))}</b><span>Doing</span><b>${v.slp === 1 ? "sleeping" : v.job ? esc(v.job.k.replace("_", " ")) : "deciding"}</b><span>Order</span><b>${v.as && ROLE[v.as.task] ? esc(ROLE[v.as.task].name) + (v.as.done ? " (" + v.as.done + " done)" : "") : v.order ? esc(v.order.verb) + (v.order.done ? " (" + v.order.done + " done)" : "") : "none"}</b></div>`;
   return `<div class="fx">${h}</div><div class="vr" data-sec="more">${selH}${vr}<div class="sr" data-test="villager-words">${words(w)}</div></div>`;
 }
 
@@ -297,13 +305,17 @@ function otherHtml(game, o) {
   if (e.kind === "furniture" && e.f === "waterjar") h += `<span>Water</span><b>${e.fill} of 60 sips</b>`;
   if (holder) h += `<span>Claimed by</span><b>${esc(holder.name)}</b>`;
   h += `<span>Position</span><b>${e.x}, ${e.y}</b></div>`;
+  if (e.kind === "furniture" && e.f === "board") {                                // 9.31: the notices as icon + count chips, a pin on a claimed one; nothing else
+    const ch = noticeChips(e, sim.tick, (id) => name(sim, id));
+    h += `<div class="knows" data-test="board-notes"><div class="sub">Notices</div><p class="ttls">` + (ch.length ? ch.map(c => `<span class="ttl kn${c.claimed ? " claimed" : ""}${c.old ? " stale" : ""}"${tipAttr(c.tip)}>${svg(c.icon, 12)} ${esc(c.text)}${c.who ? " <small>" + esc(c.who) + "</small>" : ""}${c.claimed ? " " + svg("pin", 11) : ""}</span>`).join(" ") : `<span class="dim">-</span>`) + `</p></div>`;
+  }
   if (si || (e.kind === "furniture" && e.f === "hearth")) h += `<div class="btnrow"><button data-act="invest:${e.id}" title="Ask the selected villagers (or three adults) to try things out with what is in the stockpile, at this spot only. A standing job for three days.">Investigate here</button></div>`;
   if (si) {
     for (const x of si.heat) h += `<div class="sub">Heat with ${esc(x.fuelWord)}</div><ul class="rej">` + x.layout.map(t => `<li>${esc(t)}</li>`).join("") + x.steps.map(t => `<li class="warnline"><b>To get hotter:</b> ${esc(t)}</li>`).join("") + `</ul>`;
     if (si.note) h += `<div class="sub">Why heat 5 is hard</div><p class="dim">${esc(si.note)}</p>`;
     h += `<div class="sub">What it can make</div><ul class="rej">` + si.recipes.map(r => `<li><b>${esc(r.label)}:</b> ${r.ok ? "ready" : esc(r.why)}</li>`).join("") + `</ul>`;
   }
-  const t = e.kind === "item" ? itemName(e.item) : e.kind === "plant" ? ({ tree: e.burn ? "Burning tree" : "Tree", berry: "Berry bush", tuft: "Grass tuft", tuber: "Tuber plant", sapling: "Sapling", stump: "Charred stump" })[e.species] : e.kind === "furniture" ? ({ bed: "Leaf bed", door: "Door", hearth: "Fire ring", kiln: "Pit kiln", mound: "Charcoal mound", workbench: "Workbench", bellows: "Bellows", waterjar: "Water jar", smoker: "Covered rack", forge: "Brick forge", shelf: "Shelf" })[e.f] || "Drying rack" : e.kind === "csite" ? "Planned piece" : e.kind === "flame" ? (e.src === "tree" ? "Burning tree" : "Smouldering stump") : "Site";
+  const t = e.kind === "item" ? itemName(e.item) : e.kind === "plant" ? ({ tree: e.burn ? "Burning tree" : "Tree", berry: "Berry bush", tuft: "Grass tuft", tuber: "Tuber plant", sapling: "Sapling", stump: "Charred stump" })[e.species] : e.kind === "furniture" ? ({ bed: "Leaf bed", door: "Door", hearth: "Fire ring", kiln: "Pit kiln", mound: "Charcoal mound", workbench: "Workbench", bellows: "Bellows", waterjar: "Water jar", smoker: "Covered rack", forge: "Brick forge", shelf: "Shelf", board: "Notice board" })[e.f] || "Drying rack" : e.kind === "csite" ? "Planned piece" : e.kind === "flame" ? (e.src === "tree" ? "Burning tree" : "Smouldering stump") : "Site";
   return { title: t, html: h };
 }
 

@@ -131,6 +131,7 @@ export function furniture(c, f, o, view = "side") {
   else if (f === "torch") { line(c, 16, 31, 16, 14, "#7a5430", 3); fire(c, 16, 15, 1); }
   else if (f === "lamp") { ell(c, 16, 22, 8, 8, "#c98a4a", "#5a3a1a"); ell(c, 16, 22, 4, 4, "#fff0b0"); }
   else if (f === "shelf") { line(c, 5, 31, 5, 3, "#7a5430", 2.4); line(c, 27, 31, 27, 3, "#7a5430", 2.4); for (const y of [8, 17, 27]) line(c, 5, y, 27, y, "#7a5430", 2.2); c.fillStyle = "#b8613f"; c.fillRect(9, 11, 6, 6); c.fillStyle = "#c9a85c"; c.fillRect(17, 20, 7, 7); }
+  else if (f === "board") { line(c, 8, 31, 8, 12, "#7a5430", 2.6); line(c, 24, 31, 24, 12, "#7a5430", 2.6); c.fillStyle = "#c9a468"; c.fillRect(3, 3, 26, 17); c.strokeStyle = dark; c.lineWidth = 1.2; c.strokeRect(3, 3, 26, 17); const k = Math.min(5, o.nn | 0); for (let i = 0; i < k; i++) { c.fillStyle = i % 2 ? "#fff6d0" : "#f4e6b0"; c.fillRect(5 + (i % 3) * 8 + (i > 2 ? 3 : 0), 5 + (i > 2 ? 7 : 0) + (i % 2), 6, 6); } }
   else if (f === "vent") { c.fillStyle = "#1a1410"; c.fillRect(6, 14, 20, 17); c.strokeStyle = wood; c.lineWidth = 2; c.strokeRect(6, 14, 20, 17); }
   else if (f === "waterjar") { ell(c, 16, 22, 9, 9, "#a8552f"); c.fillStyle = "#e0b090"; c.fillRect(11, 8, 10, 5); if (o.fill > 0) ell(c, 16, 22, 6, 3, "#4aa8ff"); }
   else { line(c, 5, 31, 5, 5, wood, 2.6); line(c, 27, 31, 27, 5, wood, 2.6); line(c, 5, 12, 27, 12, wood, 2.2); line(c, 5, 21, 27, 21, wood, 2.2); if (o.rv) { c.fillStyle = "#8c4a3a"; for (let i = -1; i <= 1; i++) c.fillRect(15 + i * 6, 12, 3, 5); } }
@@ -190,10 +191,10 @@ export function spriteOf(e, sim, back, ctxInfo = {}) {
     return { key: `f${e.sp}${e.tame ? "t" : ""}${hostile ? "h" : ""}${bk}`, w: big, h: big, em: 0, paint: (c) => fauna(c, e.sp, { tame: !!e.tame, hostile, back: !!back }) };
   }
   if (k === "furniture") {
-    const lit = e.f === "hearth" ? !!e.lit : (e.bn > 0), fill = e.f === "waterjar" && e.fill > 0 ? 1 : 0, rcp = e.rcp && e.inv && Object.keys(e.inv).length ? 1 : 0, rv = e.rv ? 1 : 0;
+    const nn = e.f === "board" ? Math.min(5, (e.notes || []).length) : 0, lit = e.f === "hearth" ? !!e.lit : (e.bn > 0), fill = e.f === "waterjar" && e.fill > 0 ? 1 : 0, rcp = e.rcp && e.inv && Object.keys(e.inv).length ? 1 : 0, rv = e.rv ? 1 : 0;
     const em = e.f === "torch" || e.f === "lamp" ? 0.8 : lit ? 0.45 : 0, flat = e.f === "bed";
-    const size = { door: [0.95, 1.3], bed: [1, 1], shelf: [0.9, 1.1], vent: [0.8, 0.8], workbench: [1, 0.8], torch: [0.7, 1.1], lamp: [0.6, 0.6], forge: [1, 1], waterjar: [0.7, 0.7], mound: [1, 0.9], hearth: [0.9, 0.9] }[e.f] || [0.95, 0.95];
-    return { key: `m${e.f}${lit ? "l" : ""}${fill}${rcp}${rv}`, w: size[0], h: size[1], em, flat, paint: (c) => furniture(c, e.f, { lit: !!e.lit, bn: lit ? 1 : 0, fill, rcp, rv }) };
+    const size = { door: [0.95, 1.3], bed: [1, 1], shelf: [0.9, 1.1], board: [1, 1.2], vent: [0.8, 0.8], workbench: [1, 0.8], torch: [0.7, 1.1], lamp: [0.6, 0.6], forge: [1, 1], waterjar: [0.7, 0.7], mound: [1, 0.9], hearth: [0.9, 0.9] }[e.f] || [0.95, 0.95];
+    return { key: `m${e.f}${lit ? "l" : ""}${fill}${rcp}${rv}${nn}`, w: size[0], h: size[1], em, flat, paint: (c) => furniture(c, e.f, { lit: !!e.lit, bn: lit ? 1 : 0, fill, rcp, rv, nn }) };
   }
   if (k === "flame") { const tree = e.src === "tree"; return { key: "fl" + (tree ? "t" : "s"), w: tree ? 1.6 : 0.8, h: tree ? 1.6 : 0.8, em: 0.9, paint: (c) => misc(c, "flame", { tree }) }; }
   if (k === "grave") { const hue = Math.round((e.hue || 0) / 6) * 6; return { key: "g" + hue, w: 0.8, h: 0.9, em: 0, paint: (c) => misc(c, "grave", { hue }) }; }

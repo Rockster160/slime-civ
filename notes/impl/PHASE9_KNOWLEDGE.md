@@ -1,4 +1,4 @@
-# Phase 9: Own knowledge and the town-centre board (PROPOSED, awaiting the user's approval)
+# Phase 9: Own knowledge and the town-centre board (APPROVED 2026-10-30 with the default open decisions; built BEFORE Phase 8, so beliefs and board notices go in the current monolithic save with a SAVE_VERSION bump, and Phase 8 later moves them into its global record)
 
 Author direction (2026-10-29): "Planning and re-jobbing should be based on the Slime, not globally known and globally updated. A slime should only be able to act on knowledge that it itself has. Maybe have a 'job board' in the city center where Slimes can jot down certain types of information, but otherwise there should be no telepathy."
 
@@ -108,6 +108,7 @@ Neither a slime nor the village stores individual seen blocks.
 - **Tests:** a slime that has not seen a berry bush does not go to it; it goes once it has; arriving at a gone target drops the fact.
 
 ### 9.30 Local demand and claims
+- Also remove the village-average inputs found on 2026-10-30: `knowledge.js:194-199` (cold/thirsty village shares), `board.js:118,124` (missing beds per head), `population.js:132` (beds per head in breeding weight).
 - `demandOf(v)` from beliefs replaces `dem.*` / `fneed` / `sneed` in scoring; `board.js` keeps its truth values for the HUD only. Per-slime replan trigger replaces the `ep` broadcast.
 - `makeCtx` loses the global `w` count; `capped()` counts seen workers and board claims. `reservedByOther` becomes visibility-aware.
 - **Tests:** a slime beside an empty larder rates food demand up, a slime far away and uninformed does not; two slimes who cannot see each other double up and one moves on; a claim expires.
@@ -122,6 +123,22 @@ Neither a slime nor the village stores individual seen blocks.
 - Village-collapse guard rails (see Risks): a newcomer or reborn camp starts with the founders' shared knowledge of the camp.
 - Perf: planner cost per tick measured against 9.27's baseline (O(V²) removed); balance pass.
 - **Tests:** whole-village fixture year, no starvation relative to the telepathic baseline within a tolerance; hash replay; the dev guard passes on the full quick suite.
+
+### 9.33 Learning by doing and seeing (added 2026-10-30)
+Author direction: "Similar to how possession can teach the slime experiences (also make sure slimes can share knowledge), instructing slimes to do things should also be able to gain them experiences. Seeing certain things (like a teepee) should also be enough to give the Slime an idea to try that and learn to build by just seeing it even if they aren't directly taught."
+- **Orders teach like possession, more weakly.** While a slime works a direct player order or a crew task, it gets a smaller `INSPIRE`-style multiplier on skill XP (`skills.js:114` today applies it only when `v.poss`). It also gets the same `feel` memories that possession and the AI already share (`memory.js`). The bonus is per slime, from its own order: no telepathy.
+- **Seeing teaches an idea.** When the look (`belief.js`) sees a built thing (furniture, structure or site) of a craft the slime doesn't know, it gains a small familiarity toward that craft: an **idea**, capped below `DISCOVER_FAM`, through `setFam` with `how: "saw"`.
+  - Repeated sightings and closer looks raise it, up to the cap.
+  - An idea makes the matching tinker/try more likely for *that* slime, reusing the `EVIDENCE_X` rediscovery discount in `discovery.js`, so slimes who have seen a teepee try to build one first.
+  - Watching someone build it (`WITNESS_FAM`) stays stronger than seeing a finished one.
+- **Sharing knowledge.** Friends chatting (`tell`/gossip, 9.31) can pass an idea, at half strength and only below the cap. Real teaching stays `Teach`.
+- **Visible:** an idea shows on the slime card's Know chips as a faded craft icon with a "?" (show, don't tell). The chronicle notes the first time an idea becomes a skill.
+- **Tests:**
+  - an ordered slime gains more XP than an unordered one doing the same work;
+  - a slime that sees a teepee gains an idea and is more likely to try it, while one that never saw it does not;
+  - an idea never exceeds the cap without practice;
+  - an idea passes through a chat;
+  - determinism.
 
 ## Open decisions
 - **OD-56: how strict.**

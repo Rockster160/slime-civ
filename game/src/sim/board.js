@@ -1,3 +1,4 @@
+// 9.30: HUD / debug TRUTH only. No planner reads any of this (jobs.js uses local.js demandOf(ctx); entities.js guardBoard catches a stray read).
 // Village-level state of the job board (GDD §09): the demand vector, the
 // village-level critical-need flags with hysteresis, and standing orders.
 // Stored as sim.board (saved + hashed). Everything here is recomputed on a
@@ -22,6 +23,7 @@ export const HYST = 0.5;                   // release at critical + 0.5 (§09: 2
 export const BED_COST = { item: "grass", n: 4 };     // §11.17 says grass x6; 4 keeps it inside a 5-load hand
 export const RACK_COST = { item: "stick", n: 5 };
 export const COLD_SHELTER = 0.30;          // §09: shelter is critical when warmth < 0.30 now or within 5 days
+export const MISS_SCALE = 4;               // 9.30: missing beds that make shelter demand 1 (was missing beds per head of the whole village: an average)
 export const KEEP_LOW = 0.8;               // standing orders refill below 80% of N, stop at 100% (§09, R7)
 
 export function newBoard() {
@@ -115,13 +117,13 @@ export function updateBoard(sim) {
   const cold = forecastMin(t) < COLD_SHELTER || wa >= 0.6;
   const sc = cold && missing > 0 ? 1 : 0;
   if (sc !== b.sc) { b.sc = sc; b.ep++; }
-  b.uvs = Math.round(clamp(missing / n, 0, 1) * 100) / 100;
+  b.uvs = Math.round(clamp(missing / MISS_SCALE, 0, 1) * 100) / 100;
   b.sneed = missing;
 
   // Demand vector (K3): food, shelter, rack, preserve in 0..1.
   const target = 3 + 22 * wa;
   b.dem.food = Math.round(clamp((target - eff) / target, 0, 1) * 100) / 100;
-  b.dem.shelter = Math.round(clamp(missing / n * (1 + coldAhead(t)), 0, 1) * 100) / 100;
+  b.dem.shelter = Math.round(clamp(missing / MISS_SCALE * (1 + coldAhead(t)), 0, 1) * 100) / 100;
   const racksWanted = Math.max(1, Math.ceil(vl.adults / 4));
   let pendingRacks = 0;
   for (const st of vl.sites) if (st.what === "rack") pendingRacks++;

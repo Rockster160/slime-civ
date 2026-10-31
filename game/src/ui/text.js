@@ -1,6 +1,7 @@
 // Plain-language text for the player (GDD §22): what a villager is doing, why,
 // what it could not do and why not. Pure functions of sim state - no DOM - so
 // tests/ui_text.js can check coverage headlessly.
+import { ROLE } from "../sim/orders.js";
 import { ITEMS, haveTotal, survey, JAR_HOLD } from "../sim/items.js";
 import { WAGON, cartAnimal, wagonReady } from "../sim/wagon.js";
 import { BED_COST, RACK_COST, CRIT_BASE, CRIT_WINTER, village } from "../sim/board.js";
@@ -30,7 +31,7 @@ import { hazardLines, VENT_N, POCKET_N } from "../sim/underground.js";
 
 /** Every blocker enum the sim can emit (jobs.js, tasks.js, path.js, actions.js) has a sentence here; tests/ui_text.js enforces it. */
 /** UI_SPEC §12.1/§12.2: the blocker as a 1-3 word label (never a sentence) for icons, chips and pops. */
-export const BLOCKER_SHORT = { NO_PATH: "No path", BUDGET: "Too far", BLOCKED: "Blocked", NO_MATERIAL: "No material", NO_CAPACITY: "Full hands", NO_SEASON: "Out of season", RESERVED: "Taken", MAX_WORKERS: "Crowded", NO_STORAGE: "Store full", NO_SITE: "No site", NO_TARGET: "Nothing left", NO_WATER: "No water", GONE: "Gone", TOO_FAR: "Too far", UNSUPPORTED: "Not yet", NOTHING_TO_DIG: "Nothing to dig", NO_TOOL: "No tool", UNSAFE: "Unsafe", NO_STATION: "No station" };
+export const BLOCKER_SHORT = { NO_PATH: "No path", BUDGET: "Too far", BLOCKED: "Blocked", NO_MATERIAL: "No material", NO_CAPACITY: "Full hands", NO_SEASON: "Out of season", RESERVED: "Taken", MAX_WORKERS: "Crowded", NO_STORAGE: "Store full", NO_SITE: "No site", NO_TARGET: "Nothing left", NO_WATER: "No water", GONE: "Gone", TOO_FAR: "Too far", UNSUPPORTED: "Not yet", NOTHING_TO_DIG: "Nothing to dig", NO_TOOL: "No tool", UNSAFE: "Unsafe", NO_STATION: "No station", UNKNOWN_PLACE: "Don't know where", STALE_BELIEF: "Old memory" };
 export const shortBlocker = (b) => BLOCKER_SHORT[b] || String(b || "").toLowerCase().replace(/_/g, " ").replace(/^./, c => c.toUpperCase()).split(" ").slice(0, 3).join(" ");
 export const BLOCKER_TEXT = {
   NO_PATH: "no way to get there",
@@ -48,6 +49,8 @@ export const BLOCKER_TEXT = {
   NO_TARGET: "nothing left to work on in the order area",
   NO_DUNGEON: "there is no labyrinth to delve into from here",
   NO_WATER: "no water within reach",
+  UNKNOWN_PLACE: "they have not seen where to find it (what a slime has not seen, it cannot go to)",
+  STALE_BELIEF: "the only place they remember has nothing left in it, and they cannot tell until they walk there",
   GONE: "the target is gone",
   TOO_FAR: "too far away - walk next to it first",
   SCOUT_FAR: "too far from the camp to scout (160 cells at most)",
@@ -126,6 +129,24 @@ const SPECIFIC = {
   NO_PATH: { dig: () => "no way to stand next to the rock", mine: () => "no way to reach the cells you marked (a tunnel is planned first if it can be)", build_site: () => "no way to reach the building site", craft_site: () => "no way to reach the planned bed or rack" },
   MAX_WORKERS: { tend_fire: () => "two people are already on the fire", tinker: () => "enough people are already experimenting", mine: () => "enough people are already digging (while the village needs food or beds only a fifth of it digs)", build_site: () => "most of the village is already building (the cap is 70%)", craft_site: () => "most of the village is already building (the cap is 70%)" , sow: () => "enough people are already working the field", harvest: () => "enough people are already working the field", till: () => "enough people are already working the field", water_field: () => "enough people are already working the field", fence: () => "two people are already on the fence", fodder: () => "two people are already tending the pen", slaughter: () => "two people are already tending the pen" },
   NO_SEASON: { forage: () => "berries do not grow in winter (roots can still be dug)", dry: () => "berries do not grow in winter", sow: () => "too late in the year: a crop sown now would not ripen before the frost (fields lie fallow in winter)" },
+  UNKNOWN_PLACE: {
+    forage: () => "they have not seen a ripe bush or a root patch (food they have not seen, they cannot go to)",
+    eat: () => "they know of no food in the stockpile and have not seen a bush",
+    drink: () => "they have not seen water, nor a jar of it",
+    chop: () => "they have not seen a free tree",
+    cut: () => "they have not seen a grass tuft",
+    haul: () => "they have not seen anything lying loose",
+    craft_site: () => "they have not seen a planned bed or rack to work on",
+    build_site: () => "they have not seen a building site",
+    fetch_water: () => "they have not seen water to carry",
+  },
+  STALE_BELIEF: {
+    forage: () => "the bush they remember is picked clean or gone (walk by to find another)",
+    eat: () => "the food they remember is gone",
+    chop: () => "the trees they remember have been felled",
+    cut: () => "the tufts they remember are gone",
+    haul: () => "what they remember lying about has been taken",
+  },
   NO_WATER: { water_field: () => "there is no water within reach to carry to the field" },
 };
 
@@ -178,6 +199,12 @@ export const JOB = {
   scout: { now: "Scouting unexplored land", noun: "Scout" },
   disarm: { now: "Disarming a trap", noun: "Disarm" },
   strike: { now: "Striking", noun: "Strike" },
+  post: { now: "Writing on the notice board", noun: "Post" },
+  check_board: { now: "Reading the notice board", noun: "Read the board" },
+  look: { now: "Going to look again", noun: "Look around" },
+  search_food: { now: "Looking for food", noun: "Look for food" },
+  search: { now: "Looking around", noun: "Look around" },
+  grub: { now: "Clearing", noun: "Clear" },
 };
 export const CLASS = {
   need: { label: "Personal need", color: "#ff9a2e" },
@@ -266,6 +293,7 @@ export function reasonText(sim, v, job, cls) {
   switch (cls) {
     case "need":
       if (job === "eat") return "hungry (" + pct(v.hunger) + " fed)";
+      if (job === "search_food") return "hungry (" + pct(v.hunger) + " fed) and knows of no food, so it is looking round for some";
       if (job === "drink") return "thirsty (" + pct(v.thirst) + " watered)";
       if (job === "sleep") return v.energy < 0.4 ? "tired (" + pct(v.energy) + " energy)" : "it is night and time to sleep";
       if (job === "huddle") return "cold (" + pct(v.warm) + " warm) and huddling is the way to warm up";
@@ -280,9 +308,12 @@ export function reasonText(sim, v, job, cls) {
     case "order": {
       if (v.xp) { const x = sim.exp.list.find(q => q.id === v.xp); if (x && x.kind === "delve") return "delving into the labyrinth of " + x.name + ", and " + (x.st === "home" ? "heading home (" + EXP_WHY[x.why] + ")" : x.mapped + " of " + x.rooms + " rooms mapped"); return x ? "on an expedition to find " + (x.want === x.item ? x.want : "something new (" + x.want + ")") + ", and " + (x.st === "home" ? "heading home (" + EXP_WHY[x.why] + ")" : "digging toward it") : "on an expedition"; }
       const o = v.order;
+      if (!o && v.as && ROLE[v.as.task]) return "assigned as " + ROLE[v.as.task].name.toLowerCase() + (v.as.done ? ", " + v.as.done + " done so far" : "");
+      if (o && o.verb === "clear_area") return "clearing the area you marked" + (o.done ? ", " + o.done + " done so far" : "");
       return o ? "you ordered " + o.verb + (o.tid ? "" : " around here") + (o.done ? ", " + o.done + " done so far" : "") : "you gave the order";
     }
     case "standing": {
+      if (v.job && v.job.rq) return "a request read off the notice board: " + itemName(v.job.rq) + " is short";
       if (FARM_JOBS.includes(job)) return "you marked a field, and a field is tended as a standing chore (" + sim.ents.ofKind("plot").length + " plots)";
       if (PEN_JOBS.includes(job)) return job === "slaughter" ? "a pen holds more adults than its keep-N, so the surplus is slaughtered" : "you marked a pen, and the pen is kept up as a standing chore";
       if (job === "tend_sick") { const p = sim.ents.get(v.job && v.job.tid); return "someone is ill" + (p ? " (" + p.name + ")" : "") + " and a nurse speeds their recovery, at some risk of catching it"; }
@@ -307,6 +338,10 @@ export function reasonText(sim, v, job, cls) {
       return "the village wants it";
     default:
       if (job === "tinker") return "something is nagging at the village and they have time to try things out";
+      if (job === "post") return "news and shortages to write on the notice board";
+      if (job === "search_food") return "it knows of no food, so it is looking round for some";
+      if (job === "look") return "a place it believes in has not been seen for a long time";
+      if (job === "check_board") return "nothing pressing, so see what the notice board says";
       if (job === "explore") return "Curious: " + subjWord(((v.job && v.job.key) || "explore:cave").split(":")[1]);
       return "nothing more pressing to do";
   }
@@ -348,7 +383,8 @@ export function explain(sim, v, next) {
   }
   if (v.lf && !next) out.fail = { job: v.lf[0], text: blockerText(v.lf[0], v.lf[1], null, null), ago: sim.tick - v.lf[2] };
   if (child) out.because += " (too young to take orders or work)";
-  else if (v.order && cls !== "order") out.because += "; your " + v.order.verb + " order waits";
+  else if (v.order && cls !== "order") out.because += "; your " + v.order.verb.replace("_", " ") + " order waits";
+  else if (v.as && ROLE[v.as.task] && cls !== "order") out.because += "; assigned as " + ROLE[v.as.task].name.toLowerCase();
   return out;
 }
 
@@ -376,6 +412,7 @@ export function describe(sim, e) {
       if (e.f === "hearth") return e.lit ? "Fire ring - burning (" + LEVEL_NAME[e.hl] + " heat), about " + Math.ceil(e.fuel / 900) + " half-days of fuel left; warms people within " + FIRE_R + " cells" : "Fire ring - cold" + (e.fuel > 0 ? "" : ", out of fuel");
       if (e.f === "torch") return "Torch - lights about " + TORCH_R + " cells round it; work in its light is not slowed and a tunnel is seen as far as it shines";
       if (e.f === "lamp") return "Copper lamp - lights about " + LAMP_R + " cells round it";
+      if (e.f === "board") return "Notice board - " + (e.notes || []).length + " notice" + ((e.notes || []).length === 1 ? "" : "s");
       if (e.f === "shelf") return "Shelf - makes a Storage room a better stockpile (food and hides in it spoil slower)";
       if (e.f === "vent") return "Vent shaft - fresh air comes in here: foul air within " + VENT_N + " cells of the open is cleared, and a gas pocket within " + POCKET_N;
       if (e.f === "kiln" || e.f === "mound" || e.f === "workbench" || e.f === "bellows" || e.f === "waterjar" || e.f === "smoker" || e.f === "forge") return stationLine(sim, e);
@@ -485,7 +522,7 @@ export function alerts(sim, v) {
     const r = w.rej.find(q => STUCK.includes(q.blocker));
     out.push({ k: "stuck", ch: "!", title: "Has work it cannot do: " + jobNoun(r.job, r.cls) + " - " + blockerText(r.job, r.blocker), color: "#ffd166" });
   }
-  if (v.order) out.push({ k: "ordered", ch: ">", title: "Following your " + v.order.verb + " order", color: "#7cc4ff" });
+  if (v.order) out.push({ k: "ordered", ch: ">", title: "Following your " + v.order.verb.replace("_", " ") + " order", color: "#7cc4ff" });
   return out;
 }
 

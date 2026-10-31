@@ -24,6 +24,9 @@ import { releaseJob, RES_EXPIRY } from "./jobstate.js";
 import { resetDay, rustDay } from "./skills.js";
 import { socialTick, peopleDaily } from "./people.js";
 import { decay, DECAY_EVERY } from "./memory.js";
+import { look, movedSinceLook, LOOK_EVERY, seedCamp, flags as belFlags } from "./belief.js";
+import { boardTick, cryOut, CRY_AT } from "./notices.js";
+import { newClr, clearTick, CLEAR_COMMANDS } from "./clear.js";
 import { ORDER_COMMANDS } from "./orders.js";
 import { Rooms } from "./rooms.js";
 import { BP_COMMANDS, newBps, autoBuild, instanceTick } from "./blueprint.js";
@@ -58,6 +61,8 @@ import { SCOUT_COMMANDS, landmarkTick } from "./scout.js";
 import { newTrp, trapStep, trapTick } from "./traps.js";
 import { ownDef } from "./core.js";
 import { newCm, CM_COMMANDS } from "./cm.js";
+import { initIdeas } from "./ideas.js";
+initIdeas();                                          // 9.33: the look learns what built things teach (belief.js cannot import build.js)
 
 export const START_VILLAGERS = 7;
 
@@ -100,6 +105,7 @@ export class Sim {
     this.rooms = new Rooms();                 // derived from cells; only its purpose marks are saved + hashed
     this.bps = newBps();                      // player blueprints (saved + hashed)
     this.seen = newSeen();                    // fog of knowledge (§13.8): only the log of cells seen after generation is saved + hashed
+    this.clr = newClr();                      // Clear area rectangles (clear.js; saved, hashed once one was made)
     this.mine = newMine();                    // area-mining designations (saved + hashed)
     this.disc = newDisc();                    // discovery state: seen phenomena, dead ends, curiosities, pressure, trace (saved + hashed)
     this.wild = newWild();                    // fauna bookkeeping: spawned yet?, when the thornback last died (saved + hashed; the creatures are entities)
@@ -125,7 +131,9 @@ export class Sim {
       const px = x ?? this.site.x + r.range(-5, 5), py = y ?? this.site.y + r.range(-5, 5);
       const pz = this.world.standZ(px, py);
       if (pz < 0) { if (x !== undefined) return null; continue; }
-      return addFounder(this, px, py, pz, r.int(3), r.int(360), 0.25 + 0.45 * r.float());
+      const e = addFounder(this, px, py, pz, r.int(3), r.int(360), 0.25 + 0.45 * r.float());
+      seedCamp(this, e);                                   // 9.28 (OD-57): it knows the camp
+      return e;
     }
     return null;
   }
@@ -139,6 +147,7 @@ export class Sim {
     if (t % 200 === 100) autoBuild(this);
     if (t % 100 === 60) instanceTick(this);                  // S11: queued additions of a pushed revision wait for the old piece to come down
     if (t % 200 === 0) updateKeeps(this);
+    if (t % 200 === 60) { boardTick(this); clearTick(this); }                     // 9.31: the boards forget expired notices and unrenewed claims
     if (t % YARD_PERIOD === 120) yardTick(this);                // S17: a full main yard grows by a ring
     if (t % 100 === 20) landmarkTick(this);                    // S17: far landmarks seen from afar
     if (t % 20 === 10) mineTick(this);
@@ -162,12 +171,14 @@ export class Sim {
     for (const v of vs) {
       if (!this.ents.get(v.id)) continue;
       if (v.mem && v.mem.length && (t + v.id) % DECAY_EVERY === 0) decay(v);       // experiment: memories fade, one staggered pass per slime (memory.js)
+      if (((t + v.id) % LOOK_EVERY === 0 || (v.poss && movedSinceLook(v))) && !belFlags.off) look(this, v);     // 9.32: a possessed slime also looks at each new cell it steps to
       watch(this, v);                                       // look around when they have moved (fog, §13.8)
       if (this.world.flags(v.x, v.y, v.z) & F.DUNGEON) { trapStep(this, v); if (!this.ents.get(v.id)) continue; }      // 7.21: a labyrinth's traps are spotted, or go off
       if ((t + v.id) % NEED_STEP === 0) {
         if (fearStep(this, v) > FEAR_AT && v.job && v.job.k !== "flee" && !v.poss) v.rp = 1;     // afraid: re-plan now (jobs.js genFlee); a guided villager never flees (Steadfast)
         const cause = updateNeeds(this, v);
         if (cause) { kill(this, v, cause); continue; }
+        if ((v.hunger < CRY_AT || v.warm < CRY_AT) && !belFlags.off) cryOut(this, v);       // 9.31 (OD-60): a starving or freezing slime calls out to those near it
         if (v.poss) collapseCheck(this, v);
         // A personal need turned urgent under a lower-class job: re-plan now (at most every 100 ticks).
         else if (v.action && v.job && t - v.rpt >= 60 && worstUrgency(v, isNight(t)) > 0.3) { v.rp = 1; v.rpt = t; }
@@ -184,9 +195,14 @@ export class Sim {
   afterAction(v, st) {
     const j = v.job;
     releaseJob(this, v);
-    if (j && j.c === "order" && v.order && st === 1) {
-      if (j.k === "goto") { v.order = null; this.board.ep++; }
-      else v.order.done++;
+    if (j && j.c === "order" && st === 1) {
+      if (v.order) {
+        if (j.k === "goto") { v.order = null; this.board.ep++; }
+        else v.order.done++;
+      } else if (v.as && j.g === "assign") {                       // an assignment: count the work and remember where it was done (the next target is the nearest to here)
+        if (j.k !== "search") v.as.done++;
+        v.as.x = v.x; v.as.y = v.y; v.as.z = v.z; v.as.tid = 0;
+      }
     }
   }
 
@@ -213,8 +229,7 @@ export class Sim {
     for (const v of this.ents.ofKind("villager")) { resetDay(v); rustDay(this, v); refreshDerived(this, v); }
     peopleDaily(this);                                        // S13: relationship tiers, fading, titles
     const vl = village(this);
-    // Food weight: runway against what the season ahead asks for (6 days now, ~25 as winter nears).
-    breedDaily(this, this.board.runway / (6 + 24 * winterAhead(this.tick)), vl.beds.length);
+    breedDaily(this);                                         // 9.30: each pair weighs the food it has seen in the stock and the free bed it knows of (no village runway, no beds per head)
     const d = Math.floor(dayF(this.tick));
     if (d === WINTER_START) frostBerries(this);
     if (d === 0 && this.tick > DAY) {
@@ -258,12 +273,14 @@ export class Sim {
     h.value(this.zones);
     h.value(this.trp);
     h.value(this.cm);
+    if (this.clr.n) h.value(this.clr);
     return h.hex;
   }
 }
 
 const COMMANDS = {
   ...ORDER_COMMANDS,
+  ...CLEAR_COMMANDS,
   ...BP_COMMANDS,
   ...POSSESS_COMMANDS,
   ...MINE_COMMANDS,

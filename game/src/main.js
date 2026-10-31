@@ -8,6 +8,7 @@
 // The UI reads game.sim and changes it ONLY through game.sim.apply(cmd).
 import { Sim } from "./sim/sim.js";
 import { seenAt } from "./sim/seen.js";
+import { audit } from "./sim/belief.js";
 import { TICKS_PER_SEC } from "./sim/clock.js";
 import { D, F, M } from "./sim/world.js";
 import { Camera } from "./render/camera.js";
@@ -169,7 +170,7 @@ function orderEnds(sim) {
     if (v.order) orderSeen.set(v.id, v.order.verb);
     else if (had) { orderSeen.delete(v.id); if (had !== "move") (done[had] = done[had] || []).push(v.name); }
   }
-  for (const verb in done) game.toast(`${verb[0].toUpperCase() + verb.slice(1)} order finished: ${done[verb].join(", ")} (nothing left to do in the area).`);
+  for (const verb in done) game.toast(verb === "clear_area" ? `Area cleared: ${done[verb].join(", ")}.` : `${verb[0].toUpperCase() + verb.slice(1)} done: ${done[verb].join(", ")}.`);
 }
 /** Switch input mode; modes may define enter(game) / leave(game). */
 game.setMode = (m) => {
@@ -332,6 +333,7 @@ requestAnimationFrame(frame);
 
 // Handle for tools/*.js and the console. sim is a getter-like field kept current by setSim.
 window.__game = game;
+game.bel = (id) => audit(game.sim, game.sim.ents.get(id));        // dev: how many of a slime's beliefs still match the truth ({right, gone})
 game.D = D; game.F = F; game.M = M;
 game.mapNote = mapNote;
 /** The map pixel under a screen point as [r, g, b, a]: the angled view's GL canvas under the overlay canvas, or just the 2D canvas (tests and screenshots). */

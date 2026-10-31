@@ -10,12 +10,14 @@ import { can } from "./knowledge.js";
 import { clamp, dist3 } from "./util.js";
 import { reservedByOther } from "./jobstate.js";
 import { carryRoom } from "./items.js";
-import { plots, ripe, sowOk, seedFor, fieldById, SEED_KEEP, FOD_PER_HEAD, FOD_DAYS } from "./farm.js";
+import { entsOf } from "./know.js";
+import { knowsPen } from "./boardjobs.js";
+import { demandOf, shareCap, FARM_SHARE } from "./local.js";
+import { ripe, sowOk, seedFor, fieldById, SEED_KEEP, FOD_PER_HEAD, FOD_DAYS } from "./farm.js";
 import { penLoad, slaughterTarget, openPen } from "./husbandry.js";
 import { waterEdges } from "./board.js";
 import { WATER_SIPS } from "./tasks.js";
 
-export const FARM_SHARE = 0.5;          // at most this share of the adults work the fields at once
 const SOW_TRIP = 4;                     // seeds carried per sowing trip
 const HARVEST_TRIP = 3;                 // plots harvested per trip (the hands fill first)
 const WATER_TRIP = 6;                   // plots watered per fetch of water
@@ -29,11 +31,11 @@ function cluster(list, first, n) {
 export function genFarm(ctx, H) {
   const { sim, v, sv, t } = ctx;
   if (!sim.farm.fields.length) return;
-  const known = can(sim, "CULTIVATION"), cap = Math.max(1, Math.ceil(FARM_SHARE * ctx.vl.adults));
+  const known = can(sim, "CULTIVATION"), cap = shareCap(demandOf(ctx), FARM_SHARE);
   const base = { cls: "standing", grp: "farm", skill: null, gather: true };
   const full = H.capped(ctx, "standing", "farm", cap);
   const free = (p) => !reservedByOther(sim, p, v.id) && !H.isBad(v, p.id, t);
-  const all = plots(sim);
+  const all = entsOf(ctx, "plot");                   // the plots this slime knows of (9.29)
   const ripeP = all.filter(p => ripe(p) && p.yl > 0 && free(p));
   const tilled = all.filter(p => p.tl && !p.cr && free(p));
   const dry = all.filter(p => p.cr && !ripe(p) && p.wt <= sim.tick && free(p));
@@ -123,6 +125,7 @@ export function genPens(ctx, H) {
   if (!sim.farm.pens.length) return;
   const known = can(sim, "HUSBANDRY");
   for (const pen of sim.farm.pens) {
+    if (!knowsPen(ctx, pen)) continue;                                      // 9.31: a pen is worked by the slimes that have seen it or heard of it (the board's notice)
     const gate = { x: pen.g[0], y: pen.g[1], z: pen.z };
     if (!pen.built) {
       const need = pen.need - pen.got, base = { cls: "standing", urg: 0.5, grp: "pen", skill: null };
@@ -146,8 +149,8 @@ export function genPens(ctx, H) {
       };
       H.add(ctx, c);
       if (c.blocker === "NO_MATERIAL") {                                  // the usual derived work: haul loose sticks, else cut some
-        if (sv.loose.stick > 0) H.looseCand(ctx, base, "stick", false);
-        if (sv.stock.stick + sv.loose.stick + sv.carried.stick < need) H.chopCand(ctx, base, false);
+        if (H.looseOf(ctx, "stick") > 0) H.looseCand(ctx, base, "stick", false);
+        if (H.heldOf(ctx, "stick") < need) H.chopCand(ctx, base, false);
       }
       continue;
     }
@@ -175,8 +178,8 @@ export function genPens(ctx, H) {
         };
         H.add(ctx, c);
         if (c.blocker === "NO_MATERIAL") {
-          if (sv.loose.grass > 0) H.looseCand(ctx, base, "grass", false);
-          if (sv.stock.grass + sv.loose.grass + sv.carried.grass < lack) H.gatherCand(ctx, base, false);
+          if (H.looseOf(ctx, "grass") > 0) H.looseCand(ctx, base, "grass", false);
+          if (H.heldOf(ctx, "grass") < lack) H.gatherCand(ctx, base, false);
         }
       }
     }

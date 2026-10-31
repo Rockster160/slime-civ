@@ -364,6 +364,11 @@ export class Renderer {
       ctx.beginPath(); ctx.moveTo(sx - h, sy + h * 0.8); ctx.lineTo(sx - h, sy - h * 0.8); ctx.moveTo(sx + h, sy + h * 0.8); ctx.lineTo(sx + h, sy - h * 0.8);
       for (const o of [-0.7, -0.05, 0.6]) { ctx.moveTo(sx - h, sy + h * o); ctx.lineTo(sx + h, sy + h * o); } ctx.stroke();
       ctx.fillStyle = "#b8613f"; ctx.fillRect(sx - h * 0.5, sy - h * 0.5, h * 0.4, h * 0.4); ctx.fillStyle = "#c9a85c"; ctx.fillRect(sx + h * 0.1, sy + h * 0.1, h * 0.5, h * 0.4);
+    } else if (e.f === "board") {           // 9.31: a board on two posts; a stack of paper notes pinned to it (one per notice, up to five)
+      ctx.strokeStyle = "#7a5430"; ctx.lineWidth = Math.max(1.5, ts * 0.1); ctx.beginPath(); ctx.moveTo(sx - h * 0.6, sy + h * 0.9); ctx.lineTo(sx - h * 0.6, sy - h * 0.1); ctx.moveTo(sx + h * 0.6, sy + h * 0.9); ctx.lineTo(sx + h * 0.6, sy - h * 0.1); ctx.stroke();
+      ctx.fillStyle = "#c9a468"; ctx.fillRect(sx - h, sy - h * 0.95, h * 2, h * 1.3); ctx.strokeStyle = "#3d2810"; ctx.lineWidth = 1; ctx.strokeRect(sx - h, sy - h * 0.95, h * 2, h * 1.3);
+      const k = Math.min(5, (e.notes || []).length);
+      for (let i = 0; i < k; i++) { ctx.fillStyle = i % 2 ? "#fff6d0" : "#f4e6b0"; ctx.fillRect(sx - h * 0.85 + (i % 3) * h * 0.58 + (i > 2 ? h * 0.2 : 0), sy - h * 0.85 + (i > 2 ? h * 0.6 : 0), h * 0.45, h * 0.5); }
     } else if (e.f === "vent") {            // a lined shaft: a dark mouth in a square of sticks, with air lines
       ctx.fillStyle = "#1a1410"; ctx.fillRect(sx - h * 0.8, sy - h * 0.8, h * 1.6, h * 1.6);
       ctx.strokeStyle = "#a67c52"; ctx.lineWidth = Math.max(1.5, ts * 0.1); ctx.strokeRect(sx - h * 0.8, sy - h * 0.8, h * 1.6, h * 1.6);
@@ -585,6 +590,6 @@ export class Renderer {
 const ORE_LETTER = { [M.FLINT]: "F", [M.MALACHITE]: "M", [M.CLAY]: "c", [M.IRONORE]: "I", [M.COAL]: "K", [M.SALT]: "s", [M.PEAT]: "p", [M.HERB]: "h", [M.GEM]: "g", [M.CRYSTAL]: "y", [M.COREORE]: "o", [M.CORE]: "*", [M.CACHE]: "$" };
 // One letter per job kind (the S3 Why panel gives the full text).
 const GLYPH = {
-  forage: "f", cut: "g", chop: "c", haul: "h", store: "h", eat: "e", drink: "w", sleep: "z", huddle: "z",
+  forage: "f", cut: "g", chop: "c", grub: "c", search: "?", haul: "h", store: "h", eat: "e", drink: "w", sleep: "z", huddle: "z",
   build_bed: "b", build_rack: "b", dry: "d", mine: "m", dig: "m", leisure: "~", goto: ">", flee: "!", defend: "x", hunt: "x", strike: "x", mend: "+", convalesce: "+", tend_sick: "+",
 };

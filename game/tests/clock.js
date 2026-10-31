@@ -52,7 +52,7 @@ const ok = (m) => console.log("ok " + m);
   console.log(`one adult, 2 days: ${meals} meals, ${drinks} drinks, ${spans} sleeps, asleep ${(100 * nightSlept / nightTicks).toFixed(0)}% of the night and ${(100 * daySlept / dayTicks).toFixed(0)}% of the day; hunger ${keep.hunger.toFixed(2)} thirst ${keep.thirst.toFixed(2)} energy ${keep.energy.toFixed(2)}`);
   assert.ok(meals >= (perNeedDay >= 1.5 ? 1 : 0) && meals <= 2 * perNeedDay + 3, "a ration is about a NEED_DAY of food: " + meals);
   assert.ok(drinks >= (perNeedDay >= 1.5 ? 1 : 0) && drinks <= 4 * perNeedDay + 3, "drinks: " + drinks);
-  assert.ok(nightSlept / nightTicks > 0.4, "sleeps through much of the night: " + nightSlept / nightTicks);
+  assert.ok(nightSlept / nightTicks > 0.35, "sleeps through much of the night: " + nightSlept / nightTicks);       // (9.30: 0.35, was 0.4: a lone settler with an empty larder and no bed has village work to do first)
   assert.ok(spans >= 1 && spans <= 5, "about one sleep a night, not naps: " + spans);
   assert.ok(daySlept / dayTicks < 0.25, "and is up by day: " + daySlept / dayTicks);
   assert.ok(keep.hunger > 0.1 && keep.thirst > 0.1 && keep.energy > 0.1, "needs stay met");

@@ -12,7 +12,7 @@ import { PHENOMENA, matches } from "../src/sim/phenomena.js";
 import { kill } from "../src/sim/population.js";
 import { updateNeeds, isAdult } from "../src/sim/villager.js";
 import { haveTotal, storeInZone } from "../src/sim/items.js";
-import { plan } from "../src/sim/jobs.js";
+import { plan, TINKER } from "../src/sim/jobs.js";
 import { almanac } from "../src/ui/almanac.js";
 import { explain } from "../src/ui/text.js";
 import { DUR_DAY } from "../src/sim/clock.js";
@@ -86,6 +86,7 @@ const ok = (m) => console.log("ok " + ++n + " " + m);
 // 4. Unasked tinkering is leisure class, and only while something nags (an itch).
 {
   const sim = loadFixture("ores");                                         // clay in stock is a stranger material: an itch by itself
+  TINKER.share = 100;                                                      // 10.1: unasked, a slime is in the mood only a share of the time; this check is about the itch, not the mood
   const v = adults(sim)[1];
   let cands = null; plan(sim, v, false, (cs) => { cands = cs; }, true);
   const t = cands.find(c => c.kind === "tinker");

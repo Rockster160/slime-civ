@@ -116,9 +116,10 @@ const tree = await G((id) => {
 }, target.id);
 await page.mouse.click(tree.x, tree.y, { button: "right" });
 await page.waitForTimeout(200);
-const ord = await G((id) => __game.sim.ents.get(id).order, target.id);
+const ord = await G((id) => __game.sim.ents.get(id).as, target.id);
 await shot(page, "ui-d-order-marker");
-assert.equal(ord && ord.verb, "chop"); assert.equal(ord.tid, tree.id); ok("right-click on a tree orders chop");
+assert.equal(ord && ord.task, "chop"); assert.equal(ord.tid, tree.id); ok("right-click on a tree makes the slime a lumberjack (an assignment, no area)");
+assert.ok((await page.locator("[data-test=role]").first().innerText()).includes("Lumberjack")); ok("the slime card shows the role (icon + Lumberjack)");
 assert.ok((await page.locator("[data-test=orders]").innerText()).includes("selected")); ok("order bar shows selection");
 
 // 3. drag-box selects several; Tab cycles; Esc clears
@@ -236,11 +237,12 @@ assert.ok(room && room.enclosed && room.n === 20 && room.warm > 0.3); ok("a 20-c
 await G(() => { __game.renderer.setZ(17); });
 const free = await G(() => {      // an interior cell with no villager standing close, so the click lands on the floor
   const vs = __game.sim.ents.ofKind("villager"); let best = [51, 51], bd = -1;
-  for (let y = 50; y <= 52; y++) for (let x = 49; x <= 53; x++) { const d = Math.min(...vs.map(v => Math.hypot(v.x - x, v.y - y))); if (d > bd) { bd = d; best = [x, y]; } }
+  const busy = (x, y) => __game.sim.ents.at(x, y, 15).length > 0;       // 9.29: slimes only gather what they have seen, so a tuft can still stand on the floor: click a cell with nothing on it
+  for (let y = 50; y <= 52; y++) for (let x = 49; x <= 53; x++) { if (busy(x, y)) continue; const d = Math.min(...vs.map(v => Math.hypot(v.x - x, v.y - y))); if (d > bd) { bd = d; best = [x, y]; } }
   return best;
 });
 await clickCell(...free);
-assert.equal(await G(() => __game.ui.other && __game.ui.other.kind), "room"); ok("clicking a room's floor selects the room");
+assert.equal(await G(() => __game.ui.other && __game.ui.other.kind), "room", "clicked " + free); ok("clicking a room's floor selects the room");
 await page.waitForTimeout(350);
 const roomText = await page.locator("[data-test=inspector-body]").innerText();
 assert.match(roomText, /checklist/i); assert.match(roomText, /✓/); ok("room inspector shows the checklist with ticks");
@@ -550,7 +552,7 @@ await G(() => { __game.fpvDevOff = false; });
   // a hopper in view: click it, read the card; select a villager and right-click it to hunt
   const hp = await G(() => {
     const g = __game, sim = g.sim, c = { x: 64, y: 64 };
-    const h = sim.ents.ofKind("fauna").filter(e => e.sp === "hopper").sort((a, b) => Math.abs(a.x - c.x) + Math.abs(a.y - c.y) - Math.abs(b.x - c.x) - Math.abs(b.y - c.y))[0];
+    const h = sim.ents.ofKind("fauna").filter(e => e.sp === "hopper" && sim.world.standZ(e.x, e.y + 1) <= e.z && sim.world.standZ(e.x + 1, e.y) <= e.z).sort((a, b) => Math.abs(a.x - c.x) + Math.abs(a.y - c.y) - Math.abs(b.x - c.x) - Math.abs(b.y - c.y))[0];
     g.cam.x = h.x + 0.5 + 4; g.cam.y = h.y + 0.5; g.renderer.setZ(h.z);
     const v = sim.ents.ofKind("villager")[0];
     g.selectOnly(v.id);
@@ -564,7 +566,7 @@ await G(() => { __game.fpvDevOff = false; });
   if (process.env.DBG2) console.log("HOVER", await G(() => { const h = __game.ui.hover; return h ? JSON.stringify({kind: h.kind, z: h.z, x: h.x, y: h.y, ents: h.ents.map(e => e.kind + e.id)}) : "none"; }), JSON.stringify(await G((id) => { const h = __game.sim.ents.get(id); return [h.x, h.y, h.z, __game.renderer.z]; }, hp.id)));
   await page.mouse.click(hs.sx, hs.sy, { button: "right" }); await page.waitForTimeout(300);
   if (await page.locator(".ctxmenu").count()) { await page.locator(".ctxmenu button", { hasText: /Hunt/ }).click(); await page.waitForTimeout(250); }     // ground that can be dug offers a menu: pick Hunt
-  assert.equal(await G((id) => { const v = __game.sim.ents.get(id); return v.order && v.order.verb; }, hp.vid), "hunt"); ok("right-clicking a hopper orders a hunt");
+  assert.equal(await G((id) => { const v = __game.sim.ents.get(id); return v.as && v.as.task; }, hp.vid), "hunt"); ok("right-clicking a hopper makes the slime a hunter");
   await G((id) => __game.cancelOrders([id]), hp.vid);
   await page.mouse.click(hs.sx, hs.sy); await page.waitForTimeout(350);
   const hinsp = await page.locator("[data-test=inspector-body]").innerText();
@@ -619,7 +621,7 @@ await G(() => { __game.fpvDevOff = false; });
     const g = __game, sim = g.sim, vs = sim.ents.ofKind("villager").filter(q => (q.born < -1300000 && q.born > -2400000)).slice(0, 3);
     g.cam.zoom = 14; g.cam.x = 64 + 150 / 14; g.cam.y = 64; g.renderer.setZ(sim.stock.z);
     g.selectMany(vs.map(v => v.id));
-    for (const v of vs) { v.hunger = v.thirst = v.energy = 1; }
+    for (const v of vs) { v.hunger = v.thirst = v.energy = 1; v.hp = Math.max(v.hp, 1000); }       // (the combat check above may have left one of them hurt, which would recall the crew at once)
   });
   await page.waitForTimeout(500);
   assert.ok(await page.locator("[data-test=exp]").isVisible()); ok("the Expeditions panel shows when villagers are selected");
@@ -1156,9 +1158,12 @@ await G(() => { __game.fpvDevOff = false; });
   const reached = await G((id) => {
     const g = __game, s = g.sim, v = s.ents.get(id), W = s.world;
     for (let hop = 0; hop < 90 && v.x < s.site.x + 120; hop++) {
-      let tx = v.x + 40, tz = -1;
-      for (let d = 0; d < 30 && tz < 0; d++) { tz = W.standZ(tx - d, v.y); if (tz >= 0) tx -= d; }
-      if (tz >= 0) s.apply({ type: "order", ids: [id], verb: "move", x: tx, y: v.y, z: tz });
+      let tx = v.x + 40, ty = v.y, tz = -1;
+      for (const dy of [0, 6, -6, 12, -12, 20, -20]) {       // (a lake or a cliff on this row: try a row beside it)
+        for (let d = 0; d < 30 && tz < 0; d++) { tz = W.standZ(tx - d, v.y + dy); if (tz >= 0) { tx -= d; ty = v.y + dy; } }
+        if (tz >= 0) break;
+      }
+      if (tz >= 0) s.apply({ type: "order", ids: [id], verb: "move", x: tx, y: ty, z: tz });
       for (let i = 0; i < 400; i++) { v.hunger = v.thirst = v.energy = 1; v.hp = 999; s.step(); if (!v.order) break; }
     }
     return { x: v.x, y: v.y, chunks: W.chunks.size, active: W.activeAt(v.x, v.y), explored: s.seen.ncols };

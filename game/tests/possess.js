@@ -138,11 +138,13 @@ assert.ok(!v.poss, "collapse releases");
 // health trace is identical. (The shared stream is consumed per swing, not per controller.)
 import { spawnFauna } from "../src/sim/fauna.js";
 import { storeInZone } from "../src/sim/items.js";
+import { seedCamp } from "../src/sim/belief.js";
 function fightWorld(seed) {
   const { sim, v } = world(seed);
   v.hp = 100000;                                               // this test is about the swings, not the survival
   storeInZone(sim, "berry", 40);                               // a stocked village with beds and a rack: no village-critical job outranks the order
   for (let i = 0; i < 3; i++) { const bx = sim.stock.x0 - 3, by = sim.stock.y0 + i * 2, bz = sim.world.standZ(bx, by); sim.ents.add("furniture", { f: i < 2 ? "bed" : "rack", x: bx, y: by, z: bz, owner: 0, rv: 0, rt: 0 }); }
+  sim.cache.iv++; seedCamp(sim, v);                            // 9.30: demand is local: it has to KNOW the larder, the beds and the rack (the camp is in its beliefs)
   let cell = null;
   for (let r = 4; r < 9 && !cell; r++) for (const [dx, dy] of [[1, 0], [0, 1], [-1, 0], [0, -1]]) { const x = v.x + dx * r, y = v.y + dy * r, z = sim.world.standZ(x, y); if (z >= 0 && Math.abs(z - v.z) <= 1 && !sim.ents.at(x, y, z).length) { cell = [x, y, z]; break; } }
   const h = spawnFauna(sim, "hopper", cell[0], cell[1], cell[2]);

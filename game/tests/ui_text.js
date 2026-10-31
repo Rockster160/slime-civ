@@ -28,6 +28,8 @@ const missing = [...found].filter(k => !BLOCKER_TEXT[k]);
 assert.deepEqual(missing, [], "blockers with no plain-language text: " + missing);
 for (const [k, t] of Object.entries(BLOCKER_TEXT)) assert.ok(t.length > 5 && !/[A-Z]{3}/.test(t), "bad text for " + k);
 console.log("static: " + found.size + " blocker enums, all translated");
+for (const k of ["grub", "search"]) assert.ok(JOB[k] && JOB[k].now && JOB[k].noun, "job text for " + k);       // D58: Clear area and the assignment search trip
+
 
 // 2. Every blocker x every job kind gives a clean sentence.
 const chosen = { job: "eat", cls: "need", score: 400 };
@@ -50,6 +52,7 @@ for (const seed of [1, 2, 3]) {
     if (i === 2200) { sim.apply({ type: "mine", op: "region", x0: 70, y0: 56, x1: 73, y1: 58, z: sim.stock.z - 1, layers: 2 }); sim.apply({ type: "mine", op: "seek", item: "flint" }); }   // S6: the mining job must read cleanly too
     if (i === 3000) { const vs = sim.ents.ofKind("villager").map(v => v.id); sim.apply({ type: "order", ids: vs, verb: "chop", x: 64, y: 64 }); }
     if (i === 20000) sim.apply({ type: "order", ids: sim.ents.ofKind("villager").map(v => v.id), verb: "forage", x: 60, y: 60 });
+    if (i === 3600 || i === 20600) sim.apply({ type: "cancel" });                // D58: a gather order is a standing assignment now: it ends only when cancelled, so the build and dig work that follows needs it lifted
     sim.step();
     if (i % 250) continue;
     for (const v of sim.ents.ofKind("villager")) {

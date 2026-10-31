@@ -13,17 +13,18 @@ import { seenTrapNear } from "../sim/traps.js";
 import { svg } from "./icons.js";
 import { avatar, tipAttr } from "./kit.js";
 import { esc } from "./dom.js";
+import { ASSIGN_VERBS, ROLE } from "../sim/orders.js";
 
 const VERB_ICON = { forage: "forage", chop: "chop", gather: "gather", haul: "haul", dig: "dig", hunt: "hunt", clear: "hunt", capture: "capture", scout: "scout", move: "move", disarm: "craft" };
 
 export const VERBS = [
-  { verb: "forage", label: "Forage", tip: "Pick berries from bushes around the target" },
-  { verb: "chop", label: "Chop", tip: "Fell trees around the target for logs" },
-  { verb: "gather", label: "Gather", tip: "Cut grass tufts around the target" },
-  { verb: "haul", label: "Haul", tip: "Carry loose items around the target to the stockpile" },
+  { verb: "forage", label: "Forage", tip: "Forager: keeps picking berries it knows of, until you reassign it" },
+  { verb: "chop", label: "Chop", tip: "Lumberjack: keeps felling the trees it knows of, until you reassign it" },
+  { verb: "gather", label: "Gather", tip: "Gatherer: keeps cutting grass tufts it knows of" },
+  { verb: "haul", label: "Haul", tip: "Hauler: keeps carrying loose items it knows of to the stockpile" },
+  { verb: "hunt", label: "Hunt", tip: "Hunter: keeps hunting the hoppers it knows of; the meat is hauled in. Villagers fight nothing else on their own" },
   { verb: "dig", label: "Dig", tip: "Dig out the rock or soil around the target (a 5x5 patch). Gives stone and dirt for building" },
-  { verb: "hunt", label: "Hunt", tip: "Hunt the hoppers around the target; the meat is hauled to the stockpile. Villagers fight nothing else on their own" },
-  { verb: "clear", label: "Clear", tip: "Send spear-carrying villagers to kill the monsters round the target, a den (needs a copper spear in the stockpile; they still run from the big ones, and never take on a guardian)" },
+  { verb: "clear", label: "Clear den", tip: "Send spear-carrying villagers to kill the monsters round the target, a den (needs a copper spear in the stockpile; they still run from the big ones, and never take on a guardian)" },
   { verb: "capture", label: "Capture", tip: "Catch the wild hoppers around the target alive and walk them to a finished pen (needs husbandry and a staked-out pen)" },
   { verb: "scout", label: "Scout", tip: "Walk to unexplored land and reveal it (right-click unexplored land, or right-click the minimap)" },
   { verb: "disarm", label: "Disarm", tip: "Defuse the spotted trap here (a craft job; a slip sets it off)" },
@@ -69,7 +70,8 @@ export function issueOrder(game, opt, pick) {
     return ok;
   }
   if (opt.verb === "move" && (pick.z < 0 || !sim.world.isWalkable(pick.x, pick.y, pick.z))) { game.toast("They cannot stand there."); return false; }
-  const cmd = { type: "order", ids: vs.map(v => v.id), verb: opt.verb };
+  const asg = ASSIGN_VERBS.includes(opt.verb);                                   // D58: chop, forage, gather, hunt and haul give the slime a role, not an area
+  const cmd = asg ? { type: "assign", ids: vs.map(v => v.id), task: opt.verb } : { type: "order", ids: vs.map(v => v.id), verb: opt.verb };
   if (opt.tid) cmd.tid = opt.tid; else { cmd.x = pick.x; cmd.y = pick.y; cmd.z = opt.verb === "dig" ? pick.z - 1 : opt.verb === "disarm" ? seenTrapNear(sim, pick.x, pick.y, pick.z).z : pick.z; }
   const ok = sim.apply(cmd);
   if (ui.crewTarget && sim.crews.list.some(c => c.id === ui.crewTarget)) {          // S11: aimed from the Crews panel: this order is also the crew's default task
@@ -77,8 +79,8 @@ export function issueOrder(game, opt, pick) {
     sim.apply({ type: "crew", op: "task", id: ui.crewTarget, task: t });
     ui.crewTarget = 0;
   }
-  const area = opt.verb !== "move" && !opt.tid;
-  const label = VERB_LABEL[opt.verb] + (area ? " (area)" : "");
+  const area = opt.verb !== "move" && !opt.tid && !asg;
+  const label = asg ? ROLE[opt.verb].name : VERB_LABEL[opt.verb] + (area ? " (area)" : "");
   ui.markers.push({ x: pick.x, y: pick.y, z: pick.z, label, t: performance.now(), verb: opt.verb });
   game.toast(ok ? label + ": " + vs.length + (vs.length === 1 ? " villager" : " villagers") + "." : opt.verb === "capture" ? "Cannot capture: " + (BLOCKER_TEXT[sim.lastBlocker] || "no pen") + "." : "They are already on that order.");
   return ok;
@@ -128,6 +130,11 @@ export function createOrderBar(root, game) {
     b.onclick = () => { ui.targeting = ui.targeting === v.verb ? null : v.verb; };
     verbs.appendChild(b); btns[v.verb] = b;
   }
+  const ca = document.createElement("button");                                      // D58: Clear area is a drag tool of the build palette; this is the way in from the order bar
+  ca.className = "btn big lab"; ca.dataset.test = "dock-cleararea"; ca.dataset.tip = "Clear area\nDrag a rectangle: the selected villagers clear its trees, bushes and grass tufts";
+  ca.setAttribute("aria-label", "Clear area"); ca.innerHTML = svg("cleararea", 20) + `<span class="bl">Clear area</span>`;
+  ca.onclick = () => game.buildTool("cleararea");
+  verbs.appendChild(ca);
   root.querySelector(".ob-cancel").onclick = () => { if (game.ui.sel.length) game.cancelOrders(game.ui.sel); };
   let last = "";
   return {

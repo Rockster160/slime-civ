@@ -93,7 +93,7 @@ export function splitSlime(sim, v) {
     c.born = now - ageT[i];
     for (const s of SKILLS) c.sk[s].xp = r3(xp[s][i]);
     if (!first) {                                  // the others start over: no job, no load, no bed, no partner, nothing held
-      c.action = null; c.job = null; c.why = null; c.order = null; c.carry = null; c.pk = ""; c.eq = null; c.hl = null;
+      c.action = null; c.job = null; c.why = null; c.order = null; delete c.as; c.carry = null; c.pk = ""; c.eq = null; c.hl = null;
       c.bed = 0; c.mate = 0; c.tch = null; c.bad = []; c.rp = 0; c.rpt = 0; c.lf = null; c.ep = 0; c.cr = 0; c.rest = Math.min(c.rest || 0, 1);
       delete c.xp; delete c.br; delete c.poss; delete c.pin;
       c.rel = (c.rel || []).filter(q => q.k !== "partner");

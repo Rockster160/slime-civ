@@ -25,8 +25,12 @@ import { cellXyz, chunkKX, chunkKY, chunkKey, cellIdx } from "./cellkey.js";
 import { packPlant, plantProps, isPackable } from "./dormant.js";
 import { newCm, applyCm } from "./cm.js";
 import { fillMemory } from "./memory.js";
+import { fillBel } from "./belief.js";
+import { ensureBoard } from "./notices.js";
+import { newClr } from "./clear.js";
+import { ASSIGN_VERBS } from "./orders.js";
 
-export const SAVE_VERSION = 16;       // 16 = splitting replaces cloning: `cl` and `cg` are dropped (migrate), `sp` (split origin) is additive. 15 = 7.23: sim.cm (the core ledger: choices pending, cores left, cores harvested), delve expeditions (`kind` on an expedition record, `br` on a member): additive, a v14 save loads as it is. 14 = 7.22: monsters (fauna rows with `mon`, `ck`, `sf`, `hr`, `sh`; sim.wild.gk = slain guardians; item rows chitin, core_hide, venom_sac): additive, a v13 save loads as it is. 13 = 7.21: dungeons (the land round every core gains a labyrinth: far content only, nothing within 100 cells of a camp changes) and the trap ledger `trp` (additive: absent = empty), so a v12 save loads as it is; its edits sit on the same rock except inside a labyrinth's footprint, which nobody had dug yet. 12 = 7.20: magic cores and cave networks. Terrain changed (caves, ore weights, gems, outcrops, spires), so the cells a v11 save edited sit on different rock and it is REFUSED (OLD_TERRAIN), not migrated; a v12 save has the same shape as v11. 11 = S18b: the clock rebase (a game day is 12000 ticks, was 1800; a life 500 days): every tick-stamped field (born, nx, bt, cd, timers, chronicle) is on the new clock, so a v9/v10 save is REFUSED (OLD_CLOCK), not migrated. 10 = S17: compact (cell deltas per chunk, plants as arrays, the seen set as per-chunk bitsets, landmarks seen, chunk sleep state); a v9 save loads unchanged. 9 = S16: the endless world. Terrain is regrown from the seed (the spawn search is deterministic), so a save holds only the cells that differ from it (deltas), the list of active chunks (chunks: [key, active, changed, lastNear]) and the entities; seen = {c: revealed surface columns, l: other seen cells}. A save of the old fixed 128x128 map (v < 9) cannot be loaded: restore() refuses it with a message. 8 = S13: hidden genotype (g, gp, inb, wk), bonds (aff, mn, rel), grief (gr), hobby (hb), titles (ti), heirloom (hl), skill rust (rs, lu), grave entities. 7 = S12: biomes (sim.bio: 1 = the seed grows the biome map, 0 = a world made before it), cave-in state (ug). 6 = S7a: villager familiarity (fam), discovery state (disc), flames and hearths. 5 = 5 = S6: geology (new strata + ores), seen log, mining designations. 4 = S5: skills dig/build/craft, nine traits, clone and lesson fields
+export const SAVE_VERSION = 20;       // 20 = D58: assignments (`as` on a villager: {task, tid, x, y, z, t0, done, go}) replace the area orders of the gather verbs (a v19 order chop / forage / gather / hunt / haul is migrated into one), sim.clr (Clear area rectangles; additive). 19 = 9.33: `idea` on a villager ({CRAFT: [strength, tick]}: seen or heard of, never practised), `cw` on a job; additive, absent = none, a v18 save loads as it is. 18 = 9.31: the job board is furniture with `notes` (notices.js); an older save gets a founding board beside the yard on load, and its slimes know where it stands. 17 = 9.28: per-villager belief store `bel` (belief.js); a v16 save is seeded with the camp knowledge on load (OD-57). 16 = splitting replaces cloning: `cl` and `cg` are dropped (migrate), `sp` (split origin) is additive. 15 = 7.23: sim.cm (the core ledger: choices pending, cores left, cores harvested), delve expeditions (`kind` on an expedition record, `br` on a member): additive, a v14 save loads as it is. 14 = 7.22: monsters (fauna rows with `mon`, `ck`, `sf`, `hr`, `sh`; sim.wild.gk = slain guardians; item rows chitin, core_hide, venom_sac): additive, a v13 save loads as it is. 13 = 7.21: dungeons (the land round every core gains a labyrinth: far content only, nothing within 100 cells of a camp changes) and the trap ledger `trp` (additive: absent = empty), so a v12 save loads as it is; its edits sit on the same rock except inside a labyrinth's footprint, which nobody had dug yet. 12 = 7.20: magic cores and cave networks. Terrain changed (caves, ore weights, gems, outcrops, spires), so the cells a v11 save edited sit on different rock and it is REFUSED (OLD_TERRAIN), not migrated; a v12 save has the same shape as v11. 11 = S18b: the clock rebase (a game day is 12000 ticks, was 1800; a life 500 days): every tick-stamped field (born, nx, bt, cd, timers, chronicle) is on the new clock, so a v9/v10 save is REFUSED (OLD_CLOCK), not migrated. 10 = S17: compact (cell deltas per chunk, plants as arrays, the seen set as per-chunk bitsets, landmarks seen, chunk sleep state); a v9 save loads unchanged. 9 = S16: the endless world. Terrain is regrown from the seed (the spawn search is deterministic), so a save holds only the cells that differ from it (deltas), the list of active chunks (chunks: [key, active, changed, lastNear]) and the entities; seen = {c: revealed surface columns, l: other seen cells}. A save of the old fixed 128x128 map (v < 9) cannot be loaded: restore() refuses it with a message. 8 = S13: hidden genotype (g, gp, inb, wk), bonds (aff, mn, rel), grief (gr), hobby (hb), titles (ti), heirloom (hl), skill rust (rs, lu), grave entities. 7 = S12: biomes (sim.bio: 1 = the seed grows the biome map, 0 = a world made before it), cave-in state (ug). 6 = S7a: villager familiarity (fam), discovery state (disc), flames and hearths. 5 = 5 = S6: geology (new strata + ores), seen log, mining designations. 4 = S5: skills dig/build/craft, nine traits, clone and lesson fields
 
 /** What a save of the old fixed-size world says when it is opened (S16 decision: the endless world does not emulate the 128 x 128 map). */
 export const OLD_WORLD = "This save was made in the old fixed-size world, which no longer exists: the world is endless now. Start a new game.";
@@ -41,6 +45,11 @@ export const OLD_CLOCK = "This save was made when a game day lasted 90 seconds. 
  * start at average. Pure and deterministic: the same old save always migrates to the same new state.
  */
 export function migrate(data) {
+  if (data.v < 20) for (const e of data.entities.list) if (e.kind === "villager" && e.order && ASSIGN_VERBS.includes(e.order.verb)) {      // v20 (D58): an area gather order becomes the assignment it should always have been
+    const o = e.order;
+    e.as = { task: o.verb, tid: o.tid || 0, x: o.x, y: o.y, z: o.z, t0: o.t0, done: o.done || 0, go: 0 };
+    e.order = null;
+  }
   if (data.v >= 12) {
     if (data.v < 16) for (const e of data.entities.list) if (e.kind === "villager") { delete e.cl; delete e.cg; }      // v16: cloning is gone (splitting is split.js)
     return data;
@@ -162,6 +171,7 @@ export function snapshot(sim) {
     chunks: chunkMeta(sim),
     spawn: [sim.site.x, sim.site.y],            // the camp: terrain regrows round it exactly as it was (the spawn search is never re-run for a save)
     mine: sim.mine,
+    clr: sim.clr.n ? sim.clr : undefined,
     disc: sim.disc,
     wild: sim.wild,
     exp: sim.exp,
@@ -206,6 +216,7 @@ export function restore(data) {
   sim.seen.ready = true;
   loadSeen(sim, data.seen);
   sim.mine = data.mine || { n: 0, list: [] };
+  sim.clr = data.clr || newClr();               // D58: absent in older saves (additive)
   sim.disc = data.disc || newDisc();
   sim.wild = data.wild || newWild();            // S8: absent in older saves: the creatures are spawned the first time the sim steps
   sim.exp = data.exp || newExp();
@@ -221,5 +232,7 @@ export function restore(data) {
   sim.tick = data.tick;
   applyCm(sim);                                  // 7.23: harvested cores fade from their ticks
   sim.cmdLog = data.cmds;
+  if (data.v < 17) for (const v of sim.ents.ofKind("villager")) fillBel(sim, v);      // v17 migration (OD-57): an old villager knows the camp, as a founder does. (Needs the world, so it runs here, not in migrate().)
+  if (data.v < 18) ensureBoard(sim);      // v18 migration (9.31, OD-59): the founding board beside the yard; every slime knows where it stands. (Needs the world, so it runs here, not in migrate().)
   return sim;
 }

@@ -25,6 +25,7 @@ export function control(sim, v) {
   if (v.poss) { playerStep(sim, v); return; }
   const board = sim.board;
   if (v.action) {
-    if (v.ep !== board.ep || v.rp || (sim.tick + v.id) % 200 === 0) { v.ep = board.ep; v.rp = 0; replan(sim, v); }
-  } else { v.ep = board.ep; decide(sim, v); }
+    // 9.30: no village broadcast. A slime replans when it was told to (rp: an order to it, a need of its own, belief.js `look` writing a new need:/danger: fact) or on its staggered timer.
+    if (v.rp || (sim.tick + v.id) % 200 === 0) { v.rp = 0; replan(sim, v); }
+  } else { decide(sim, v); }
 }

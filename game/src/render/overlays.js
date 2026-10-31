@@ -56,6 +56,12 @@ export function drawOverlays(game) {
     if (id === ui.focus) { ctx.lineWidth = 1; ctx.strokeStyle = "rgba(255,226,122,.35)"; ring(ctx, sx, sy, r + 4, cam.sinP); }
     if (v.order) orderFlag(ctx, cam, v.order, ts);
   }
+  for (const r of sim.clr ? sim.clr.list : []) {                       // D58: the Clear area rectangles (everyone sees them: the player marked them)
+    const [ax, ay, cw, th] = cam.rect(r.x0, r.y0, r.x1 + 1, r.y1 + 1, r.z);
+    ctx.fillStyle = "rgba(110,200,90,.12)"; ctx.fillRect(ax, ay, cw, th);
+    ctx.strokeStyle = "rgba(124,207,90,.9)"; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(ax, ay, cw, th); ctx.setLineDash([]);
+    drawIcon(ctx, "cleararea", ax + 4, ay + 4, 14, "#7ccf5a");
+  }
 
   // Transient markers where orders were given.
   const now = performance.now();
@@ -87,7 +93,8 @@ function label(ctx, text, x, y, color) {
 function orderFlag(ctx, cam, o, ts) {
   const [sx, sy] = cam.toScreen(o.x + 0.5, o.y + 0.5, o.z);
   ctx.strokeStyle = "rgba(124,196,255,.8)"; ctx.lineWidth = 1.5;
-  if (o.verb !== "move") { ctx.setLineDash([4, 3]); ring(ctx, sx, sy, 10 * ts, cam.sinP); ctx.setLineDash([]); }   // the area the order covers (radius 10)
+  if (o.verb === "clear" || o.verb === "capture") { ctx.setLineDash([4, 3]); ring(ctx, sx, sy, 10 * ts, cam.sinP); ctx.setLineDash([]); }   // the area these two cover (radius 10: a den's monsters, the hoppers round a pen); the gather verbs have no area (D58)
+  if (o.verb === "clear_area") return;
   ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx, sy - ts * 0.9); ctx.lineTo(sx + ts * 0.6, sy - ts * 0.7); ctx.lineTo(sx, sy - ts * 0.5); ctx.stroke();
 }
 

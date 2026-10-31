@@ -34,6 +34,9 @@ let n = 0;
 const ok = (m) => console.log("ok " + ++n + " " + m);
 /** Run until f(sim) or `max` ticks; returns ticks used or -1. */
 function until(sim, f, max) { for (let i = 0; i < max; i++) { sim.step(); if (f(sim)) return i; } return -1; }
+// A bigger yard (three more rows): the fixtures' stockpiles are only just big enough, and a full yard idles every keep. With beliefs on the village also builds and fetches for its own needs
+// (a rack, a bed, grass and sticks on request), so the margin that was enough with the world telepathic is not.
+function roomy(sim) { const z = sim.stock; clearArea(sim, z.x0, z.y1 + 1, z.x1 - z.x0 + 1, 3, z.z); z.y1 += 3; }
 const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).slice(0, 3).map(v => v.id), ...extra });
 
 // 1. The table: each new row fires from its context and falls short on a named axis.
@@ -163,7 +166,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
     assert.ok(!can(sim, craft), name + ": unknown at the start");
     asks(sim, extra(sim));
     let t = until(sim, (s) => can(s, craft), 8 * DUR_DAY);
-    if (t < 0) { asks(sim, extra(sim)); t = until(sim, (s) => can(s, craft), 8 * DUR_DAY); }       // S13: one experiment per station per day makes a find a chance roll (3 tries in an ask); asked a second time if the first ask came up empty
+    if (t < 0) { asks(sim, extra(sim)); t = until(sim, (s) => can(s, craft), 8 * DUR_DAY); }
     assert.ok(t >= 0, name + ": found within two asks (6 game days) (dead ends " + sim.disc.dead.length + ", tries " + sim.disc.nt + ", miss " + JSON.stringify(sim.disc.miss) + ")");
     assert.ok(sim.disc.trace.some(e => e.k === "tinker" && e.ok && e.row === craftRow(craft)), name + ": the trace shows a tinker success");
     ok("tinker: " + name + " (" + t + " ticks, " + sim.disc.nt + " tries)");
@@ -172,11 +175,11 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   const craftRow = (c) => PHENOMENON_IDS.find(id => PHENOMENA[id].craft === c);
   via("stone struck", "workshop", "DRESS_STONE", () => ({ item: "stone" }));
   via("grass twisted", "workshop", "CORDAGE", () => ({ item: "grass" }));
-  via("a hide worked", "workshop", "HIDE_WORKING", () => ({ item: "hide" }));
+  via("a hide worked", "workshop", "HIDE_WORKING", () => ({ item: "hide" }), (s) => { storeInZone(s, "hide", 6); s.cache.iv++; });       // 10.1: hides to spare (a try burns one, and the keeps now draw on the same stock)
   via("meat left on the covered rack beside the fire", "workshop", "SMOKING", (s) => ({ item: "hopper_meat", at: furn(s, "smoker")[0].id }));
   via("a log and an axe", "workshop", "FRAMING", () => ({ item: "log" }), (s) => { storeInZone(s, "stone_axe", 1); s.cache.iv++; });
   via("copper beaten cold", "copperage", "HAMMERING", () => ({ item: "copper" }));
-  via("copper and a mould in a hot kiln", "copperage", "CASTING", (s) => ({ item: "copper", at: furn(s, "kiln")[0].id }), (s) => { storeInZone(s, "mould", 2); s.cache.iv++; });
+  via("copper and a mould in a hot kiln", "copperage", "CASTING", (s) => ({ item: "copper", at: furn(s, "kiln")[0].id }), (s) => { storeInZone(s, "mould", 6); s.cache.iv++; });   // a try with the mould burns it: with two, two log-fuel tries in a row (a stream 1 in 40) use them up before charcoal is drawn
   via("iron ore and coal in the forge", "ironready", "IRON_SMELTING", (s) => ({ item: "iron_ore", at: furn(s, "forge")[0].id }));
   via("iron and coal in the forge", "ironready", "FORGING", (s) => ({ item: "iron", at: furn(s, "forge")[0].id }), (s) => { storeInZone(s, "iron", 12); grant(s, adults(s)[0], "IRON_SMELTING"); s.cache.iv++; });
 }
@@ -216,6 +219,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
     ok("bench + rack recipes: " + JSON.stringify(got) + " in " + t + " ticks");
     for (const k of Object.keys(want)) sim.apply({ type: "unkeep", item: k });
   };
+  roomy(sim);
   for (const e of sim.ents.ofKind("item").filter(q => q.item === "stick" || q.item === "log").slice()) sim.ents.remove(e.id);       // room in the stockpile (a full one idles every keep)
   storeInZone(sim, "grass", 12); storeInZone(sim, "stone", 16); storeInZone(sim, "flint", 4); storeInZone(sim, "stick", 10); storeInZone(sim, "log", 6); sim.cache.iv++;           // (S13: a regenerated fixture's stores are whatever the village had left; the recipes need these)
   phase({ cordage: 3, block: 2, stone_axe: 1, smoked_meat: 4 });           // (one bench: a bench job is one worker at a time, so the products are made in phases)
@@ -259,7 +263,7 @@ const asks = (sim, extra) => sim.apply({ type: "investigate", ids: adults(sim).s
   ok("copper age: moulds, sheet and a cast axe in " + t + " ticks; fittings and a cast pick in " + t2 + " more");
 }
 {
-  const sim = loadFixture("ironready"), [a, b] = adults(sim);
+  const sim = loadFixture("ironready"), [a, b] = adults(sim); roomy(sim);
   grant(sim, a, "IRON_SMELTING", 0.6); grant(sim, a, "FORGING", 0.6);
   sim.apply({ type: "keep", item: "iron", n: 2 });
   const t = until(sim, (s) => haveTotal(s, "iron") >= 2, 8 * DUR_DAY);       // (an event wait: until the forge has run, capped)

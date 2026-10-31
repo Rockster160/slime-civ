@@ -151,10 +151,10 @@ export function expeditionTick(sim) {
 }
 
 /** Ore the crew dug that lies loose somewhere out of the stockpile, nearest to `v` (for the carry-home leg). Resolved by the jobs, read here. */
-export function looseTarget(sim, x, v) {
+export function looseTarget(sim, x, v, skip, list) {
   let best = null, bd = 1e9;
   const z = sim.stock;
-  for (const s of sim.ents.ofKind("item")) {
+  for (const s of list || sim.ents.ofKind("item")) {
     if (s.item !== x.want || (s.x >= z.x0 && s.x <= z.x1 && s.y >= z.y0 && s.y <= z.y1) || s.rv) continue;
     const d = Math.abs(s.x - v.x) + Math.abs(s.y - v.y) + 2 * Math.abs(s.z - v.z);
     if (d < bd && d <= 60) { bd = d; best = s; }

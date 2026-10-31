@@ -19,6 +19,7 @@ import { push, pop } from "./path.js";
 import { isOre, isSeen } from "./seen.js";
 import { inZone, stockZoneAt } from "./items.js";
 import { log } from "./chronicle.js";
+import { designate } from "./notices.js";
 import { WATER_LEVEL } from "./terrain.js";
 import { inTerritory } from "./lair.js";
 import { toolAround } from "./gear.js";
@@ -172,6 +173,8 @@ export const MINE_COMMANDS = {
       d = { ...base, kind: "seek", item: c.item, mat: ITEM_MAT[c.item], n: c.n || SEEK_N, ax, ay, wp: spiral(ax, ay), wi: 0, bad: [], tgt: -1, fail: 0, exp: c.exp || 0, deep: c.deep || 0 };
     } else return fail("NOTHING_TO_DIG");
     m.n++; m.list.push(d);
+    const at = d.kind === "region" ? [(d.x0 + d.x1) >> 1, (d.y0 + d.y1) >> 1, d.zt] : d.kind === "depth" ? [d.x, d.y, d.z0] : d.kind === "vein" ? [d.sx, d.sy, d.sz] : [d.ax, d.ay, sim.stock.z];
+    designate(sim, "dig", at[0], at[1], at[2], 1);          // 9.31 (OD-58): the designation is written on the board; slimes that are not told learn of it by reading it or from a friend
     return true;
   },
 };

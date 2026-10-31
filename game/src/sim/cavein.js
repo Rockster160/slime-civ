@@ -2,6 +2,7 @@
 // this file changes the world: it flags and collapses unstable cells, widens the seen frontier by torchlight, and every 100 ticks
 // lets the village shore up a cracking roof, light a dark working face and vent foul air, all through ordinary ghosts (csites)
 // that villagers build like any piece, so the player can do the same by hand.
+import { designateCells } from "./notices.js";
 import { World, M, F } from "./world.js";
 import { SPAN_R, CRACK_TICKS, COLLAPSE_DMG, unstableAt, airMap, badAt } from "./underground.js";
 import { lightSources, underground, inLight, TORCH_R } from "./light.js";
@@ -108,7 +109,7 @@ function rescue(sim, e, fall) {
 const ghost = (sim, w, m, x, y, z) => {
   if (checkPlace(sim, w, m, x, y, z)) return false;
   const r = placeGhosts(sim, [{ w, m, x, y, z }], ++sim.board.sg);
-  if (r.placed) sim.board.ep++;
+  if (r.placed) { sim.board.ep++; designateCells(sim, "site", sim.ents.at(x, y, z).map(id => sim.ents.get(id)).filter(e => e && e.kind === "csite")); }       // 9.32 (OD-58): the village's own ghost is written on the board too, or nobody would know to go
   return r.placed > 0;
 };
 const outstanding = (sim, f) => sim.ents.ofKind("csite").some(s => s.w === f || (f === "support" && s.w === "wall" && s.m === "support"));

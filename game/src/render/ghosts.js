@@ -7,12 +7,12 @@ import { regionCells } from "../sim/mine.js";
 import { roomFire } from "../sim/fire.js";
 
 export const PIECE_COLOR = {
-  wall: "176,138,84", floor: "150,118,80", roof: "214,190,100", door: "120,200,240", bed: "110,200,90", rack: "200,150,90", hearth: "240,130,60", kiln: "198,98,62", mound: "140,104,66", workbench: "166,124,82", bellows: "150,100,70", waterjar: "74,168,255", smoker: "107,138,74", forge: "168,74,52", torch: "255,170,60", lamp: "232,176,96", vent: "150,200,230", shelf: "190,150,100",
+  wall: "176,138,84", floor: "150,118,80", roof: "214,190,100", door: "120,200,240", bed: "110,200,90", rack: "200,150,90", hearth: "240,130,60", kiln: "198,98,62", mound: "140,104,66", workbench: "166,124,82", bellows: "150,100,70", waterjar: "74,168,255", smoker: "107,138,74", forge: "168,74,52", torch: "255,170,60", lamp: "232,176,96", vent: "150,200,230", shelf: "190,150,100", board: "200,170,110",
 };
 
 /** Where a piece sits on the height axis: [the z of the plane its top is drawn on, the height of its body below that]. A wall is a block one cell tall, a roof lies one above it, the rest are flat on the floor. */
 export function pieceLift(w, z) { return w === "wall" ? [z + 1, 1] : w === "roof" ? [z + 2, 0] : [z, 0]; }
-const GLYPH_OF = (w) => w === "door" ? "D" : w === "bed" ? "b" : w === "hearth" ? "f" : w === "kiln" ? "K" : w === "mound" ? "M" : w === "workbench" ? "W" : w === "bellows" ? "B" : w === "waterjar" ? "J" : w === "smoker" ? "S" : w === "forge" ? "F" : w === "torch" ? "t" : w === "lamp" ? "L" : w === "vent" ? "V" : w === "shelf" ? "h" : "r";
+const GLYPH_OF = (w) => w === "door" ? "D" : w === "bed" ? "b" : w === "hearth" ? "f" : w === "kiln" ? "K" : w === "mound" ? "M" : w === "workbench" ? "W" : w === "bellows" ? "B" : w === "waterjar" ? "J" : w === "smoker" ? "S" : w === "forge" ? "F" : w === "torch" ? "t" : w === "lamp" ? "L" : w === "vent" ? "V" : w === "shelf" ? "h" : w === "board" ? "n" : "r";
 
 /** Draw one ghost cell at tile (x, y), standing level z (default: the ground there). `bad` draws it red. In the angled view a wall is a block (its front face shows) and a roof floats above it. */
 export function ghostCell(ctx, cam, w, x, y, { alpha = 0.45, bad = false, framed = false, z } = {}) {

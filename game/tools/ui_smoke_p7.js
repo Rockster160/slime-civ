@@ -237,6 +237,7 @@ try {
     const got = await GD(() => {                                                    // the sim runs in the page, capped
       const s = __game.sim, x = s.exp.list[0];
       for (let t = 0; t < 2500 && !(x.mapped >= 4 && x.opened >= 1); t++) s.step();
+      for (let t = 0; t < 600 && x.st !== "done"; t++) s.step();       // (a little longer: the minimap check below wants a few more explored cells than the minimum)
       __game.state.paused = true;
       const l = s.ents.get(x.ids[0]);
       return { mapped: x.mapped, rooms: x.rooms, opened: x.opened, disarmed: x.disarmed, lx: l.x, ly: l.y, lz: l.z };
@@ -328,6 +329,45 @@ try {
     assert.ok(overValid >= 3 && overGood === overValid, (flat ? "flat" : "angled") + " view: a drag that starts over a child of a pass-through overlay works: " + overGood + "/" + overValid);
     ok((flat ? "flat" : "angled") + " view: live drag-select " + good + "/" + valid + " (" + overGood + "/" + overValid + " starting over an overlay child)");
     await dp.close();
+  }
+  // ---- D57: assignments (a role on the card and under the slime, no ring) and the Clear area drag tool ----
+  {
+    const ap = await mk("?tools=all&seed=1&debug=1");
+    const Ga = (fn, arg) => ap.evaluate(fn, arg);
+    await ap.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", "settled.json"), "utf8"));
+    await ap.keyboard.press("Shift+O"); await ap.waitForTimeout(800);
+    const A2 = await Ga(() => {
+      const g = __game, s = g.sim; g.state.paused = true; g.ui.follow = 0; g.clearSelection();
+      const v = s.ents.ofKind("villager").find(q => q.slp === 0 && !q.xp && q.age !== 0), cp = s.stock;
+      const t = s.ents.ofKind("plant").filter(p => p.species === "tree" && !p.burn).sort((a, b) => Math.abs(a.x - cp.x0) + Math.abs(a.y - cp.y0) - Math.abs(b.x - cp.x0) - Math.abs(b.y - cp.y0))[0];
+      for (const q of s.ents.ofKind("villager")) { q.hunger = q.thirst = q.energy = 1; q.fear = 0; }
+      s.ents.move(v, t.x - 2, t.y, s.world.standZ(t.x - 2, t.y) >= 0 ? s.world.standZ(t.x - 2, t.y) : t.z);
+      g.cam.x = t.x + 0.5; g.cam.y = t.y + 0.5; g.cam.zoom = 22; g.selectOnly(v.id, true);
+      s.apply({ type: "assign", ids: [v.id], task: "chop", tid: t.id });
+      return { id: v.id, tx: t.x, ty: t.y };
+    });
+    await ap.waitForTimeout(500);
+    assert.ok((await ap.locator("[data-test=role]").first().innerText()).includes("Lumberjack"), "the card names the role");
+    await shot(ap, "ui-934-assigned");
+    ok("an assigned slime: the card shows icon + Lumberjack; the map shows it under the slime, and no ring is drawn round the order");
+    await ap.keyboard.press("b"); await ap.waitForTimeout(300);
+    assert.ok(await ap.locator("[data-test=tool-cleararea]").isVisible(), "the Clear area tool is in the build palette");
+    await ap.locator("[data-test=tool-cleararea]").click(); await ap.waitForTimeout(200);
+    const [p0, p1] = await Ga((a) => { const g = __game, z = g.renderer.z, m = (x, y) => g.cam.toScreen(x + 0.5, y + 0.5, z); return [m(a.tx - 3, a.ty - 3), m(a.tx + 4, a.ty + 4)]; }, A2);
+    await ap.mouse.move(p0[0], p0[1]); await ap.mouse.down();
+    for (let k = 1; k <= 6; k++) { await ap.mouse.move(p0[0] + (p1[0] - p0[0]) * k / 6, p0[1] + (p1[1] - p0[1]) * k / 6); await ap.waitForTimeout(25); }
+    await shot(ap, "ui-934-cleararea-drag");
+    await ap.mouse.up(); await ap.waitForTimeout(300);
+    const st = await Ga((id) => { const g = __game, s = g.sim, v = s.ents.get(id); return { n: s.clr.list.length, verb: v.order && v.order.verb, w: s.clr.list[0] && s.clr.list[0].x1 - s.clr.list[0].x0 + 1 }; }, A2.id);
+    assert.equal(st.n, 1); assert.equal(st.verb, "clear_area"); assert.ok(st.w >= 7, "the dragged rectangle");
+    await ap.keyboard.press("Escape"); await ap.keyboard.press("b"); await ap.waitForTimeout(300);
+    await Ga(() => { __game.state.paused = true; });
+    await shot(ap, "ui-934-cleararea");
+    assert.ok((await ap.locator("[data-test=role]").first().innerText()).includes("Clear area"), "the card says Clear area");
+    ok("the Clear area tool: dragging a rectangle marks it, the selected slime is ordered, the card says Clear area (X cancels both)");
+    await Ga((id) => __game.cancelOrders([id]), A2.id);
+    assert.ok(await Ga((id) => { const v = __game.sim.ents.get(id); return !v.order && !v.as; }, A2.id), "X cancels the assignment and the clear order");
+    await ap.close();
   }
 } finally { await browser.close(); }
 if (errors.length) { console.log("ERRORS:\n" + errors.join("\n")); process.exit(1); }

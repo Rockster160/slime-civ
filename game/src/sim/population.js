@@ -12,12 +12,15 @@ import { log } from "./chronicle.js";
 import { afterDeath } from "./knowledge.js";
 import { restricted } from "./lair.js";
 import { initPerson, kinship, grandparents, weakChance, makeWeak, pickPartner, onDeath } from "./people.js";
+import { seedCamp, inheritBel, shareCamp } from "./belief.js";
+import { placeBoard } from "./notices.js";
+import { pairWeights } from "./local.js";
 import {
   TRAITS, FOUNDER_RANGE, LIFE_DAYS, makeName, rollRange, villagerProps, inheritGeno, inheritHue,
   ageDays, maturity, fitness, maxHp, stepTicks, dailyNeed, pace, isAdult, lifeStage,
 } from "./villager.js";
 
-export const BREED_P = 0.02 * DUR_DAY / DAY;   // per eligible adult per daily call (every 1800 ticks), before weights. Breeding is tied to AGE like a life is (S18b): 0.02 per CALENDAR day (0.025 on the 4-year life, x0.8 for the 5-year life), spread over the DAY/1800 daily calls in it
+export const BREED_P = 0.04 * DUR_DAY / DAY;   // per eligible adult per daily call (every 1800 ticks), before weights. Breeding is tied to AGE like a life is (S18b): 0.02 per CALENDAR day (0.025 on the 4-year life, x0.8 for the 5-year life), spread over the DAY/1800 daily calls in it
 export const BREED_COOLDOWN = 56;        // CALENDAR days (x DAY ticks) * lifePace / fertility: 45 on the 4-year life x 1.25 for the 5-year life
 const SEASON_BREED = [1.2, 1.3, 0.9, 0.6];   // mean 1.00 (§11.7 mean-normalised rule)
 
@@ -60,6 +63,8 @@ export function foundColony(sim, n) {
   if (vs.length >= 2) { vs[0].mate = vs[1].id; vs[1].mate = vs[0].id; vs[0].lin = vs[1].lin = 0; }
   // 3 rations/head of food in the starting pile (fresh berries; they spoil, so they get eaten first).
   storeInZone(sim, "berry", 3 * n);
+  placeBoard(sim);                                       // 9.31 (OD-59): the founding job board, free, beside the yard (before the founders look, so they know where it is)
+  for (const v of vs) seedCamp(sim, v);                 // 9.28 (OD-57): the founders know the camp (after the pile is down, so they know the larder)
 }
 
 export function spawnChild(sim, a, b) {
@@ -76,6 +81,8 @@ export function spawnChild(sim, a, b) {
   for (const s of SKILLS) e.sk[s].xp = 0;             // children start with no experience (a master's child starts at zero, §10)
   refreshDerived(sim, e);
   initPerson(sim, e);
+  inheritBel(sim, e, a);                                 // 9.28: a newborn starts with its parent's beliefs
+  shareCamp(sim, e);                                     // 9.32: and the camp's shared knowledge, so a thin parent leaves no blind child
   log(sim, "BIRTH", e.name + " was born to " + a.name + " and " + b.name + "." + sportText(sp.sports, t) + (weak ? " Born frail: " + (kin >= 0.5 ? "close kin" : "kin") + " should not have children together." : ""), [e.id, a.id, b.id], { sports: sp.sports, weak: weak ? 1 : 0 }, 1);
   return e;
 }
@@ -93,19 +100,16 @@ function eligible(sim, v) {
 }
 
 /** Once a day: maybe pair adults and bear children. Weighted by food and beds, never gated (§08). */
-export function breedDaily(sim, foodFrac, beds) {
+export function breedDaily(sim) {
   const r = sim.rng.stream("breed");
   const vs = sim.ents.ofKind("villager");
   const n = vs.length;
   if (n === 0) return;
-  const foodW = clamp(foodFrac, 0.05, 1);
-  const bedW = 0.4 + 0.6 * clamp(beds / n, 0, 1);
   const seasonW = SEASON_BREED[seasonIdx(sim.tick)];
   const pool = vs.filter(v => eligible(sim, v));
   const used = new Set();
   for (const a of pool) {
     if (used.has(a.id) || a.cd > sim.tick) continue;
-    if (!r.chance(BREED_P * foodW * bedW * seasonW * a.t.fertility * (0.85 + 0.15 * a.t.leisure))) continue;       // a contented (leisurely) villager is a bit keener
     let b = pool.find(o => o.id === a.mate && !used.has(o.id));
     if (b && kinship(a, b) >= 0.25 && r.chance(0.5)) b = null;           // S13: a bonded pair that turns out to be near kin may be passed over
     if (!b) {
@@ -113,6 +117,8 @@ export function breedDaily(sim, foodFrac, beds) {
       if (!others.length) continue;
       b = pickPartner(r, a, others);                                     // S13: partners and friends first, close kin mildly avoided
     }
+    const pw = pairWeights(sim, a, b);                                   // 9.30: the pair's own knowledge of food and beds (local.js), not the village runway and beds per head
+    if (!r.chance(BREED_P * pw.food * pw.bed * seasonW * a.t.fertility * (0.85 + 0.15 * a.t.leisure))) continue;       // a contented (leisurely) villager is a bit keener
     used.add(a.id); used.add(b.id);
     spawnChild(sim, a, b);
     for (const p of [a, b]) {

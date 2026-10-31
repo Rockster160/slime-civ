@@ -17,6 +17,7 @@ import { log, once } from "./chronicle.js";
 import { dayF, seasonIdx, WINTER_START } from "./season.js";
 import { GROW_BY_SEASON } from "./plants.js";
 import { CAMP } from "./board.js";
+import { designate, designateCells } from "./notices.js";
 import { sight } from "./discovery.js";
 
 export const CROP = { berry: { days: 7, yield: 8, label: "berry crop" }, tuber: { days: 9, yield: 6, label: "tuber crop" } };
@@ -81,6 +82,7 @@ export const FARM_COMMANDS = {
     if (!n) { sim.farm.n--; return fail(sim, "NO_SITE"); }
     sim.farm.fields.push(f);
     sim.cache.iv++; sim.board.ep++;
+    designateCells(sim, "plot", plots(sim).filter(p => p.fid === f.id));          // 9.32 (OD-58): the field's plots are written on the board
     return true;
   },
   /** {type:"fieldcfg", id, cr}: which crop a field sows ("auto" picks by stock). */
@@ -103,6 +105,7 @@ export const FARM_COMMANDS = {
     const p = { id: ++sim.farm.n, ...r, g: [r.x0 + (w >> 1), r.y1], built: 0, got: 0, need: w + h, fod: 0, fc: 0, hg: 0, keep: KEEP_DEFAULT };
     sim.farm.pens.push(p);
     sim.board.ep++;
+    designate(sim, "pen", p.g[0], p.g[1], p.z, 1);          // 9.31 (OD-58): the pen is written on the board
     return true;
   },
   /** {type:"pencfg", id, keep}: how many penned hoppers to keep; the surplus adults are slaughtered. */

@@ -13,7 +13,7 @@
 // Commands: {type:"crew", op:"make", name, ids, hk?} | "rename" {id,name} | "disband" {id} | "add" {id,ids} | "remove" {id,ids}
 //           | "task" {id, task} (null clears) | "hotkey" {id, hk 0..9} | "recall" {id} (members drop orders and walk back to camp)
 import { isAdult } from "./villager.js";
-import { ORDER_COMMANDS } from "./orders.js";
+import { ORDER_COMMANDS, ASSIGN_VERBS, ROLE } from "./orders.js";
 import { ITEMS, stockCapacity } from "./items.js";
 import { CAMP } from "./board.js";
 
@@ -56,7 +56,8 @@ export function taskText(t) {
   if (t.t === "chore") return CHORE_LABEL[t.g] || t.g;
   if (t.t === "keep") return "keep " + (ITEMS[t.item] ? ITEMS[t.item].label : t.item) + " stocked";
   if (t.t === "exp") return "on an expedition";
-  const V = { forage: "forage berries", chop: "chop trees", gather: "gather grass", haul: "haul loose items", move: "go to", dig: "dig", hunt: "hunt hoppers", capture: "capture hoppers" };
+  if (ASSIGN_VERBS.includes(t.verb)) return ROLE[t.verb].name;                       // D58: a gather verb is a role
+  const V = { move: "go to", dig: "dig", capture: "capture hoppers", clear: "clear the den", scout: "scout", disarm: "disarm" };
   return (V[t.verb] || t.verb) + (t.x !== undefined ? " near (" + t.x + ", " + t.y + ")" : "");
 }
 
@@ -69,7 +70,8 @@ function release(sim, c) { for (const id of c.ids) { const v = sim.ents.get(id);
 function giveTask(sim, c, task) {
   c.task = task;
   if (task && task.t === "order") ORDER_COMMANDS.order(sim, { ids: c.ids.filter(id => { const v = usable(sim, id); return v && !v.xp; }), verb: task.verb, tid: task.tid || 0, x: task.x, y: task.y, z: task.z });
-  sim.board.ep++;                                            // everyone re-plans now: the preference counts at their next decision
+  sim.board.ep++;
+  for (const id of c.ids) { const v = usable(sim, id); if (v) v.rp = 1; }   // 9.30: the members re-plan now (the preference counts at their next decision); nobody else is told
 }
 
 export const CREW_COMMANDS = {
@@ -95,6 +97,7 @@ export const CREW_COMMANDS = {
     if (c.op === "rename") { crew.name = nameOf(c.name, crew.name); return true; }
     if (c.op === "disband") {
       if (crew.task && crew.task.t === "exp") { /* the expedition stays; it simply loses its name */ }
+      for (const id of crew.ids) { const v = usable(sim, id); if (v) v.rp = 1; }
       release(sim, crew); L.list.splice(L.list.indexOf(crew), 1); sim.board.ep++; return true;
     }
     if (c.op === "add") {
@@ -103,7 +106,7 @@ export const CREW_COMMANDS = {
         const v = usable(sim, vid);
         if (!v || !isAdult(sim, v) || v.poss || v.cr === crew.id) continue;
         const old = crewOf(sim, v); if (old) old.ids = old.ids.filter(q => q !== vid);
-        v.cr = crew.id; crew.ids.push(vid); n++;
+        v.cr = crew.id; crew.ids.push(vid); n++; v.rp = 1;
         if (crew.task && crew.task.t === "order" && !v.xp) ORDER_COMMANDS.order(sim, { ids: [vid], verb: crew.task.verb, tid: crew.task.tid || 0, x: crew.task.x, y: crew.task.y, z: crew.task.z });
       }
       if (n) { crewTick(sim); sim.board.ep++; }
@@ -124,7 +127,7 @@ export const CREW_COMMANDS = {
     }
     if (c.op === "task") {
       const t = c.task;
-      if (t === null || t === undefined) { crew.task = null; sim.board.ep++; return true; }
+      if (t === null || t === undefined) { crew.task = null; sim.board.ep++; for (const id of crew.ids) { const v = usable(sim, id); if (v) v.rp = 1; } return true; }
       if (t.t === "chore" && CHORES.includes(t.g)) { giveTask(sim, crew, { t: "chore", g: t.g }); return true; }
       if (t.t === "keep") {
         if (!ITEMS[t.item]) return false;

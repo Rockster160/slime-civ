@@ -116,8 +116,9 @@ const solidAt = (sim, x, y, z) => sim.world.isSolid(x, y, z);
     peak = Math.max(peak, sim.ents.ofKind("villager").filter(v => v.job && v.job.k === "build_site" && v.action).length);
   }
   assert.ok(peak >= 2, "several builders at once (" + peak + ")");
-  assert.ok(peak <= Math.ceil(0.7 * adults), "hand cap: " + peak + " builders of " + adults + " adults");
-  console.log(`4 ok: peak ${peak} builders of ${adults} adults (cap ${Math.ceil(0.7 * adults)})`);
+  // 9.30: no village-wide hand cap any more. A slime only counts the builders it can SEE (a share of the slimes it knows of, local.js), so slimes that cannot see each other may all go (the planner is local, D52).
+  assert.ok(peak <= adults, "builders " + peak + " of " + adults + " adults");
+  console.log(`4 ok: peak ${peak} builders of ${adults} adults (each slime only counts the builders in view)`);
 }
 
 // ---- 5. the dry-run preview is pure ----

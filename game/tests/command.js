@@ -45,7 +45,7 @@ const ok = (m) => console.log("ok " + ++n + " " + m);
   // an order task is given to every member as an ordinary order
   const tree = sim.ents.ofKind("plant").find(p => p.species === "tree");
   assert.ok(sim.apply({ type: "crew", op: "task", id: c.id, task: { t: "order", verb: "chop", x: tree.x, y: tree.y, z: tree.z } }));
-  assert.ok(c.ids.every(id => sim.ents.get(id).order && sim.ents.get(id).order.verb === "chop"), "every member got the chop order");
+  assert.ok(c.ids.every(id => sim.ents.get(id).as && sim.ents.get(id).as.task === "chop"), "every member got the chop assignment");
   assert.ok(!sim.apply({ type: "crew", op: "task", id: c.id, task: { t: "order", verb: "fly", x: 1, y: 1 } }), "an unknown verb is refused");
   assert.ok(!sim.apply({ type: "crew", op: "task", id: c.id, task: { t: "chore", g: "dance" } }));
   // recall: orders go, they walk back to camp

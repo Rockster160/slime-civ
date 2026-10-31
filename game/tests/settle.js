@@ -193,6 +193,7 @@ function farHeaps(sim, dist = 30) {
     clearArea(sim, x, y, 6, 1, z0);
     const out = [];
     for (let i = 0; i < 6; i++) { dropLoose(sim, "log", 10, x + i, y, z0); out.push([x + i, y, z0]); }
+    for (const a of adults(sim)) a.bel.push(["loose", x + 2, y, z0, 60, sim.tick, 0], ["loose", x + 5, y, z0, 30, sim.tick, 0]);       // 9.29: a planner hauls only what it has seen: the slimes know where the heaps lie
     return out;
   }
   throw new Error("no far ground for the heaps");

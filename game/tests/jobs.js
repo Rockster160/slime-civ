@@ -7,6 +7,7 @@ import { Sim } from "../src/sim/sim.js";
 import { putStack } from "../src/sim/items.js";
 import { isAdult } from "../src/sim/villager.js";
 import { plan } from "../src/sim/jobs.js";
+import { readStock } from "../src/sim/belief.js";
 import { hutCells } from "./bots/shelter_plan.js";
 import { flatSpot, clearArea } from "./helpers.js";
 
@@ -26,6 +27,8 @@ function addBeds(sim) {            // everyone housed, so shelter-critical (cold
   }
   sim.cache.iv++;
 }
+/** 9.30: demand is local, so the food contest below needs every slime to have READ the larder (they are told it, as if they were all at the yard). */
+const readLarder = (sim) => { for (const v of sim.ents.ofKind("villager")) if (v.bel) { readStock(sim, v.bel, null, sim.tick, true); v.rp = 1; } };
 const nearestTree = (sim) => sim.ents.ofKind("plant").filter(p => p.species === "tree")
   .sort((a, b) => Math.abs(a.x - 64) + Math.abs(a.y - 64) - Math.abs(b.x - 64) - Math.abs(b.y - 64))[0];
 const classes = (sim) => {
@@ -47,7 +50,7 @@ const classes = (sim) => {
   for (let i = 0; i < 400; i++) {
     if (i % 10 === 0) settle();
     sim.step();
-    if (sim.tick % 20 === 0) { setStock(sim, 8, 0); }          // hold the dip: the larder stays low while we watch
+    if (sim.tick % 20 === 0) { setStock(sim, 8, 0); readLarder(sim); }          // hold the dip: the larder stays low while we watch
     const c = classes(sim);
     foodWorkers = (c["vcrit:forage"] || 0) + (c["vcrit:dry"] || 0);
     orderWorkers = c["order:chop"] || 0;
@@ -57,17 +60,18 @@ const classes = (sim) => {
   }
   assert.equal(sim.board.fc, 1, "food runway under 2 days should set the village-critical food flag");
   assert.ok(sim.board.fneed >= 1, "fneed should be positive");
-  assert.ok(maxFood >= Math.min(sim.board.fneed, adults.length) - 1, `peak food workers ${maxFood} should fill the ${sim.board.fneed} jobs the deficit needs`);
-  const ordered = sim.ents.ofKind("villager").filter(v => v.order).length;
+  // 9.30: the hands come from what each slime believes (its larder reading, the bushes it knows), not from the board's fneed; the rack's derived chop takes some of them
+  assert.ok(maxFood >= 3, `peak food workers ${maxFood} (board fneed ${sim.board.fneed}, HUD truth)`);
+  const ordered = sim.ents.ofKind("villager").filter(v => v.order || v.as).length;
   assert.equal(ordered, adults.length, "the order is still outstanding on everyone (orders are not cancelled, only out-ranked)");
-  assert.ok(sim.ents.ofKind("villager").filter(v => v.order && v.why.cls === "vcrit" && v.job.g === "food").length >= 1, "ordered villagers are on village-critical food jobs");
+  assert.ok(sim.ents.ofKind("villager").filter(v => (v.order || v.as) && v.why.cls === "vcrit" && v.job.g === "food").length >= 1, "ordered villagers are on village-critical food jobs");
   const f = sim.ents.ofKind("villager").find(v => v.job && v.job.c === "vcrit");
   assert.ok(f.why && f.why.cls === "vcrit" && f.why.score >= 350, "Why record of a food worker should say village-critical");
   console.log(`stamp-during-food-dip ok: runway ${sim.board.runway} d, fneed ${sim.board.fneed}, ${foodWorkers} on food, ${orderWorkers} on the order, ${JSON.stringify(classes(sim))}`);
 
   // Food recovers past the release line: the hands return to the order.
   setStock(sim, 0, 90);
-  for (let i = 0; i < 400; i++) { if (i % 10 === 0) settle(); sim.step(); }
+  for (let i = 0; i < 400; i++) { if (i % 10 === 0) settle(); if (i % 20 === 0) readLarder(sim); sim.step(); }
   assert.equal(sim.board.fc, 0, "flag should release once runway passes critical + 0.5");
   const c = classes(sim);
   assert.equal((c["vcrit:forage"] || 0) + (c["vcrit:dry"] || 0), 0, "no village-critical food jobs after release: " + JSON.stringify(c));
@@ -93,14 +97,14 @@ const classes = (sim) => {
   for (let i = 0; i < 500; i++) {
     if (i % 10 === 0) settle();
     sim.step();
-    if (sim.tick % 20 === 0) keepDip();
+    if (sim.tick % 20 === 0) { keepDip(); readLarder(sim); }
     const f = sim.ents.ofKind("villager").filter(v => v.job && v.action && v.job.c === "vcrit" && v.job.g === "food").length;
     maxFood = Math.max(maxFood, f);
     for (const v of sim.ents.ofKind("villager")) if (v.job && v.action && v.job.k === "build_site") { builders++; if (v.job.c !== "standing") orderBuilders++; }
   }
   if (process.env.DBG) console.log("1b", JSON.stringify(classes(sim)), "adults", adults.length, "fneed", sim.board.fneed);
   assert.equal(sim.board.fc, 1, "food critical during the dip");
-  assert.ok(maxFood >= Math.min(sim.board.fneed, adults.length) - 1, `food workers ${maxFood} should fill the ${sim.board.fneed} jobs the deficit needs`);
+  assert.ok(maxFood >= 3, `food workers ${maxFood} (board fneed ${sim.board.fneed}, HUD truth)`);
   assert.equal(orderBuilders, 0, "stamp jobs are derived, standing class - never an order");
   console.log(`stamp-x10-during-food-dip ok: ${maxFood} on food (need ${sim.board.fneed}), ${builders} builder-ticks at standing class; ${sim.ents.ofKind("csite").length} pieces still waiting`);
   // the larder recovers: now the stamp gets built

@@ -21,7 +21,7 @@
 // the task's difficulty (GDD §10 table: hard-rock dig 0.8, kiln 0.7, smelt 0.9).
 import { expNeg, settle, clamp } from "./util.js";
 import { F } from "./world.js";
-import { INSPIRE } from "./inspire.js";
+import { INSPIRE, ORDER_XP } from "./inspire.js";
 import { DUR_DAY, DAY } from "./clock.js";
 import { isMentorOf, noteLesson, MENTOR_X } from "./bonds.js";
 
@@ -104,6 +104,9 @@ export function lessons(sim, v, s) {
   return 1;
 }
 
+/** 9.33: this slime is working a direct order or a crew task right now (the job's class is ORDER, or the crew's default task chose it). */
+export const ordered = (v) => !!(v.job && (v.job.c === "order" || v.job.cw));
+
 /** Award XP for output. Returns the XP gained. */
 export function xpFor(v, s, value, difficulty, worked, mult = 1) {
   return value * XP_PER_VALUE * Math.max(0, 1 - level(v, s) / difficulty) * rested(worked) * learnRate(v) * mult;
@@ -111,7 +114,7 @@ export function xpFor(v, s, value, difficulty, worked, mult = 1) {
 export function gain(sim, v, s, value, isNovel, difficulty = DIFFICULTY[s]) {
   if (!isNovel) return 0;
   const sk = v.sk[s], tc = teacherOf(sim, v, s);
-  const g = xpFor(v, s, value, difficulty, sk.wk, (tc ? TEACH_X * (isMentorOf(tc, v) ? MENTOR_X : 1) : lessons(sim, v, s)) * (v.poss ? 1 + INSPIRE.xp : 1));
+  const g = xpFor(v, s, value, difficulty, sk.wk, (tc ? TEACH_X * (isMentorOf(tc, v) ? MENTOR_X : 1) : lessons(sim, v, s)) * (v.poss ? 1 + INSPIRE.xp : ordered(v) ? 1 + ORDER_XP : 1));
   if (tc && g > 0) noteLesson(tc, v);                         // S13: lessons that pay out make a mentor
   sk.xp = Math.round((sk.xp + g) * 10000) / 10000;
   return g;

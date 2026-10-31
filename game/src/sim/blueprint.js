@@ -11,6 +11,7 @@
 import { World, F } from "./world.js";
 import { BMAT, BMAT_OF, DEFAULT_MAT, checkPlace, csiteAt, placeGhosts, costOf, builtPiece, markPiece, replaceOk, removeSite } from "./build.js";
 import { once } from "./chronicle.js";
+import { boardNeed, designateCells } from "./notices.js";
 
 export const MAX_BP_CELLS = 1500;
 
@@ -264,6 +265,7 @@ export const BP_COMMANDS = {
     const r = placeGhosts(sim, c.cells, g);
     if (r.placed) {
       sim.board.ep++;
+      designateCells(sim, "site", c.cells.filter(q => sim.ents.at(q.x, q.y, q.z).some(id => { const e = sim.ents.get(id); return e && e.kind === "csite"; })));     // 9.32 (OD-58): the ghosts are written on the board
       const bp = c.bp && c.at ? sim.bps.list.find(b => b.id === c.bp) : null;
       if (bp) addInstance(sim, bp, c.at.ox | 0, c.at.oy | 0, c.at.z | 0, c.at.rot | 0, c.at.over || {}).g = g;
       if (c.bp) once(sim, "firstStamp", "MILESTONE", "The first blueprint was stamped: “" + ((sim.bps.list.find(b => b.id === c.bp) || {}).name || "a design") + "”.", [], {}, 1);
@@ -285,7 +287,7 @@ SPOTS.sort((a, b) => (a[0] * a[0] + a[1] * a[1]) - (b[0] * b[0] + b[1] * b[1]) |
  */
 export function autoBuild(sim) {
   const b = sim.board;
-  if (!(b.sneed > 0) || !(b.dem.shelter > 0 || b.sc)) return false;
+  if (!(boardNeed(sim, "need:bed") > 0)) return false;                       // 9.31: the village's wish for beds is what its slimes wrote on the board (not the world's bed count)
   if (sim.ents.ofKind("csite").some(s => s.g === b.ag)) return false;          // the last one is still going up
   const bps = sim.bps.list.filter(p => p.auto && p.cells.length);
   if (!bps.length) return false;

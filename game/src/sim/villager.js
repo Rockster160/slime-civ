@@ -207,7 +207,7 @@ export function villagerProps(x, y, z, o) {
     hunger: o.hunger ?? 0.9, thirst: o.thirst ?? 0.9, energy: o.energy ?? 0.9, warm: 1, mood: 0.8, hp: 100, hard: 0,
     bed: 0, mate: 0, cd: 0, rest: 0, slp: 0, mv: 6, carry: null, action: null, job: null, why: null, order: null,
     sk: o.sk, ep: 0, bad: [], rp: 0, rpt: 0, lf: null, ws: "", wt: 0, tch: null, sp: o.sp ?? 0, fam: {},
-    g: o.g ?? null, gp: o.gp ?? [], inb: o.inb ?? 0, wk: o.wk ?? 0, aff: {}, mn: {}, rel: [], gr: null, hb: { xp: 0, n: 0 }, ti: [], hl: null, ps: null, mem: [], epi: [],
+    g: o.g ?? null, gp: o.gp ?? [], inb: o.inb ?? 0, wk: o.wk ?? 0, aff: {}, mn: {}, rel: [], gr: null, hb: { xp: 0, n: 0 }, ti: [], hl: null, ps: null, mem: [], epi: [], bel: [],
   };
 }
 

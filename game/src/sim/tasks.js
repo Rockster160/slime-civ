@@ -22,6 +22,9 @@ import { feel, mineSubject } from "./memory.js";
 import { INSPIRE } from "./inspire.js";
 import { DIG, diggable, diggableMarked, uproot, HARD_DIFFICULTY, toolNeeded } from "./dig.js";
 import { reveal } from "./seen.js";
+import { felt, learnDug } from "./belief.js";
+import { post, read, delivered, arrived, passBoard } from "./notices.js";
+import { takenByOther, RES_EXPIRY } from "./jobstate.js";
 import { mineDug } from "./mine.js";
 import { TUBER_REGROW, TUBER_YIELD } from "./plants.js";
 import { addFuel, FUEL_ITEMS, cookMul } from "./fire.js";
@@ -77,6 +80,21 @@ export function rate(sim, v, name, sk) {
 
 const VERBS = {
   goto: { dur: 1, skill: null, check: () => null, work: () => "done" },
+  post: {   // 9.31: write facts, shortages and the claim on the board's notices (notices.js); the slime has walked up to it
+    dur: 20, skill: null,
+    check(sim, v, s) { const b = E(sim, s); return b && b.f === "board" ? null : "GONE"; },
+    work(sim, v, s) { post(sim, v, E(sim, s)); return "done"; },
+  },
+  survey: {   // 9.32: the go-and-look errand: standing where a believed thing should be, the slime looks at once (what it finds replaces or drops the fact that sent it)
+    dur: 10, skill: null,
+    check: () => null,
+    work(sim, v, s) { felt(sim, v); if (s.sf) { v.sf = (v.sf || 0) + 1; v.sfT = sim.tick; } if (s.ag && v.as) v.as.go = 0; return "done"; },       // (a food search counts the trip, so the next one heads another way)
+  },
+  read: {   // 9.31: copy the board's notices into the slime's beliefs and take a request (notices.js). Only a slime standing there can
+    dur: 20, skill: null,
+    check(sim, v, s) { const b = E(sim, s); return b && b.f === "board" ? null : "GONE"; },
+    work(sim, v, s) { read(sim, v, E(sim, s)); return "done"; },
+  },
 
   pick: {   // take a berry from a bush
     dur: 25 * FORAGE_SLOW, skill: null, tr: "speed", base: GATHER_BASE,
@@ -114,9 +132,23 @@ const VERBS = {
     check(sim, v, s) { const p = E(sim, s); return p && p.species === "tree" && !p.burn ? null : "GONE"; },
     work(sim, v, s) {
       const p = E(sim, s);
+      if (!p || p.species !== "tree") return "GONE";            // the tree went (felled by someone else, burnt or packed away) while this slime was working
       fellTree(sim, p);
       dropLoose(sim, "log", 2, p.x, p.y, p.z);
       dropLoose(sim, "stick", 4, p.x, p.y, p.z);
+      return "done";
+    },
+  },
+  grub: {   // Clear area (clear.js): take a plant out for good. A tree gives its logs and sticks, a bush its berries, a tuft its grass, all loose; the cell is free to build on
+    dur: 90, skill: null, tr: "strength",
+    check(sim, v, s) { const p = E(sim, s); return p && p.kind === "plant" && !p.burn ? null : "GONE"; },
+    work(sim, v, s) {
+      const p = E(sim, s);
+      if (!p || p.kind !== "plant") return "GONE";
+      if (p.species === "tree") { dropLoose(sim, "log", 2, p.x, p.y, p.z); dropLoose(sim, "stick", 4, p.x, p.y, p.z); sim.world.setFlags(p.x, p.y, p.z, sim.world.flags(p.x, p.y, p.z) & ~F.OBSTACLE); }
+      else if (p.species === "berry" && p.yield > 0) dropLoose(sim, "berry", p.yield, p.x, p.y, p.z);
+      else if (p.species === "tuft" && p.yield > 0) dropLoose(sim, "grass", 1, p.x, p.y, p.z);
+      sim.ents.remove(p.id); sim.cache.iv++;
       return "done";
     },
   },
@@ -133,6 +165,7 @@ const VERBS = {
         takeFromStack(sim, st, k); i--;                   // the list shrinks when a stack empties
         carryAdd(sim, v, s.item, k); need -= k;
       }
+      if (need <= 0) passBoard(sim, v);                    // 9.31: taking stock beside the board: the claim for this job is written, and the news if it is due
       return need > 0 ? "NO_MATERIAL" : "done";
     },
   },
@@ -144,10 +177,12 @@ const VERBS = {
         const c = storeCell(sim, v.carry.item, v.x, v.y);
         if (!c) return "NO_STORAGE";
         const left = putStack(sim, v.carry.item, v.carry.n, c[0], c[1], c[2], v.carry.q);
-        const placed = v.carry.n - left;
+        const placed = v.carry.n - left, item = v.carry.item;
         if (placed <= 0) return "NO_STORAGE";
         carryTake(sim, v, placed);
+        delivered(sim, v, item, placed);                  // 9.31: the request for it on the board falls
       }
+      arrived(sim, v);                                    // 9.31: it is in the yard with company and maybe a board at hand: facts change hands
       return "done";
     },
   },
@@ -488,6 +523,7 @@ const VERBS = {
       const sj = mineSubject(m);
       if (sj) feel(sim, v, sj, "good", sj === "gem" ? 30 : 8);                              // experiment (memory.js): what the dig turned up
       reveal(sim, s.cx, s.cy, s.cz);                                // the digger looks into the hole: its neighbours are now seen (fog, §13.8)
+      learnDug(sim, v, s.cx, s.cy, s.cz);                           // 9.29: ... and the ore the hole opened up is in the digger's own beliefs
       if (s.did) mineDug(sim, s.did, m, got, s.cx, s.cy, s.cz);
       return "done";
     },
@@ -632,6 +668,12 @@ ACTIONS.Task = {
         if (r === ST.RUNNING) return ST.RUNNING;
         a.mv = null;
       }
+      if (s.tid && v.job && v.job.rl && v.job.rl.includes(s.tid)) {      // 9.30: a target another slime held when this one planned (out of sight): find it taken, or take it now
+        const e = sim.ents.get(s.tid);
+        if (e && takenByOther(sim, e, v.id)) { a.blocker = "RESERVED"; return fail(v, s, a, sim); }
+        if (e) { e.rv = v.id; e.rt = sim.tick; if (!v.job.res.includes(e.id)) v.job.res.push(e.id); }
+        v.job.rl.splice(v.job.rl.indexOf(s.tid), 1);
+      }
       const b = verb.check(sim, v, s);
       if (b) { a.blocker = b; return fail(v, s, a, sim); }
       a.ph = 1; a.p = 0;
@@ -651,8 +693,10 @@ ACTIONS.Task = {
 };
 
 /** A step failed: remember why (the Why panel reads v.lf) and cool the target down. */
+const LOST = new Set(["GONE", "NO_MATERIAL", "NO_WATER"]);             // arriving to find the target gone or empty (9.29: the believed place was wrong)
 function fail(v, s, a, sim) {
   v.lf = [a.k, a.blocker, sim.tick];
+  if (LOST.has(a.blocker)) felt(sim, v);                                // the walk was wasted and it is felt: the look drops or corrects the fact that sent them (and `bad` below keeps them off it)
   if (s.tid && !((s.v === "strike" || s.v === "catch" || s.v === "slaughter") && a.blocker === "TOO_FAR")) {       // a creature that moved off is chased again, not given up on
     v.bad.push([s.tid, sim.tick + 600]);       // unreachable_cooldown (§09)
     if (v.bad.length > 8) v.bad.shift();

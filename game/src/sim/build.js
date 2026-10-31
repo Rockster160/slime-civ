@@ -19,11 +19,12 @@ import { World, M, F, MAT } from "./world.js";
 import { dropLoose, inZone, haveTotal, stockZoneAt } from "./items.js";
 import { sight } from "./discovery.js";
 import { once } from "./chronicle.js";
+import { designateCells } from "./notices.js";
 import { BED_COST, RACK_COST } from "./board.js";
 import { can } from "./knowledge.js";
 
 export const SPAN = 3;
-export const TIER = { floor: 0, wall: 1, bed: 2, rack: 2, hearth: 2, kiln: 2, mound: 2, workbench: 2, bellows: 2, waterjar: 2, smoker: 2, forge: 2, torch: 2, lamp: 2, vent: 2, shelf: 2, roof: 2, door: 3 };
+export const TIER = { floor: 0, wall: 1, bed: 2, rack: 2, hearth: 2, kiln: 2, mound: 2, workbench: 2, bellows: 2, waterjar: 2, smoker: 2, forge: 2, torch: 2, lamp: 2, vent: 2, shelf: 2, board: 2, roof: 2, door: 3 };
 
 /** Buildable materials. role = what they may be used as (a material class is its role); dur = ticks of work. */
 export const BMAT = {
@@ -46,7 +47,7 @@ export const BMAT = {
 export const BMAT_OF = {};                       // material id -> key
 for (const k of Object.keys(BMAT)) BMAT_OF[BMAT[k].id] = k;
 export const DEFAULT_MAT = { wall: "wattle", floor: "dirt", roof: "thatch" };
-export const PIECES = ["wall", "floor", "roof", "door", "bed", "rack", "hearth", "kiln", "mound", "workbench", "bellows", "waterjar", "smoker", "forge", "torch", "lamp", "vent", "shelf"];
+export const PIECES = ["wall", "floor", "roof", "door", "bed", "rack", "hearth", "kiln", "mound", "workbench", "bellows", "waterjar", "smoker", "forge", "torch", "lamp", "vent", "shelf", "board"];
 /** S12: light and air underground (furniture through the same ghost pipeline; plain building work, not craft). */
 export const UNDERGROUND_PIECES = ["torch", "lamp", "vent"];
 /** S7b stations (furniture made through the same ghost pipeline as the hearth). */
@@ -70,6 +71,7 @@ const FURN = {
   torch: { item: "stick", n: 1, dur: 60, label: "Torch" },
   lamp: { item: "sheet", n: 1, dur: 120, label: "Copper lamp" },
   vent: { item: "stick", n: 4, dur: 200, label: "Vent shaft" },
+  board: { item: "stick", n: 4, dur: 160, label: "Notice board" },           // 9.31: a job board (notices.js): more can be raised beside where people work
   shelf: { item: "stick", n: 5, dur: 200, label: "Shelf" },                 // S15: a storage room's furniture (purposes.js)            // S9: a lidded, vented, lined furnace: coal and a second draft reach the Forge level (heat 5)
 };
 
@@ -192,7 +194,12 @@ function wallNear(sim, x, y, z) {
 export function readySites(sim) {
   const c = sim.cache;
   if (c.rsv === c.csv && c.rsw === sim.world.version && c.rs) return c.rs;
-  const all = sim.ents.ofKind("csite"), byG = new Map();
+  c.rs = readyFrom(sim, sim.ents.ofKind("csite")); c.rsv = c.csv; c.rsw = sim.world.version;
+  return c.rs;
+}
+/** The same rule over the ghosts in `all` (9.29: the ones a planner believes in): {ready, waiting, total, all}. */
+export function readyFrom(sim, all) {
+  const byG = new Map();
   for (const s of all) {
     const t = byG.get(s.g) || [0, 0, 0, 0];      // unbuilt count per tier within the group
     t[TIER[s.w]]++; byG.set(s.g, t);
@@ -210,8 +217,7 @@ export function readySites(sim) {
     if (ok) ready.push(s); else waiting++;
   }
   ready.sort((a, b) => TIER[a.w] - TIER[b.w] || a.id - b.id);
-  c.rs = { ready, waiting, total: all.length }; c.rsv = c.csv; c.rsw = sim.world.version;
-  return c.rs;
+  return { ready, waiting, total: all.length, all };
 }
 function adjacentRoof(sim, s) {
   const w = sim.world;
@@ -256,6 +262,7 @@ export function finishSite(sim, v, s) {
       : s.w === "kiln" || s.w === "mound" || s.w === "smoker" || s.w === "forge" ? { f: s.w, x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0, lid: s.w === "forge" ? 2 : 0, inv: {}, rcp: "", bn: 0, bt: 0, lv: 0, by: 0, fq: 0 }
       : s.w === "workbench" ? { f: s.w, x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0, inv: {}, rcp: "" }
       : s.w === "waterjar" ? { f: s.w, x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0, fill: 0 }
+      : s.w === "board" ? { f: s.w, x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0, notes: [] }
       : { f: s.w, x: s.x, y: s.y, z: s.z, owner: 0, rv: 0, rt: 0 });
     if (s.w === "door") w.markDirty(s.x, s.y, s.z);
     if (s.w === "bed") once(sim, "firstBed", "BUILT_FIRST", v.name + " made the first leaf bed.", [v.id], {}, 1);
@@ -269,6 +276,7 @@ export function finishSite(sim, v, s) {
     else if (s.w === "forge") once(sim, "firstForge", "BUILT_FIRST", v.name + " built the first brick forge.", [v.id], {}, 1);
     else if (s.w === "torch") once(sim, "firstTorch", "BUILT_FIRST", v.name + " set the first torch in the dark.", [v.id], {}, 1);
     else if (s.w === "lamp") once(sim, "firstLamp", "BUILT_FIRST", v.name + " hung the first copper lamp.", [v.id], {}, 1);
+    else if (s.w === "board") once(sim, "firstBoard", "BUILT_FIRST", v.name + " raised a notice board.", [v.id], {}, 1);
     else if (s.w === "shelf") once(sim, "firstShelf", "BUILT_FIRST", v.name + " set up the first shelf.", [v.id], {}, 1);
     else if (s.w === "vent") once(sim, "firstVent", "BUILT_FIRST", v.name + " cut the first vent shaft: air moves in the tunnel.", [v.id], {}, 1);
     void f;
@@ -295,12 +303,12 @@ export const MAT_NAME = (m) => (MAT[m] ? MAT[m].name : "?");
 // as loose items. It pays NO XP (taking down what you put up must not be a grind, R17) and never touches natural
 // terrain: only cells flagged F.PLAYER, and doors / beds / racks.
 export const REFUND = 0.75;
-export const UNBUILD_DUR = { wall: 80, floor: 40, roof: 50, door: 60, bed: 80, rack: 100, hearth: 80, kiln: 120, mound: 80, workbench: 100, bellows: 80, waterjar: 40, smoker: 100, forge: 160, torch: 30, lamp: 40, vent: 80, shelf: 60 };
+export const UNBUILD_DUR = { wall: 80, floor: 40, roof: 50, door: 60, bed: 80, rack: 100, hearth: 80, kiln: 120, mound: 80, workbench: 100, bellows: 80, waterjar: 40, smoker: 100, forge: 160, torch: 30, lamp: 40, vent: 80, shelf: 60, board: 60 };
 
 /** The built piece of kind w standing at stand cell (x,y,z): {cell:[x,y,z]} | {ent} | null. */
 export function builtPiece(sim, w, x, y, z) {
   const wd = sim.world;
-  if (w === "door" || w === "bed" || w === "rack" || w === "hearth" || w === "shelf" || STATIONS.includes(w) || UNDERGROUND_PIECES.includes(w)) {
+  if (w === "door" || w === "bed" || w === "rack" || w === "hearth" || w === "shelf" || w === "board" || STATIONS.includes(w) || UNDERGROUND_PIECES.includes(w)) {
     for (const id of sim.ents.at(x, y, z)) { const e = sim.ents.get(id); if (e.kind === "furniture" && e.f === w) return { ent: e }; }
     return null;
   }
@@ -327,7 +335,10 @@ export function markDeconstruct(sim, c) {
       sim.ents.add("dsite", { w, x, y, z: c.z, rv: 0, rt: 0 }); n++;
     }
   }
-  if (n) { sim.cache.iv++; sim.board.ep++; }
+  if (n) {
+    sim.cache.iv++; sim.board.ep++;
+    designateCells(sim, "site", sim.ents.ofKind("dsite").filter(d => d.z === c.z && d.x >= Math.min(c.x0, c.x1) && d.x <= Math.max(c.x0, c.x1) && d.y >= Math.min(c.y0, c.y1) && d.y <= Math.max(c.y0, c.y1)));     // 9.32 (OD-58)
+  }
   return n > 0;
 }
 

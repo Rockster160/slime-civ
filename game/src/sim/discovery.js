@@ -15,7 +15,7 @@
 import { DUR_DAY } from "./clock.js";
 import { clamp } from "./util.js";
 import { PHENOMENA, PHENOMENON_IDS, matches, tagsOf, TAG_PRESSURE, PRESSURE_TAGS, TOOL_ITEMS } from "./phenomena.js";
-import { setFam, famOf, can, pressure, trace, evidenceOf, EVIDENCE_X, DISCOVER_FAM, WITNESS_FAM } from "./knowledge.js";
+import { setFam, famOf, can, pressure, trace, evidenceOf, EVIDENCE_X, DISCOVER_FAM, WITNESS_FAM, IDEA_CAP, ideaOf } from "./knowledge.js";
 import { flames, litHearths, hearths, smokeFire } from "./fire.js";
 import { survey, dropLoose, takeFromStack, inZone } from "./items.js";
 import { stationHeat, FUEL_H } from "./heat.js";
@@ -300,22 +300,28 @@ export function tinkerCandidates(sim) {
   return sim.cache.tk;
 }
 
+/** 9.33: how much more this slime's try is weighted for an idea it holds of the craft the experiment would find: 1 (none) up to EVIDENCE_X at the cap (the rediscovery discount, per slime). */
+export function ideaX(v, c) {
+  const row = v && v.idea && c.row ? PHENOMENA[c.row] : null;
+  const f = row ? ideaOf(v, row.craft) : 0;
+  return f > 0 ? 1 + (EVIDENCE_X - 1) * f / IDEA_CAP : 1;
+}
 /** Chance that one weighted pick fires `rowId` (0 if no matching candidate made the cap). Expected attempts = 1 / this. */
-export function discoveryOdds(sim, rowId) {
+export function discoveryOdds(sim, rowId, v) {
   const list = tinkerCandidates(sim);
   let all = 0, hit = 0;
-  for (const c of list) { all += c.w; if (c.row === rowId) hit += c.w; }
+  for (const c of list) { const w = c.w * ideaX(v, c); all += w; if (c.row === rowId) hit += w; }
   return all ? hit / all : 0;
 }
 
 /** Weighted draw from the candidates with the "tinker" stream. dry: the best one, drawing nothing (previews must not move the RNG). */
-export function pickCandidate(sim, list, dry) {
+export function pickCandidate(sim, list, dry, v) {
   if (!list.length) return null;
   if (dry) return list[0];
   let tot = 0;
-  for (const c of list) tot += c.w;
+  for (const c of list) tot += c.w * ideaX(v, c);
   let x = sim.rng.stream("tinker").float() * tot;
-  for (const c of list) { x -= c.w; if (x < 0) return c; }
+  for (const c of list) { x -= c.w * ideaX(v, c); if (x < 0) return c; }
   return list[list.length - 1];
 }
 

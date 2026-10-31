@@ -4,7 +4,7 @@ const DOING = {
   build_site: "Building", craft_site: "Making", deconstruct: "Taking down", dig: "Digging", mine: "Mining", cut: "Gathering", chop: "Chopping", haul: "Hauling", store: "Storing",
   goto: "Walking", tend_fire: "Tending fire", fire_kiln: "Firing kiln", burn_charcoal: "Burning", smelt: "Smelting", smoke: "Smoking", make_tool: "Making", fetch_water: "Fetching water",
   tinker: "Tinkering", explore: "Exploring", cook: "Cooking", haul_wagon: "Hauling", flee: "Fleeing", defend: "Fighting", mend: "Resting", convalesce: "Resting", tend_sick: "Nursing", hunt: "Hunting",
-  till: "Tilling", sow: "Sowing", water_field: "Watering", harvest: "Harvesting", fence: "Fencing", fodder: "Feeding", slaughter: "Butchering", capture: "Catching", scout: "Scouting", strike: "Striking", disarm: "Disarming",
+  till: "Tilling", sow: "Sowing", water_field: "Watering", harvest: "Harvesting", fence: "Fencing", fodder: "Feeding", slaughter: "Butchering", capture: "Catching", scout: "Scouting", strike: "Striking", disarm: "Disarming", post: "Posting", check_board: "Reading board", look: "Looking", search_food: "Looking for food", search: "Searching", grub: "Clearing",
 };
 /** A villager's current doing as one word ("" when walking about with nothing to say). */
 export function doingWord(v) {

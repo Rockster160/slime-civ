@@ -28,6 +28,8 @@ import { award, firstTitle } from "./titles.js";
 import { CRAFTS, CRAFT_IDS, ERA_RANK, PHENOMENA, PRESSURE_TAGS } from "./phenomena.js";
 import { coldAhead, winterAhead, dayF } from "./season.js";
 import { haveTotal } from "./items.js";
+import { waterEdges } from "./board.js";
+import { boardNeed, KEEP_FOOD_N } from "./notices.js";
 
 export const DISCOVER_FAM = 0.5;        // the discoverer (D8, §10)
 export const WITNESS_FAM = 0.2;         // a witness who saw it happen
@@ -38,6 +40,13 @@ export const KIN_X = 2;                 // a child learning from a parent
 export const USE_NUDGE = 0.02;          // using a craft nudges familiarity toward 1
 export const TRACE_MAX = 40;
 export const EVIDENCE_X = 8;            // a tinker near evidence of a craft nobody knows weights the matching try this much higher (about 0.3x the expected tries, gate 0.4x, D8)
+export const IDEA_CAP = 0.15;           // 9.33: an idea (v.idea, a craft seen or heard of but never practised) never passes this without practice; below WITNESS_FAM and DISCOVER_FAM
+export const IDEA_FIRST = 0.03;         // the first sighting of a built thing of a craft the slime lacks (x aptitude)
+export const IDEA_STEP = 0.02;          // each later sighting, once IDEA_GAP ticks have passed (x aptitude)
+export const IDEA_CLOSE = 2;            // a look at something within this many cells counts IDEA_CLOSE_X
+export const IDEA_CLOSE_X = 2;
+export const IDEA_GAP = 600;            // ticks between sightings that count, per slime and craft
+export const IDEA_TELL = 0.5;           // a chat passes an idea at this fraction of the teller's
 export const LOW_FAM = 0.3;             // below this a craft adds waste on top of skill (§10)
 
 export function newDisc() {
@@ -46,6 +55,8 @@ export function newDisc() {
 }
 
 export const famOf = (v, craft) => (v.fam && v.fam[craft]) || 0;
+/** 9.33: the strength of a slime's idea of a craft (0..IDEA_CAP), 0 once it knows the craft. v.idea = {CRAFT: [strength, tick of the last sighting or telling]}. An idea never makes `can()` true. */
+export const ideaOf = (v, craft) => (v.idea && v.idea[craft] && !famOf(v, craft) ? v.idea[craft][0] : 0);
 
 /** Living villagers with familiarity > 0, in id order. */
 export function holders(sim, craft) {
@@ -106,6 +117,7 @@ export function updateEra(sim) {
  * The first time anyone ever learns a craft is a chronicle "first"; learning it again after a loss is a rediscovery.
  */
 export function setFam(sim, v, craft, f, how) {
+  if (how && (how.kind === "saw" || how.kind === "tell")) return setIdea(sim, v, craft, f);
   f = r3(Math.min(1, f));
   const old = famOf(v, craft);
   if (f <= old) return false;
@@ -113,6 +125,11 @@ export function setFam(sim, v, craft, f, how) {
   v.fam[craft] = f;
   sim.cache.kn = null;
   if (old > 0) return true;
+  if (v.idea && v.idea[craft]) {                                         // 9.33: an idea became a skill
+    delete v.idea[craft];
+    if (!Object.keys(v.idea).length) delete v.idea;
+    once(sim, "idea_" + craft, "DISCOVERY", v.name + " had only seen it done, and now knows " + CRAFTS[craft].short + ".", [v.id], { craft, how: "idea" }, 1);
+  }
   const d = sim.disc, C = CRAFTS[craft], row = how && how.row ? PHENOMENA[how.row] : null;
   const wasLost = d.lost[craft] !== undefined;
   if (wasLost) delete d.lost[craft];
@@ -127,6 +144,22 @@ export function setFam(sim, v, craft, f, how) {
   if (d.sole[craft] && hs.length > 1) delete d.sole[craft];
   updateEra(sim);
   return true;
+}
+
+/** 9.33: raise a slime's idea of a craft to at least f (capped at IDEA_CAP, never lowers, nothing for a craft it knows). Not a familiarity: `can()` and the era do not see it. */
+function setIdea(sim, v, craft, f) {
+  f = r3(Math.min(IDEA_CAP, f));
+  if (famOf(v, craft) > 0 || f <= ideaOf(v, craft)) return false;
+  if (!v.idea) v.idea = {};
+  v.idea[craft] = [f, sim.tick];
+  return true;
+}
+/** 9.33: a chat. `from` passes each idea it holds to `to` at IDEA_TELL of its strength (never above the cap, never to a knower). Returns how many ideas moved. */
+export function tellIdeas(sim, from, to) {
+  if (!from.idea) return 0;
+  let n = 0;
+  for (const c in from.idea) if (setIdea(sim, to, c, ideaOf(from, c) * IDEA_TELL)) n++;
+  return n;
 }
 
 /** Called by population.kill after the villager is gone: the last holder's death loses the capability (R11). */
@@ -184,19 +217,23 @@ export function warmRaw(tick, coldShare) {
 export function toolEdgeRaw(digsToday, sawOre, hardDug) {
   return clamp(0.4 * Math.min(1, digsToday / 10) + (sawOre ? 0.35 : 0) + (hardDug ? 0.2 : 0), 0, 1);
 }
-/** carry_water, 0..1 (pure): the share of the village thirsty right now, doubled (long walks to the stream show up as thirst). */
-export function carryWaterRaw(thirsty, n) { return n ? clamp(2 * thirsty / n, 0, 1) : 0; }
+/** carry_water, 0..1 (pure; 9.30): how far the camp is from its drink, in cells. A long walk to the stream is the water that wants carrying (it was the share of the village thirsty right now: a village average). */
+export function carryWaterRaw(walk) { return clamp((walk - 6) / 24, 0, 1); }
+/** Cells from the camp centre to the nearest drink spot (terrain; 99 when there is none within the window). Read once a day. */
+function drinkWalk(sim) {
+  let best = 99;
+  for (const e of waterEdges(sim)) { const d = Math.max(Math.abs(e[0] - sim.site.x), Math.abs(e[1] - sim.site.y)); if (d < best) best = d; }
+  return best;
+}
 
 /** The raw (unsmoothed) pressure of each tag now. */
 export function rawPressure(sim) {
-  const vs = sim.ents.ofKind("villager"), d = sim.disc;
-  let cold = 0, dry = 0;
-  for (const v of vs) { if (v.warm < 0.6) cold++; if (v.thirst < 0.4) dry++; }
+  const d = sim.disc;
   const sawOre = haveTotal(sim, "malachite") > 0 || haveTotal(sim, "iron_ore") > 0;                                  // green stone in hand that the stone tools cannot use
   return {
-    warm: warmRaw(sim.tick, vs.length ? cold / vs.length : 0),
-    keep_food: clamp(sim.board.dem.food, 0, 1),
-    carry_water: carryWaterRaw(dry, vs.length),
+    warm: warmRaw(sim.tick, 0),                                        // 9.30: the season's forecast alone (it was also the share of the village that was cold)
+    keep_food: clamp(boardNeed(sim, "need:food") / KEEP_FOOD_N, 0, 1),     // 9.31: the larder shortage the slimes wrote on the board (rations short, KEEP_FOOD_N of them is full pressure)
+    carry_water: carryWaterRaw(drinkWalk(sim)),
     tool_edge: toolEdgeRaw(d.dg || 0, sawOre, !!d.hd),
   };
 }

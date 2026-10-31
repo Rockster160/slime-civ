@@ -10,6 +10,7 @@ import { log } from "./chronicle.js";
 import { award, MASTER_AT } from "./titles.js";
 import { genoFrom, isAdult } from "./villager.js";
 import { bump, chemistry, refreshTiers, fadeAffinity, relOf } from "./bonds.js";
+import { gossip } from "./notices.js";
 import { HOBBIES, hobbyOf, hobbyLevel, NOTABLE_AT } from "./hobby.js";
 import { SKILLS, level, PROFESSION } from "./skills.js";
 import { inZone } from "./items.js";
@@ -117,6 +118,8 @@ export function socialTick(sim) {
     for (let j = i + 1; j < vs.length; j++) {
       const b = vs[j];
       if (!near3(a, b)) continue;
+      const rl = relOf(a, b.id);
+      if ((rl && (rl.k === "friend" || rl.k === "partner")) || kinship(a, b) >= 0.25) gossip(sim, a, b);       // 9.31: friends near each other swap place facts (same pairs, same cadence)
       if (wa && b.job && b.action && WORKING.has(b.job.c)) {
         const ch = chemistry(a, b);
         if (ch >= 0) bump(a, b, 0, 2 * ch); else bump(a, b, 2, 2 * ch);

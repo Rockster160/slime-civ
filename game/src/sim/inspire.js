@@ -6,3 +6,5 @@ export const INSPIRE = {
   xp: 0.15,        // +15% skill XP per output (skills.gain)
   grace: 600,      // ticks the village keeps the reservations the villager held before possession (§09)
 };
+// 9.33: a slime working a direct order or a crew task is taught a little by it: about half the possessed bonus, to that slime only (its own order, no telepathy).
+export const ORDER_XP = 0.075;

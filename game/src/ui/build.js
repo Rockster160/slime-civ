@@ -17,6 +17,7 @@ import { ITEMS } from "../sim/items.js";
 import { itemName, BLOCKER_TEXT } from "./text.js";
 import { SEEK_ALL as SEEK_ITEMS } from "../sim/mine.js";
 import { can } from "../sim/knowledge.js";
+import { orderable } from "./orders.js";
 
 const TOOLS = [
   ["wall", "Wall", "Walls block movement and keep the wind out. Drag a rectangle to outline a room."],
@@ -36,6 +37,7 @@ const TOOLS = [
   ["torch", "Torch", "A stake with a flame (1 stick), set on a tunnel floor. Lights about 5 cells round it: work in its light is not slowed and the tunnel is seen as far as it shines. Needs someone who keeps fire. Villagers also place torches along a tunnel they are digging."],
   ["lamp", "Copper lamp", "A copper-housed lamp (1 copper sheet): a steadier, wider light (about 7 cells). Needs someone who can hammer copper."],
   ["vent", "Vent", "A stick-lined shaft (4 sticks) that moves air: foul air near it is cleared, and a dead-end tunnel next to it stays fresh. Villagers place one beside bad air they have seen."],
+  ["board", "Notice board", "A job board (4 sticks). Slimes write what they have seen and what is short on it, and read it when they have nothing to do: put one where people pass. Villagers can only read the board they walk up to."],
   ["shelf", "Shelf", "A shelf (5 sticks). Put them in a room set to Storage: the room becomes a stockpile whose food and hides spoil slower, the better it is."],
   ["field", "Field", "Drag a rectangle of bare grass (up to 12 by 12) to mark a field. Villagers till it, sow seed from the stockpile, water and harvest it as chores. Crops grow in spring and summer; the first frost kills any that are not ripe. Needs someone who has seen a seed come up."],
   ["pen", "Pen", "Drag a rectangle (2 to 8 cells a side) for a hopper pen. Villagers stake out a fence of sticks with a gate on the south side; then the Capture order brings wild hoppers in, grass in the stockpile feeds them and they breed. Needs husbandry."],
@@ -43,6 +45,7 @@ const TOOLS = [
  ["stockpile", "Stockpile", "Drag a rectangle (up to 12 by 12) of free ground to add a stockpile zone. Pick what it takes: everything, only food, or only materials. Villagers carry an item to a zone whose filter names it before the main yard, so a yard full of food stops blocking logs and stone. The main yard also grows a ring by itself when it fills, if the land is free."],
   ["erase", "Erase", "Drag a rectangle to remove planned pieces (delivered materials come back)."],
   ["deconstruct", "Deconstruct", "Drag a rectangle over BUILT walls, floors, roofs, doors, beds and racks to have villagers take them down (about 75% of the materials come back). Erase removes plans; this removes finished pieces."],
+  ["cleararea", "Clear area", "Drag a rectangle to clear it of trees, bushes and grass tufts (logs, sticks and berries come out loose). Selected villagers start at once; idle ones help when they hear of it. Rock and tubers stay."],
   ["dig", "Dig", "Mark ground for villagers to dig as a chore: a region (drag), a stair down (click), a vein to follow (click an ore cell) or an item to seek (flint, malachite, clay). Or order the selected villagers to dig a 5x5 patch."],
   ["capture", "Capture", "Drag a rectangle around a finished building to save it as a blueprint."],
 ];
@@ -50,7 +53,7 @@ const SHAPES = {
   wall: [["box", "Outline"], ["line", "Line"], ["fill", "Fill"]], floor: [["fill", "Fill"], ["line", "Line"], ["box", "Outline"]],
   roof: [["fill", "Fill"], ["box", "Outline"], ["line", "Line"]], door: [["point", "Point"], ["line", "Line"]],
   bed: [["point", "Point"], ["line", "Line"]], rack: [["point", "Point"], ["line", "Line"]], hearth: [["point", "Point"]],
-  kiln: [["point", "Point"]], mound: [["point", "Point"]], bellows: [["point", "Point"]], workbench: [["point", "Point"]], waterjar: [["point", "Point"]], smoker: [["point", "Point"]], forge: [["point", "Point"]], torch: [["point", "Point"]], lamp: [["point", "Point"]], vent: [["point", "Point"]], shelf: [["point", "Point"], ["line", "Line"]],
+  kiln: [["point", "Point"]], mound: [["point", "Point"]], bellows: [["point", "Point"]], workbench: [["point", "Point"]], waterjar: [["point", "Point"]], smoker: [["point", "Point"]], forge: [["point", "Point"]], board: [["point", "Point"]], torch: [["point", "Point"]], lamp: [["point", "Point"]], vent: [["point", "Point"]], shelf: [["point", "Point"], ["line", "Line"]],
 };
 const MATS = { wall: ["wattle", "hide", "log", "timber", "stone", "dressed", "brick", "support"], roof: ["thatch", "hideroof", "logroof"], floor: ["dirt", "plank"] };      // S9: a material shows once someone can work it (BMAT.need)
 const REASON = { bounds: "outside the map", blocked: "something is in the way", ground: "nothing solid to stand it on", exists: "already planned", stockpile: "that is the stockpile", material: "wrong material", unknown: "nobody in the village knows how to make that yet" };
@@ -61,7 +64,7 @@ const ZF = [["all", "Everything"], ["food", "Food only"], ["mat", "Materials onl
 export const ZF_LABEL = { all: "everything", food: "food only", mat: "materials only" };
 
 export function buildState() {
-  return { tool: "wall", mat: { wall: "wattle", roof: "thatch", floor: "dirt" }, shape: { wall: "box", floor: "fill", roof: "fill", door: "point", bed: "point", rack: "point", hearth: "point", kiln: "point", mound: "point", bellows: "point", workbench: "point", waterjar: "point", smoker: "point", forge: "point", torch: "point", lamp: "point", vent: "point", shelf: "point" },
+  return { tool: "wall", mat: { wall: "wattle", roof: "thatch", floor: "dirt" }, shape: { wall: "box", floor: "fill", roof: "fill", door: "point", bed: "point", rack: "point", hearth: "point", kiln: "point", mound: "point", bellows: "point", workbench: "point", waterjar: "point", smoker: "point", forge: "point", torch: "point", lamp: "point", vent: "point", shelf: "point", board: "point" },
     drag: null, bp: null, prevZ: 17, last: "", zf: "all",
     dig: { intent: "region", layers: 3, levels: 6, item: "malachite" } };
 }
@@ -89,7 +92,7 @@ export function createBuildMode(game, root) {
     if (icon) { b.classList.add("btn", cls === "tool" ? "tl" : "ico"); b.innerHTML = svg(icon, 18) + `<span class="${cls === "tool" ? "tcap" : "sr"}">${esc(label)}</span>`; b.setAttribute("aria-label", label); } else b.textContent = label;
     b.dataset.tip = (icon ? label + "\n" : "") + title; b.onclick = fn; parent.appendChild(b); return b;
   };
-  const GROUPS = [["wall", "floor", "roof", "door"], ["bed", "rack", "shelf", "waterjar", "torch", "lamp", "vent"], ["hearth", "kiln", "mound", "bellows", "workbench", "smoker", "forge"], ["field", "pen", "cellar", "stockpile"], ["erase", "deconstruct", "dig", "capture"]];
+  const GROUPS = [["wall", "floor", "roof", "door"], ["bed", "rack", "board", "shelf", "waterjar", "torch", "lamp", "vent"], ["hearth", "kiln", "mound", "bellows", "workbench", "smoker", "forge"], ["field", "pen", "cellar", "stockpile"], ["erase", "deconstruct", "cleararea", "dig", "capture"]];
   const toolBtns = {};
   const TOOL_BY = Object.fromEntries(TOOLS.map(t => [t[0], t]));
   GROUPS.forEach((g, gi) => {
@@ -141,6 +144,7 @@ export function createBuildMode(game, root) {
   };
   game.buildRotate = rotate;
   game.buildErase = () => setTool("erase");
+  game.buildTool = (k) => { if (ui.mode !== "build") game.setMode("build"); setTool(k); };           // D58: the order bar's Clear area button
 
   // ---- geometry helpers ----
   const level = () => renderer.z;
@@ -190,7 +194,7 @@ export function createBuildMode(game, root) {
     down(g, e) {
       if (e.button !== 0) return false;
       const c = cellAt(e);
-      if (SHAPES[B.tool] || RECT_TOOLS.includes(B.tool) || B.tool === "erase" || B.tool === "capture" || B.tool === "deconstruct" || (B.tool === "dig" && B.dig.intent === "region")) B.drag = { a: c, b: c };
+      if (SHAPES[B.tool] || RECT_TOOLS.includes(B.tool) || B.tool === "erase" || B.tool === "capture" || B.tool === "deconstruct" || B.tool === "cleararea" || (B.tool === "dig" && B.dig.intent === "region")) B.drag = { a: c, b: c };
       return false;
     },
     move(g, e) {
@@ -222,6 +226,9 @@ export function createBuildMode(game, root) {
       } else if (t === "deconstruct" && d) {
         const ok = sim.apply({ type: "deconstruct", x0: d.a.x, y0: d.a.y, x1: c.x, y1: c.y, z });
         game.toast(ok ? "Marked for taking down. Villagers do it as a chore and bring the materials back." : "No built pieces on this level in that rectangle.");
+      } else if (t === "cleararea" && d) {
+        const ok = sim.apply({ type: "clearArea", ids: orderable(game).map(v => v.id), x0: d.a.x, y0: d.a.y, x1: c.x, y1: c.y, z });
+        game.toast(ok ? "Clear area: " + (ui.sel.length ? "on it." : "idle villagers will help.") : "Nothing to clear there.");
       } else if (t === "capture" && d) {
         const rid = ui.reviseBp, rbp = rid && sim.bps.list.find(b => b.id === rid);
         if (rbp) {                                                  // S11: capture over a saved design = revision n+1
@@ -285,15 +292,15 @@ export function createBuildMode(game, root) {
           ctx.fillStyle = RECT_COLOR[t][0]; ctx.strokeStyle = RECT_COLOR[t][1]; ctx.lineWidth = 2; ctx.fillRect(ax, ay, rw, rh); ctx.strokeRect(ax, ay, rw, rh);
         }
       }
-      if (B.drag && (t === "erase" || t === "capture" || t === "deconstruct" || t === "dig")) {
+      if (B.drag && (t === "erase" || t === "capture" || t === "deconstruct" || t === "dig" || t === "cleararea")) {
         const { a, b } = B.drag, [ax, ay, rw, rh] = cam.rect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.max(a.x, b.x) + 1, Math.max(a.y, b.y) + 1, z);
-        const red = t !== "capture" && t !== "dig"; ctx.fillStyle = t === "dig" ? "rgba(201,162,255,.28)" : red ? "rgba(230,70,60,.18)" : "rgba(124,196,255,.18)"; ctx.strokeStyle = t === "dig" ? "#c9a2ff" : red ? "#e6463c" : "#7cc4ff"; ctx.lineWidth = 2;
+        const red = t !== "capture" && t !== "dig" && t !== "cleararea"; ctx.fillStyle = t === "cleararea" ? "rgba(110,200,90,.26)" : t === "dig" ? "rgba(201,162,255,.28)" : red ? "rgba(230,70,60,.18)" : "rgba(124,196,255,.18)"; ctx.strokeStyle = t === "cleararea" ? "#7ccf5a" : t === "dig" ? "#c9a2ff" : red ? "#e6463c" : "#7cc4ff"; ctx.lineWidth = 2;
         ctx.fillRect(ax, ay, rw, rh); ctx.strokeRect(ax, ay, rw, rh);
-      } else if (!B.drag && (t === "erase" || t === "capture" || t === "dig" || t === "deconstruct")) {
+      } else if (!B.drag && (t === "erase" || t === "capture" || t === "dig" || t === "deconstruct" || t === "cleararea")) {
         const c = mouseCell();
         if (inMap(c)) {
           const tz = renderer.topAt(c.x, c.y) + 1, [sx, sy, cw, ch] = cam.rect(c.x, c.y, c.x + 1, c.y + 1, tz > 0 ? tz : z);
-          ctx.strokeStyle = t === "erase" || t === "deconstruct" ? "#e6463c" : t === "dig" ? "#c9a2ff" : "#7cc4ff"; ctx.lineWidth = 2;
+          ctx.strokeStyle = t === "erase" || t === "deconstruct" ? "#e6463c" : t === "cleararea" ? "#7ccf5a" : t === "dig" ? "#c9a2ff" : "#7cc4ff"; ctx.lineWidth = 2;
           if (t === "dig" && B.dig.intent === "order") ctx.strokeRect(sx - 2 * cw, sy - 2 * ch, 5 * cw, 5 * ch); else ctx.strokeRect(sx, sy, cw, ch);
         }
       }
@@ -389,7 +396,7 @@ export function createBuildMode(game, root) {
       bpb.style.display = game.unlocked("blueprints") ? "" : "none"; bpb.classList.toggle("on", !!ui.bpOpen);
       if (t === "capture" && !game.unlocked("blueprints")) B.tool = "wall";
       const DH = { region: "Drag a box over the ground to dig. [ ] changes the level you see.", depth: "Click where the stair should start.", vein: "Click an ore or clay cell you have uncovered.", seek: "Click where to start looking.", order: "Select villagers, then click rock or soil." };
-      const help = t === "stockpile" ? "Drag a rectangle (up to 12 by 12) of free ground. Items go to a zone whose filter names them before the main yard." : t === "dig" ? DH[B.dig.intent] : t === "field" ? "Drag a rectangle of bare grass for a field (up to 12 by 12)." : t === "pen" ? "Drag a rectangle, 2 to 8 cells a side, for a hopper pen." : t === "cellar" ? "Drag over a dug, roofed room at least 3 levels below the surface (view its level first)." : t === "capture" ? (ui.reviseBp ? "Drag around the edited building to capture it as the next revision of the design." : "Drag a rectangle around a finished building.") : t === "deconstruct" ? "Drag over finished pieces to take them down." : t === "erase" ? "Drag over planned pieces to remove them." : t === "stamp" ? "Click to place; R rotates; right-click stops." : SHAPES[t] ? "Drag on the map to plan. Right-click cancels." : "";
+      const help = t === "stockpile" ? "Drag a rectangle (up to 12 by 12) of free ground. Items go to a zone whose filter names them before the main yard." : t === "dig" ? DH[B.dig.intent] : t === "field" ? "Drag a rectangle of bare grass for a field (up to 12 by 12)." : t === "pen" ? "Drag a rectangle, 2 to 8 cells a side, for a hopper pen." : t === "cellar" ? "Drag over a dug, roofed room at least 3 levels below the surface (view its level first)." : t === "capture" ? (ui.reviseBp ? "Drag around the edited building to capture it as the next revision of the design." : "Drag a rectangle around a finished building.") : t === "deconstruct" ? "Drag over finished pieces to take them down." : t === "cleararea" ? "Drag a rectangle to clear its trees, bushes and tufts." : t === "erase" ? "Drag over planned pieces to remove them." : t === "stamp" ? "Click to place; R rotates; right-click stops." : SHAPES[t] ? "Drag on the map to plan. Right-click cancels." : "";
       const cost = status._cost || "";
       const h = `<span class="bb-help"${tipAttr(help)}>${svg("help", 16)}<span class="sr">${esc(help)}</span></span> ${cost}`;
       if (h !== status._h) { status._h = h; status.innerHTML = h; }

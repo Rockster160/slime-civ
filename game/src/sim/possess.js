@@ -22,6 +22,7 @@ import { isAdult, ageDays, fitness, maxHp } from "./villager.js";
 import { inZone, stockZoneAt, ITEMS } from "./items.js";
 import { costOf, checkPlace, placeGhosts, csiteAt } from "./build.js";
 import { log } from "./chronicle.js";
+import { noteSeen } from "./belief.js";
 
 export const COLLAPSE_HP = 0.10;      // below this share of max health the body gives out and the guidance ends
 
@@ -94,6 +95,7 @@ export function playerStep(sim, v) {
   if (pin.tid || pin.verb) {
     const verb = pin.verb, tid = pin.tid, cell = [pin.x, pin.y, pin.z];
     pin.tid = 0; pin.verb = "";
+    noteSeen(sim, v, tid ? sim.ents.get(tid) : null);          // 9.32: what the player points its slime at is something the slime has seen
     const r = interact(sim, v, tid, verb, cell);
     if (r.blocker) { p.fb = [r.blocker, t]; return; }
     if (v.action) cancelAction(sim, v);
@@ -185,6 +187,7 @@ export function interact(sim, v, tid, verb, cell) {
   if (e.kind === "furniture") {
     if (!near1(v, e)) return { blocker: "TOO_FAR" };
     if (e.f === "bed") return interact(sim, v, tid, "sleep", cell);
+    if (e.f === "board") return verb === "post" ? one("post", { v: "post", tid, ...here(v) }) : one("check_board", { v: "read", tid, ...here(v) });     // 9.32: a possessed slime reads (or posts to) the board like any other
     if (e.f === "rack" && v.carry && v.carry.item === "berry" && v.carry.n >= 5) return one("dry", { v: "dry", tid, x: e.x, y: e.y, z: e.z }, [e]);
   }
   return { blocker: "GONE" };
