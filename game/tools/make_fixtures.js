@@ -523,6 +523,8 @@ export const FIXTURES = {
   // `autumn`: year2 (year-day 4) + 68 days = year-day 72, three days before winter. `midwinter3`: autumn + 15 days, year-day 87, the coldest stretch.
   autumn: { from: "year2", natural: true, days: 68, prep: (s) => runDays(s, 68) },
   midwinter3: { from: "autumn", natural: true, days: 15, prep: (s) => runDays(s, 15) },
+  // `spring3`: midwinter3 + 14 days = year-day 1 of the next year. The winter's old-age deaths have emptied the beds of the elders; the village is 8 with a bed each.
+  spring3: { from: "midwinter3", natural: true, days: 14, prep: (s) => runDays(s, 14) },
   // A roofed shelter with beds, a stockpile and its purpose set, built by the scripted shelter player (separate run).
   hut: { bot: true, until: (s) => s.tick >= 14 * DUR_DAY && s.rooms.all().some(r => r.enclosed) },
 };

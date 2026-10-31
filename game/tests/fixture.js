@@ -25,6 +25,7 @@ export function loadFixture(name) {
     for (const n of chain) makeDerived(n);
     text = fresh(name);
   }
+  if (!text && !FIXTURES[name]) throw new Error("no fixture named " + name);          // 10.2: a typo must not start the long regeneration (and overwrite every file)
   if (!text) { console.log("fixtures missing or stale: regenerating (one long run)..."); makeFixtures(); text = fresh(name); }
   if (!text) throw new Error("no fixture named " + name);
   return restore(text);

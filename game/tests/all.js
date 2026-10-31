@@ -8,10 +8,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-// The quick set is split in two so each half stays well under the 5-minute cap (measured 2026-10-30:
+// The quick set is split in two so each half stays well under the 5-minute cap (measured 2026-10-30 after 10.2: A and B about 172 s each; before that:
 // A about 140 s, B about 170 s; save_roundtrip alone is 80 s). Run both, one after the other.
-const PART_A = ["oblique", "determinism", "path_bench", "rooms", "build", "jobs", "possess", "deconstruct", "ui_text", "genetics", "split", "property3", "geology", "mining", "heat", "events", "discovery", "chain", "discoveries", "property6", "bots/grind", "bots/k6", "creatures", "flora", "living", "command", "crowd", "underground", "migrate", "ui_s12", "people", "bots/breed", "bots/swap", "bots/expand", "depth", "settle", "endless", "steady"];
-const PART_B = ["save_roundtrip", "cores", "dungeon", "dungeon_regrow", "monsters", "delve", "dormant", "spawn17", "s17", "fpv", "clock", "lifespan", "skill_pacing", "k3", "dayguard", "memory", "stepneed", "belief", "beliefplan", "localdemand", "board", "knowhard", "ideas", "assign"];
+const PART_A = ["oblique", "determinism", "path_bench", "rooms", "build", "jobs", "possess", "deconstruct", "ui_text", "genetics", "split", "property3", "geology", "mining", "heat", "events", "discovery", "chain", "discoveries", "property6", "bots/grind", "bots/k6", "creatures", "flora", "living", "command", "crowd", "underground", "migrate", "ui_s12", "people", "bots/breed", "bots/swap", "bots/expand", "depth", "settle", "endless", "natural_autumn", "natural_cold"];
+const PART_B = ["save_roundtrip", "cores", "dungeon", "dungeon_regrow", "monsters", "delve", "dormant", "spawn17", "s17", "fpv", "clock", "lifespan", "skill_pacing", "k3", "dayguard", "memory", "stepneed", "belief", "beliefplan", "localdemand", "board", "knowhard", "ideas", "assign", "natural_spring"];
 const FULL = ["crowd 100", "bots/chainrun", "bots/k6 --year", "bots/overorder", "bots/absent", "bots/shelter", "bots/keep999", "bots/possess"];
 const full = process.argv.includes("--full");
 const part = process.argv.includes("b") ? "b" : "a";

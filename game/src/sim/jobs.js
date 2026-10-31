@@ -758,7 +758,7 @@ function genHaul(ctx, clsFor) {
     const cls = clsFor(v.carry.item);
     const c = { kind: "store", cls: cls.cls, kp: cls.kp, grp: cls.kp ? "kp:" + cls.kp : "haul", urg: Math.max(0.2, carryLoad(v) / cap), d: 0, key: "store:0" };
     const cell = storeCell(sim, v.carry.item, v.x, v.y);
-    if (!cell && ITEMS[v.carry.item].food === 0) {                  // the food-only cells are all that is left: set the load down rather than stand there with full hands
+    if (!cell && (ITEMS[v.carry.item].food === 0 || v.hunger > 0.8)) {                  // the food-only cells are all that is left: set the load down rather than stand there with full hands
       c.d = 0; c.key = "store:dump"; c.cls = "vcrit"; c.uv = 0; c.grp = "dump";     // full hands also block foraging, so setting the load down is as urgent as the food chain
       c.mk = () => ({ task: Task("store", [{ v: "dump", ...HERE }]), res: [] });
     } else if (!cell) { c.blocker = "NO_STORAGE"; c.mk = () => ({ blocker: "NO_STORAGE" }); }
