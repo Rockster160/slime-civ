@@ -539,7 +539,7 @@ function huntMk(ctx, e) {
   return () => {
     const st = standAdj(ctx, e);
     if (!st || !reach(ctx, st)) return { blocker: "NO_PATH" };
-    return { task: Task("hunt", [...equipSteps(ctx, "copper_spear"), { v: "strike", tid: e.id, ...st }]), res: [e] };
+    return { task: Task("hunt", [...equipSteps(ctx, "copper_spear"), { v: "strike", tid: e.id, ...st }]), res: FAUNA[e.sp].huntable === 2 ? [] : [e] };       // big game is hunted by a party: nobody claims it alone
   };
 }
 /** Hunting hoppers as a demand-class job while the village is short of food (a few hunters at most). */
@@ -1503,7 +1503,7 @@ function genAssign(ctx) {
   let best = null, bd = 1e9, rsv = 0;
   const consider = (e, bonus) => {
     if (!assignable(ctx, task, e)) return;
-    if (reservedByOther(sim, e, v.id)) { rsv++; return; }
+    if (!(e.kind === "fauna" && FAUNA[e.sp].huntable === 2) && reservedByOther(sim, e, v.id)) { rsv++; return; }
     if (isBad(v, e.id, t)) return;
     const d = Math.abs(e.x - a.x) + Math.abs(e.y - a.y) - bonus;
     if (d < bd || d === bd && best && e.id < best.id) { bd = d; best = e; }

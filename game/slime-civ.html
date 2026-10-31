@@ -379,7 +379,7 @@
 <div id="settingsOverlay" data-test="settings"></div>
 <div id="savesOverlay" class="sheet" data-test="saves-sheet"></div>
 <script>
-window.__BUILD = {"stage":"7.23","commit":"2681fa5","dirty":true,"time":"2026-10-30 22:34"};
+window.__BUILD = {"stage":"7.23","commit":"92eccbe","dirty":true,"time":"2026-10-31 10:38"};
 (function () {
   "use strict";
   
@@ -11211,6 +11211,7 @@ window.__BUILD = {"stage":"7.23","commit":"2681fa5","dirty":true,"time":"2026-10
     const FEAR_AT = 0.6;          // above this an autonomous villager drops what they do and runs (§13.7)
     const FEAR_STOP = 0.3;        // ... and keeps running until it falls below this
     const FEAR_R = 14;            // how far a scary creature is seen
+    const PARTY_FEAR = 0.2, PARTY_R = 3;      // a slime sent to hunt a creature, with another slime within PARTY_R, fears that creature a fifth as much and is frightened less by its bite: a hunting party stands
     const ARMED_BOLD = 0.5, ARMED_FEAR = 0.2;      // 7.22: a villager with a spear in hand fears a weak thing (scare < ARMED_BOLD: crawlers, spitters) a fifth as much, so a spear crew can clear a den
     const FEAR_RISE = 0.3, FEAR_FALL = 0.02, FEAR_COMPANY = 0.03;     // per 10 ticks
     const BARE = 12, SPEAR = 50;  // damage of a bare-handed blow and of a copper spear thrust (GDD §13.6: three thrusts kill the thornback)
@@ -11528,20 +11529,25 @@ window.__BUILD = {"stage":"7.23","commit":"2681fa5","dirty":true,"time":"2026-10
     /** Fear rises with how close a scary creature is and falls over time, faster in company (§13.7). Returns the new fear. */
     function fearStep(sim, v) {
       let near = 1e9, rise = 0, seen = "";
+      const quarry = v.as && v.as.task === "hunt" ? v.as.tid : 0, party = quarry && withCompany(sim, v);
       for (const e of faunaOf(sim)) {
         const sc = FAUNA[e.sp].scare;
         if (!sc || Math.abs(e.z - v.z) > 3) continue;
         const d = cheb(e, v);
         if (d < near) near = d;
-        if (d <= FEAR_R) { let q = sc * (1 - d / FEAR_R); if (sc < ARMED_BOLD && v.eq && v.eq.item === "copper_spear") q *= ARMED_FEAR; q *= fearMul(v, e.sp); if (q > rise) { rise = q; seen = e.sp; } }        // 7.22: a row's `scare` scales the fear it causes (1 = the thornback); the strongest creature in sight counts
+        if (d <= FEAR_R) { let q = sc * (1 - d / FEAR_R); if (sc < ARMED_BOLD && v.eq && v.eq.item === "copper_spear") q *= ARMED_FEAR; q *= fearMul(v, e.sp); if (party && e.id === quarry) q *= PARTY_FEAR; if (q > rise) { rise = q; seen = e.sp; } }        // 7.22: a row's `scare` scales the fear it causes (1 = the thornback); the strongest creature in sight counts
       }
       let f = v.fear || 0;
       if (near === 1e9 && f === 0) return 0;
       if (seen && f < FEAR_AT) feel(sim, v, seen, "safe", 3);                                  // experiment: a scary creature in sight that has not yet frightened them is exposure without harm (habituation)
-      let company = false;
-      if (f > 0) for (const o of sim.ents.ofKind("villager")) if (o !== v && Math.abs(o.x - v.x) <= 3 && Math.abs(o.y - v.y) <= 3 && Math.abs(o.z - v.z) <= 1) { company = true; break; }
+      const company = f > 0 && (party || withCompany(sim, v));
       f += (near <= FEAR_R ? FEAR_RISE * rise : 0) - (company ? FEAR_COMPANY : FEAR_FALL);
       return (v.fear = r3(Math.max(0, Math.min(1, f))));
+    }
+    /** Another villager within PARTY_R cells (and a level). */
+    function withCompany(sim, v) {
+      for (const o of sim.ents.ofKind("villager")) if (o !== v && Math.abs(o.x - v.x) <= PARTY_R && Math.abs(o.y - v.y) <= PARTY_R && Math.abs(o.z - v.z) <= 1) return true;
+      return false;
     }
     /** The nearest scary creature within sight, or null. */
     function threatOf(sim, v) {
@@ -11574,7 +11580,8 @@ window.__BUILD = {"stage":"7.23","commit":"2681fa5","dirty":true,"time":"2026-10
         if (tgt.sp === "hopper") { tgt.st = "flee"; tgt.n = FAUNA.hopper.flee.steps; tgt.cd = 1; }
         else if (tgt.sp === "grazer" && !tgt.tame && att.kind === "villager") { tgt.st = "turn"; tgt.tg = att.id; tgt.tu = sim.tick + TURN_TICKS; tgt.cd = 2; }     // S14: struck, it comes back at whoever struck it
       } else {
-        tgt.fear = Math.max(tgt.fear || 0, att.kind === "fauna" && FAUNA[att.sp].fearDmg !== undefined ? FAUNA[att.sp].fearDmg : 0.8);                   // damage is fear (§13.7); a grazer's blow frightens less than a beast's (hunters stand)
+        const hunting = att.kind === "fauna" && tgt.as && tgt.as.task === "hunt" && tgt.as.tid === att.id && withCompany(sim, tgt);
+        tgt.fear = Math.max(tgt.fear || 0, att.kind === "fauna" && FAUNA[att.sp].fearDmg !== undefined ? FAUNA[att.sp].fearDmg : hunting ? 0.45 : 0.8);                   // damage is fear (§13.7); a grazer's blow frightens less than a beast's (hunters stand)
         once(sim, "firstWound", "DISASTER", tgt.name + " was wounded by the " + label(att) + ".", [tgt.id], {}, 2);
         if (tgt.hp > 0 && att.kind === "fauna") {                                // experiment (memory.js): hurt by this kind, and where it happened
           const mag = clamp(20 + dmg * 3, 20, 100), pl = placeOf(sim, tgt.x, tgt.y, tgt.z);
@@ -11623,7 +11630,7 @@ window.__BUILD = {"stage":"7.23","commit":"2681fa5","dirty":true,"time":"2026-10
       if (dryAir(sim, e)) sight(sim, "DRY_FOOD", "wind", e.x, e.y, e.z, null);
     }
     
-    return { newWild, spawnFauna, faunaTick, saltLicks, initFauna, hopperCap, hopperDay, huntingPressure, faunaDaily, fearStep, threatOf, attackOf, swing, FAUNA, FEAR_AT, FEAR_STOP, FEAR_R, ARMED_BOLD, BARE, SPEAR_USES, HOPPER_START, HUNTS_TO_SEE, faunaOf, label, near1, HOPPER_LIFE, TUFTS_PER_HOPPER, HOPPER_MIN_CAP, EDGE_RING, wildHoppers, LICK_R };
+    return { newWild, spawnFauna, faunaTick, saltLicks, initFauna, hopperCap, hopperDay, huntingPressure, faunaDaily, fearStep, threatOf, attackOf, swing, FAUNA, FEAR_AT, FEAR_STOP, FEAR_R, PARTY_FEAR, ARMED_BOLD, BARE, SPEAR_USES, HOPPER_START, HUNTS_TO_SEE, faunaOf, label, near1, HOPPER_LIFE, TUFTS_PER_HOPPER, HOPPER_MIN_CAP, EDGE_RING, wildHoppers, LICK_R };
   })();
   
   __mod["sim/husbandry.js"] = (function () {
@@ -15213,7 +15220,7 @@ window.__BUILD = {"stage":"7.23","commit":"2681fa5","dirty":true,"time":"2026-10
       return () => {
         const st = standAdj(ctx, e);
         if (!st || !reach(ctx, st)) return { blocker: "NO_PATH" };
-        return { task: Task("hunt", [...equipSteps(ctx, "copper_spear"), { v: "strike", tid: e.id, ...st }]), res: [e] };
+        return { task: Task("hunt", [...equipSteps(ctx, "copper_spear"), { v: "strike", tid: e.id, ...st }]), res: FAUNA[e.sp].huntable === 2 ? [] : [e] };       // big game is hunted by a party: nobody claims it alone
       };
     }
     /** Hunting hoppers as a demand-class job while the village is short of food (a few hunters at most). */
@@ -16177,7 +16184,7 @@ window.__BUILD = {"stage":"7.23","commit":"2681fa5","dirty":true,"time":"2026-10
       let best = null, bd = 1e9, rsv = 0;
       const consider = (e, bonus) => {
         if (!assignable(ctx, task, e)) return;
-        if (reservedByOther(sim, e, v.id)) { rsv++; return; }
+        if (!(e.kind === "fauna" && FAUNA[e.sp].huntable === 2) && reservedByOther(sim, e, v.id)) { rsv++; return; }
         if (isBad(v, e.id, t)) return;
         const d = Math.abs(e.x - a.x) + Math.abs(e.y - a.y) - bonus;
         if (d < bd || d === bd && best && e.id < best.id) { bd = d; best = e; }
@@ -24074,7 +24081,7 @@ window.__BUILD = {"stage":"7.23","commit":"2681fa5","dirty":true,"time":"2026-10
     /** Right-click: one-click default; a popup only when several verbs fit. */
     function rightClick(game, pick, sx, sy) {
       const opts = optionsAt(game, pick);
-      if (pick.ents.some(e => e.kind === "fauna" && FAUNA[e.sp].hostile && !(FAUNA[e.sp].mon && !FAUNA[e.sp].boss))) { game.toast("Villagers will not fight a thornback on their own. Guide one yourself (select it, press Q), with a copper spear."); return; }
+      if (pick.ents.some(e => e.kind === "fauna" && FAUNA[e.sp].hostile && !FAUNA[e.sp].huntable && !(FAUNA[e.sp].mon && !FAUNA[e.sp].boss))) { game.toast("Villagers will not fight a thornback on their own. Guide one yourself (select it, press Q), with a copper spear."); return; }
       if (!game.ui.sel.length) { game.toast("Select villagers first, then right-click to give an order."); return; }
       if (opts.length === 1) { issueOrder(game, opts[0], pick); return; }
       if (opts.length === 2 && opts[0].verb !== "move" && opts[1].verb === "move") { issueOrder(game, opts[0], pick); return; }   // target + "move here": the target wins

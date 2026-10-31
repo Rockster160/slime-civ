@@ -43,6 +43,7 @@ export const FAUNA = {
 export const FEAR_AT = 0.6;          // above this an autonomous villager drops what they do and runs (§13.7)
 export const FEAR_STOP = 0.3;        // ... and keeps running until it falls below this
 export const FEAR_R = 14;            // how far a scary creature is seen
+export const PARTY_FEAR = 0.2, PARTY_R = 3;      // a slime sent to hunt a creature, with another slime within PARTY_R, fears that creature a fifth as much and is frightened less by its bite: a hunting party stands
 export const ARMED_BOLD = 0.5, ARMED_FEAR = 0.2;      // 7.22: a villager with a spear in hand fears a weak thing (scare < ARMED_BOLD: crawlers, spitters) a fifth as much, so a spear crew can clear a den
 const FEAR_RISE = 0.3, FEAR_FALL = 0.02, FEAR_COMPANY = 0.03;     // per 10 ticks
 export const BARE = 12, SPEAR = 50;  // damage of a bare-handed blow and of a copper spear thrust (GDD §13.6: three thrusts kill the thornback)
@@ -360,20 +361,25 @@ export function faunaDaily(sim) {
 /** Fear rises with how close a scary creature is and falls over time, faster in company (§13.7). Returns the new fear. */
 export function fearStep(sim, v) {
   let near = 1e9, rise = 0, seen = "";
+  const quarry = v.as && v.as.task === "hunt" ? v.as.tid : 0, party = quarry && withCompany(sim, v);
   for (const e of faunaOf(sim)) {
     const sc = FAUNA[e.sp].scare;
     if (!sc || Math.abs(e.z - v.z) > 3) continue;
     const d = cheb(e, v);
     if (d < near) near = d;
-    if (d <= FEAR_R) { let q = sc * (1 - d / FEAR_R); if (sc < ARMED_BOLD && v.eq && v.eq.item === "copper_spear") q *= ARMED_FEAR; q *= fearMul(v, e.sp); if (q > rise) { rise = q; seen = e.sp; } }        // 7.22: a row's `scare` scales the fear it causes (1 = the thornback); the strongest creature in sight counts
+    if (d <= FEAR_R) { let q = sc * (1 - d / FEAR_R); if (sc < ARMED_BOLD && v.eq && v.eq.item === "copper_spear") q *= ARMED_FEAR; q *= fearMul(v, e.sp); if (party && e.id === quarry) q *= PARTY_FEAR; if (q > rise) { rise = q; seen = e.sp; } }        // 7.22: a row's `scare` scales the fear it causes (1 = the thornback); the strongest creature in sight counts
   }
   let f = v.fear || 0;
   if (near === 1e9 && f === 0) return 0;
   if (seen && f < FEAR_AT) feel(sim, v, seen, "safe", 3);                                  // experiment: a scary creature in sight that has not yet frightened them is exposure without harm (habituation)
-  let company = false;
-  if (f > 0) for (const o of sim.ents.ofKind("villager")) if (o !== v && Math.abs(o.x - v.x) <= 3 && Math.abs(o.y - v.y) <= 3 && Math.abs(o.z - v.z) <= 1) { company = true; break; }
+  const company = f > 0 && (party || withCompany(sim, v));
   f += (near <= FEAR_R ? FEAR_RISE * rise : 0) - (company ? FEAR_COMPANY : FEAR_FALL);
   return (v.fear = r3(Math.max(0, Math.min(1, f))));
+}
+/** Another villager within PARTY_R cells (and a level). */
+function withCompany(sim, v) {
+  for (const o of sim.ents.ofKind("villager")) if (o !== v && Math.abs(o.x - v.x) <= PARTY_R && Math.abs(o.y - v.y) <= PARTY_R && Math.abs(o.z - v.z) <= 1) return true;
+  return false;
 }
 /** The nearest scary creature within sight, or null. */
 export function threatOf(sim, v) {
@@ -406,7 +412,8 @@ export function swing(sim, att, tgt) {
     if (tgt.sp === "hopper") { tgt.st = "flee"; tgt.n = FAUNA.hopper.flee.steps; tgt.cd = 1; }
     else if (tgt.sp === "grazer" && !tgt.tame && att.kind === "villager") { tgt.st = "turn"; tgt.tg = att.id; tgt.tu = sim.tick + TURN_TICKS; tgt.cd = 2; }     // S14: struck, it comes back at whoever struck it
   } else {
-    tgt.fear = Math.max(tgt.fear || 0, att.kind === "fauna" && FAUNA[att.sp].fearDmg !== undefined ? FAUNA[att.sp].fearDmg : 0.8);                   // damage is fear (§13.7); a grazer's blow frightens less than a beast's (hunters stand)
+    const hunting = att.kind === "fauna" && tgt.as && tgt.as.task === "hunt" && tgt.as.tid === att.id && withCompany(sim, tgt);
+    tgt.fear = Math.max(tgt.fear || 0, att.kind === "fauna" && FAUNA[att.sp].fearDmg !== undefined ? FAUNA[att.sp].fearDmg : hunting ? 0.45 : 0.8);                   // damage is fear (§13.7); a grazer's blow frightens less than a beast's (hunters stand)
     once(sim, "firstWound", "DISASTER", tgt.name + " was wounded by the " + label(att) + ".", [tgt.id], {}, 2);
     if (tgt.hp > 0 && att.kind === "fauna") {                                // experiment (memory.js): hurt by this kind, and where it happened
       const mag = clamp(20 + dmg * 3, 20, 100), pl = placeOf(sim, tgt.x, tgt.y, tgt.z);

@@ -89,7 +89,7 @@ export function issueOrder(game, opt, pick) {
 /** Right-click: one-click default; a popup only when several verbs fit. */
 export function rightClick(game, pick, sx, sy) {
   const opts = optionsAt(game, pick);
-  if (pick.ents.some(e => e.kind === "fauna" && FAUNA[e.sp].hostile && !(FAUNA[e.sp].mon && !FAUNA[e.sp].boss))) { game.toast("Villagers will not fight a thornback on their own. Guide one yourself (select it, press Q), with a copper spear."); return; }
+  if (pick.ents.some(e => e.kind === "fauna" && FAUNA[e.sp].hostile && !FAUNA[e.sp].huntable && !(FAUNA[e.sp].mon && !FAUNA[e.sp].boss))) { game.toast("Villagers will not fight a thornback on their own. Guide one yourself (select it, press Q), with a copper spear."); return; }
   if (!game.ui.sel.length) { game.toast("Select villagers first, then right-click to give an order."); return; }
   if (opts.length === 1) { issueOrder(game, opts[0], pick); return; }
   if (opts.length === 2 && opts[0].verb !== "move" && opts[1].verb === "move") { issueOrder(game, opts[0], pick); return; }   // target + "move here": the target wins

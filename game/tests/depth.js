@@ -268,6 +268,14 @@ function wolfAt(sim, c) { const w = spawnFauna(sim, "wolf", c[0], c[1], c[2]); w
   assert.ok(ate >= 0 && w2.fd > h.tick, "a hungry wolf takes a hopper (" + ate + " ticks)");
   // a hunt order on a wolf is accepted (dangerous game, the player's call)
   assert.ok(h.apply({ type: "order", ids: [adults(h)[0].id], verb: "hunt", tid: w2.id }));
+  // ... and the whole village sent after a wolf stands together and kills it (a party does not panic at its quarry, and nobody claims big game alone)
+  {
+    const p = loadFixture("pen"); p.dp = newDepth(1); p.wild.i2 = 1;
+    const pv = adults(p), wx = p.stock.x0 + 12, wy = p.stock.y0, pw = wolfAt(p, [wx, wy, p.world.standZ(wx, wy)]);
+    assert.ok(p.apply({ type: "order", ids: pv.map(v => v.id), verb: "hunt", tid: pw.id }));
+    for (let i = 0; i < 2000 && p.ents.get(pw.id); i++) p.step();
+    assert.ok(!p.ents.get(pw.id) && pv.every(v => p.ents.get(v.id)), "an ordered party kills a wolf and nobody dies");
+  }
   // the surfaces: inspector line, curio
   assert.ok(/Wolf/.test(describe(h, w2)) && !/undefined/.test(describe(h, w2)));
 }
