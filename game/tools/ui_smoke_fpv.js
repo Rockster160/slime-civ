@@ -20,7 +20,7 @@ try {
   await page.goto(pathToFileURL(join(root, "slime-civ.html")).href + "?tools=all&seed=1&debug=1");
   await page.waitForFunction(() => window.__game);
   const G = (fn, arg) => page.evaluate(fn, arg);
-  await G((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", "start.json"), "utf8"));
+  await G((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), readFileSync(join(root, "tests", "fixtures", "start.json"), "utf8"));
   await page.keyboard.press("Shift+O"); await page.waitForTimeout(800);
   // setup: one adult on open ground facing east, a tree beside it and a berry bush two cells further on
   const info = await G(() => {

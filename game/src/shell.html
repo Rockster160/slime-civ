@@ -258,6 +258,9 @@
   .cc-card { background:var(--s1); border-radius:var(--r2); box-shadow:var(--e2); padding:var(--sp3) var(--sp4); border:1px solid #9a6bff; } .cc-head { display:flex; align-items:center; gap:var(--sp2); font-size:15px; } .cc-head .ic { color:#d68cff; } .cc-card p { margin:var(--sp2) 0; } .cc-btns { display:flex; gap:var(--sp2); } .cc-btns .btn { flex:1; justify-content:center; } .cc-sub { font-size:12px; color:var(--tx2); }
   .sheet-head { position:sticky; top:calc(-1 * var(--sp4)); z-index:2; background:#12171e; margin:calc(-1 * var(--sp4)) 0 var(--sp3); padding-top:var(--sp4); } .sheet-head .xbtn { top:var(--sp3); right:0; }
   .helpcard .sheet-head { display:flex; align-items:center; gap:var(--sp3); border-bottom:1px solid var(--line); padding-bottom:var(--sp2); } .helpcard .sheet-head h2 { margin:0; } .helpcard .hreplay { padding:4px 14px; min-height:28px; margin-right:36px; }
+  .savecard .srow { display:flex; align-items:center; gap:var(--sp3); padding:8px 0; border-bottom:1px solid var(--line); } .savecard .sprev { flex:none; line-height:0; border-radius:4px; overflow:hidden; }
+  .savecard .smain { flex:1; display:flex; flex-direction:column; gap:3px; min-width:0; } .savecard .smain b { font-size:14px; } .savecard .smeta { display:flex; gap:12px; align-items:center; } .savecard .smeta svg { vertical-align:-2px; }
+  .savecard .sbtn { flex:none; display:flex; gap:6px; } .savecard .sbtn .btn { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; min-height:28px; } .savecard .sbtn .btn.warn { border-color:var(--bad,#e5594f); color:var(--bad,#e5594f); } .savecard .sempty { padding:20px 0; }
   .setcard h2, .helpcard h2 { margin-bottom:6px; } .setcard h3, .helpcard h3 { margin:14px 0 4px; color:var(--tx2); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
   .setcard table, .helpcard table { border-collapse:collapse; width:100%; } .setcard td, .helpcard td { padding:3px 10px 3px 0; vertical-align:middle; border-bottom:1px solid var(--line); } .setcard td.act { width:230px; }
   .setcard tr.hd td { color:var(--tx2); font-weight:600; padding-top:10px; border:0; } .setcard tr.cap td button.chg { border-color:var(--sel); color:var(--sel); }
@@ -374,6 +377,7 @@
 <div id="book" class="sheet" data-test="book"></div>
 <div id="helpOverlay" class="sheet"></div>
 <div id="settingsOverlay" data-test="settings"></div>
+<div id="savesOverlay" class="sheet" data-test="saves-sheet"></div>
 <script>
 /*BUNDLE*/
 </script>

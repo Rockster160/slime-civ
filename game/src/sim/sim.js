@@ -16,7 +16,7 @@ import { DAY, DUR_DAY } from "./clock.js";
 import { dayF, WINTER_START, isNight, winterAhead } from "./season.js";
 import { newCache, spoilDaily } from "./items.js";
 import { newBoard, updateBoard, updateKeeps, village } from "./board.js";
-import { newChron, once } from "./chronicle.js";
+import { newChron, once, pruneChron } from "./chronicle.js";
 import { growPlants, frostBerries } from "./plants.js";
 import { updateNeeds, NEED_STEP, worstUrgency } from "./villager.js";
 import { addFounder, foundColony, breedDaily, kill, refreshDerived } from "./population.js";
@@ -35,6 +35,7 @@ import { roomMilestones } from "./roomeval.js";
 import { PURPOSES } from "./purposes.js";
 import { newSeen, initSeen, watch, seenRle } from "./seen.js";
 import { chunkTick, ACT_R, chunkMeta, hookEntities } from "./chunks.js";
+import { worldDeltas, allEntities } from "./paging.js";
 import { newMine, mineTick, MINE_COMMANDS } from "./mine.js";
 import { newDisc, updatePressure, knowledgeTick } from "./knowledge.js";
 import { packTick } from "./gear.js";
@@ -66,6 +67,8 @@ initIdeas();                                          // 9.33: the look learns w
 
 export const START_VILLAGERS = 7;
 
+/** 8.27: how many of the newest commands a sim (and so a save) keeps. */
+export const CMD_CAP = 200;
 export class Sim {
   /** @param {number} seed  @param {{villagers?: number, biomes?: boolean, depth?: boolean, ironman?: boolean}} [opts] villagers: 0 for a bare world (used by load); biomes: false regrows a world made before S12's biome pass; ironman: one autosave slot, no manual load (UI rule, saved) */
   static create(seed, opts = {}) {
@@ -96,11 +99,13 @@ export class Sim {
     this.ents = ents;
     this.def = ownDef(world.def); this.site = world.site;     // S16: the generator's definition and the camp (world.site; not a constant any more)
     hookEntities(this);
+    ents.dk = world.dk;                       // 8.25: one dirty-chunk set for cells and entities (the store reads and clears it)
     this.path = new Pathfinder(this.world);
     this.cmdLog = [];                         // [{t, type, ...}] in application order
     this.stock = null;                        // stockpile zone {x0,y0,x1,y1,z}
     this.board = newBoard();                  // job-board village state (saved, hashed)
     this.chron = newChron();                  // chronicle + dead villagers' records (saved, hashed)
+    this.pg = null;                           // 8.26: chunk paging (paging.js enablePaging); null = every changed chunk stays resident. Runtime only, never saved or hashed
     this.cache = newCache();                  // derived data only; never saved
     this.rooms = new Rooms();                 // derived from cells; only its purpose marks are saved + hashed
     this.bps = newBps();                      // player blueprints (saved + hashed)
@@ -217,6 +222,7 @@ export class Sim {
   /** Once per calendar day: spoilage, skill day reset, aging refresh, births, season events. */
   daily() {
     spoilDaily(this);
+    pruneChron(this);                                         // 8.24: bounded dead-villager records and mem: flags
     sproutDaily(this);                                        // S10: rotted seed near the camp may come up (the sight that teaches farming)
     faunaDaily(this);
     floraDaily(this, CAMP(this.stock));                       // S10: plants age, seed and wither; the map neither fills nor empties
@@ -245,6 +251,7 @@ export class Sim {
     const ok = COMMANDS[cmd.type] ? COMMANDS[cmd.type](this, cmd) : false;
     this.rooms.update(this);                  // so a UI reading rooms right after a command sees the new state
     this.cmdLog.push({ t: this.tick, ...cmd });
+    if (this.cmdLog.length >= CMD_CAP * 2) this.cmdLog = this.cmdLog.slice(-CMD_CAP);       // 8.27 (OD-54): only the newest commands are kept (nothing reads the log but tests and replays of a short span)
     return ok;
   }
 
@@ -253,9 +260,9 @@ export class Sim {
     const h = new Hasher();
     h.u32(this.tick);
     h.value(this.rng.counters());
-    h.value(this.world.deltas());
+    h.value(worldDeltas(this));
     h.value(chunkMeta(this));                 // S16: which chunks are active, which changed, when they were last near anyone
-    h.value(this.ents.toJSON());
+    h.value(allEntities(this));
     h.value(this.stock);
     h.value(this.board);
     h.value(this.chron);

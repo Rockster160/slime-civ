@@ -68,7 +68,7 @@ function run(sim, max, until, hold = []) {
   for (const v of sim.ents.ofKind("villager")) assert.ok(v.bel.some(f => f[0] === "furn:board"), "every founder knows the board");
   const old = loadFixture("settled");
   assert.equal(boardsOf(old).length, 1, "a fixture saved before the board gets one when it is opened");
-  assert.equal(SAVE_VERSION, 20);
+  assert.equal(SAVE_VERSION, 21);
   ok("a founding board stands " + gap + " cells from the yard, empty; the founders know it; an older save gets one (SAVE_VERSION " + SAVE_VERSION + ")");
 }
 

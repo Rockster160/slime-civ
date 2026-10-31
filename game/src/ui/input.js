@@ -31,7 +31,7 @@ export function setupInput(game, canvas) {
     if (act === "pause") { game.togglePause(); e.preventDefault(); return; }
     if (k >= "1" && k <= "9" && k.length === 1) { game.setSpeed(SPEEDS[Number(k) - 1]); return; }      // 1-5: 1x-5x, 6: 10x, 7: 25x, 8: 50x, 9: MAX
     if (guide) {                                    // guiding: walk keys step, the guide keys act (ui/possess.js); no follow toggle, no Tab
-      if (k === "Escape") { if (game.fpvEscape && game.fpvEscape()) return; if (ui.book) game.closeBook(); else if (ui.help) ui.help = false; else { ui.digest = null; game.release(); } return; }     // letting go always works, even with the digest up
+      if (k === "Escape") { if (game.fpvEscape && game.fpvEscape()) return; if (ui.saves) ui.saves = false; else if (ui.book) game.closeBook(); else if (ui.help) ui.help = false; else { ui.digest = null; game.release(); } return; }     // letting go always works, even with the digest up
       if (e.shiftKey && (k === "ArrowUp" || k === "ArrowDown") && game.fpvNudge) { game.fpvNudge(k === "ArrowUp" ? 1 : -1); e.preventDefault(); return; }       // nudge the pitch
       if (act === "release") { game.release(); return; }
       if (act === "turnLeft" || act === "turnRight") { if (!e.repeat && game.fpvTurn) game.fpvTurn(act === "turnLeft" ? -1 : 1); e.preventDefault(); return; }
@@ -66,7 +66,8 @@ export function setupInput(game, canvas) {
 
   function escape() {
     closeMenu();
-    if (ui.book) game.closeBook();
+    if (ui.saves) ui.saves = false;
+    else if (ui.book) game.closeBook();
     else if (ui.help) ui.help = false;
     else if (ui.digest) ui.digest = null;
     else if (ui.targeting) ui.targeting = null;

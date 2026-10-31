@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 export const fixtureJSON = (name) => readFileSync(join(root, "tests", "fixtures", name + ".json"), "utf8");
 const loadFx = async (page, G, name) => {
-  await page.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), fixtureJSON(name));
+  await page.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), fixtureJSON(name));
   await page.keyboard.press("Shift+O"); await page.waitForTimeout(600);
   await G(() => { const g = __game; g.state.paused = true; g.ui.follow = 0; g.clearSelection(); g.setMode("select"); g.ui.digest = null; g.sim.board.fc = 0; g.setLevel(g.D - 1); g.renderer.peek = null; });
 };
@@ -161,7 +161,12 @@ export async function inspector(page, { G, ok, shot }) {
     jobs.add(r.job + "/" + r.why); if (lastJob !== null && r.job !== lastJob) jobsChanged++; lastJob = r.job;
     if (!base.length) base.push(r);
     assert.equal(r.q.length >= 6 ? 6 : r.q.length, 6, "the first six sections exist: " + JSON.stringify(r.q));
-    assert.deepEqual(r.q.slice(0, 6), base[0].q.slice(0, 6), "the inspector's top sections keep their tops and heights (sample " + n + ", job " + r.job + ")");
+    {                                                      // (the "Passed over" row grows with its chips now: sections above it keep their tops, every other section keeps its height, those below it only move by the row's change)
+      const a = r.q.slice(0, 6), b = base[0].q.slice(0, 6), pi = b.findIndex(x => x[0] === "passed"), shift = pi < 0 ? 0 : a[pi][2] - b[pi][2];
+      assert.deepEqual(a.map(x => x[0]), b.map(x => x[0]), "the inspector's top sections stay in order (sample " + n + ", job " + r.job + ")");
+      assert.deepEqual(a.map((x, i) => (i === pi ? 0 : x[2])), b.map((x, i) => (i === pi ? 0 : x[2])), "the inspector's top sections keep their heights (sample " + n + ", job " + r.job + ")");
+      assert.deepEqual(a.map((x, i) => x[1] - (pi >= 0 && i > pi ? shift : 0)), b.map(x => x[1]), "the inspector's top sections keep their tops (sample " + n + ", job " + r.job + ")");
+    }
     assert.deepEqual(r.card, base[0].card, "the inspector card keeps its place and size");
     await page.waitForTimeout(250);
   }

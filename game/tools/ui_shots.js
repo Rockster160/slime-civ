@@ -21,7 +21,7 @@ async function load(fixture, query = "") {
   await page.goto(pathToFileURL(join(root, "slime-civ.html")).href + "?seed=1&spawn=64,64" + query);
   await page.waitForFunction(() => window.__game);
   if (fixture) {
-    await page.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", fixture + ".json"), "utf8"));
+    await page.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), readFileSync(join(root, "tests", "fixtures", fixture + ".json"), "utf8"));
     await page.keyboard.press("Shift+O"); await page.waitForTimeout(500);
   }
   await G(() => { __game.state.paused = true; __game.ui.attn.tick = __game.sim.tick; });

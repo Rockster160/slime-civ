@@ -18,6 +18,8 @@ import { depthOn } from "./depth.js";
 import { HIGHLAND, MARSH } from "./biome.js";
 import { sleepChunks, wakeChunks } from "./dormant.js";
 import { WORLD } from "./worldgen.js";
+import { oreSummary } from "./seen.js";
+import { metaRow, coldRows, evictFar, pageIn, EVICT_PERIOD, EVICT_PHASE } from "./paging.js";
 
 export const ACT_CH = 3;            // chunks round an anchor's chunk that are active (7 x 7 chunks: at least 33 cells every way)
 export const ACT_R = 48;            // (cells; the same reach for callers that think in cells: activateAround at creation)
@@ -49,9 +51,10 @@ export function anchorsOf(sim) {
 
 /** Saved and hashed: [[key, active, changed, lastNear, asleepSince, packedPlants, packedItems]] of every resident chunk, ascending (the last two only when the chunk is dormant). */
 export function chunkMeta(sim) {
-  return sim.world.chunkKeys().map(k => { const c = sim.world.chunks.get(k); return c.dz ? [k, c.act, c.mod, c.last, c.dz, c.pk, c.pi] : [k, c.act, c.mod, c.last]; });
+  const rows = sim.world.chunkKeys().map(k => metaRow(k, sim.world.chunks.get(k)));
+  if (!sim.world.ev.size) return rows;
+  return rows.concat(coldRows(sim)).sort((a, b) => a[0] - b[0]);                  // 8.26: evicted chunks are still part of the world
 }
-
 export const SLEEP_PERIOD = 100;
 
 export function chunkTick(sim) {
@@ -66,15 +69,17 @@ export function chunkTick(sim) {
   const waking = [];
   for (const k of [...need].sort((a, b) => a - b)) {
     const cx = chunkKX(k), cy = chunkKY(k);
+    if (w.ev.size && w.ev.has(k) && !pageIn(sim, k)) continue;      // 8.26: back from the cold store (not there yet: the land waits, and is asked for again in 20 ticks)
     const was = w.peekResident(cx, cy);
     if (was && was.dz) { waking.push(was); continue; }
     if (activateChunk(w, sim.ents, sim.def, cx, cy, t) && sim.wild.init) spawnWild(sim, w.peekResident(cx, cy), 0);
     const c = w.peekResident(cx, cy);
-    if (c) c.last = t;
+    if (c) { c.last = t; w.dk.add(k); }
   }
   wakeChunks(sim, waking, spawnWild);
   if (t % SLEEP_PERIOD === 47) sleepFar(sim, anchorChunks);
   if (t % UNLOAD_PERIOD === 107) unload(sim, anchorChunks);
+  if (sim.pg && t % EVICT_PERIOD === EVICT_PHASE) evictFar(sim, anchorChunks, oreSummary);
 }
 
 /** Changed chunks farther than DEACT_CH from every anchor fall asleep. */

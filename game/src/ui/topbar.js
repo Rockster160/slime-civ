@@ -5,7 +5,7 @@ import { dateOf, SEASON_NAMES } from "../sim/clock.js";
 import { phase, isNight } from "../sim/season.js";
 import { SPEEDS } from "./skip.js";
 import { randomSeed } from "./saves.js";
-import { saveLocal, loadLocal, downloadSave, loadFile, newGame, savedInfo, autoList, continueAuto } from "./saves.js";
+import { saveLocal, loadLocal, downloadSave, loadFile, copyCode, loadCode, newGame, savedInfo, autoList, continueAuto, fmtBytes } from "./saves.js";
 import { svg } from "./icons.js";
 import { btn, tipAttr } from "./kit.js";
 import { dialSvg } from "./dial.js";
@@ -39,9 +39,12 @@ export function createTopBar(root, game) {
       <div class="pop menu" data-test="menu-pop">
         <button data-m="save" data-test="m-save">${svg("save", 16)}Save to browser <kbd>Shift-S</kbd></button>
         <button data-m="load" data-test="m-load">${svg("load", 16)}Load from browser <kbd>Shift-O</kbd></button>
-        <button data-m="dl" data-test="m-dl">${svg("save", 16)}Download save (.json)</button>
+        <button data-m="saves" data-test="m-saves">${svg("load", 16)}Saves</button>
+        <button data-m="dl" data-test="m-dl">${svg("save", 16)}Download save (.slime)</button>
         <button data-m="file" data-test="m-file">${svg("load", 16)}Load save from file...</button>
-        <input type="file" accept=".json,application/json" style="display:none">
+        <button data-m="code" data-test="m-code">${svg("save", 16)}Copy save code</button>
+        <button data-m="paste" data-test="m-paste">${svg("load", 16)}Load from save code...</button>
+        <input type="file" accept=".slime,.json,application/json,application/gzip" style="display:none">
         <div class="mrow" data-test="about-world" data-tip="The seed names this world: the same seed makes the same land. Share it to replay it.">World seed <b class="aboutseed" data-test="about-seed"></b></div><div class="mrow dim">Version <span data-test="about-build" data-tip="Build time"></span></div>
         <div class="mrow"><label>New game <select class="seedmode" data-test="seed-mode"><option value="random" selected>Random</option><option value="enter">Enter seed</option></select></label><input class="seed" type="number" value="1" min="0" style="display:none" data-test="seed-input"></div>
         <div class="mrow"><button data-m="new" data-test="m-new">${svg("plus", 14)}Start</button></div>
@@ -89,11 +92,11 @@ export function createTopBar(root, game) {
   q(".tb-game").onclick = (e) => {
     e.stopPropagation(); toggle(menu);
     const i = savedInfo();
-    q(".saveinfo").textContent = i ? "Browser save: " + i.label + " · seed " + i.seed : "";
+    q(".saveinfo").textContent = i ? "Browser save: " + i.label + " · seed " + i.seed + " · " + fmtBytes(i.bytes) : "";
     q(".seed").value = game.sim.seed; q(".aboutseed").textContent = game.sim.seed; { const ab = q("[data-test=about-build]"); ab.textContent = game.buildText ? "· " + game.buildText : ""; ab.dataset.tip = game.build ? "Built " + game.build.time + (game.build.dirty ? "\n(with uncommitted changes)" : "") : ""; }
     const iron = game.sim.ironman, autos = autoList();                    // S12: autosaves on offer; an ironman game can load nothing, and its own slot only from another game
-    for (const id of ["save", "load", "dl", "file"]) { const b = menu.querySelector(`[data-m="${id}"]`); b.disabled = iron; b.dataset.tip = iron ? "Ironman: no manual saving or loading" : ""; }
-    q(".autos-l").style.display = autos.length ? "" : "none"; q(".autos").innerHTML = autos.length ? autos.map(a => `<button data-auto="${a.key}" ${iron ? "disabled" : ""}>${svg("load", 14)}<span class="atxt">${a.iron ? "Ironman: " : ""}Day ${a.day}, ${a.pop} slimes · seed ${a.seed}</span></button>`).join("") : "";
+    for (const id of ["save", "load", "dl", "file", "code", "paste"]) { const b = menu.querySelector(`[data-m="${id}"]`); b.disabled = iron; b.dataset.tip = iron ? "Ironman: no manual saving or loading" : ""; }
+    q(".autos-l").style.display = autos.length ? "" : "none"; q(".autos").innerHTML = autos.length ? autos.map(a => `<button data-auto="${a.key}" ${iron ? "disabled" : ""}>${svg("load", 14)}<span class="atxt">${a.iron ? "Ironman: " : ""}Day ${a.day}, ${a.pop} slimes · seed ${a.seed} · ${fmtBytes(a.bytes)}</span></button>`).join("") : "";
   };
   window.addEventListener("click", (e) => { if (!e.target.closest || !e.target.closest(".tb-menuwrap")) closePops(); });
   menu.addEventListener("click", (e) => {
@@ -105,9 +108,12 @@ export function createTopBar(root, game) {
     else if (a === "load") loadLocal(game);
     else if (a === "dl") downloadSave(game);
     else if (a === "file") file.click();
+    else if (a === "code") copyCode(game);
+    else if (a === "paste") loadCode(game);
     else if (a === "new") newGame(game, q(".seedmode").value === "random" ? randomSeed() : q(".seed").value, { ironman: q(".iron").checked });
     else if (a === "settings") ui.settings = true;
     else if (a === "keys") ui.help = true;
+    else if (a === "saves") game.openSaves();
     else if (a === "ill") { const id = ui.sel.find(i => game.sim.ents.get(i) && game.sim.ents.get(i).kind === "villager") || (game.sim.ents.ofKind("villager").find(v => !v.ill) || {}).id; game.toast(id && game.sim.apply({ type: "ill", id }) ? "A villager has fallen ill." : "Nobody can be made ill (this world has no sickness, or they already are)."); }
     else if (a === "lightning" || a === "stump") game.toast(game.sim.apply({ type: "force", ev: a }) ? (a === "lightning" ? "Lightning strikes a tree near the camp." : "A stump near the camp starts to smoulder.") : "No tree to strike.");
     if (a !== "file") closePops();

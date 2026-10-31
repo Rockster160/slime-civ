@@ -160,8 +160,10 @@ const mh = (sim, v) => maxHp(v, fitness(v, ageDays(sim, v)));
     }
   };
   const A = setup(), hashes = [];
+  const cmds = [], applyA = A.sim.apply.bind(A.sim);       // (8.27: the sim keeps only its newest commands, so a replay records its own log)
+  A.sim.apply = (c) => { cmds.push({ t: A.sim.tick, ...c }); return applyA(c); };
   for (let i = 0; i < 20000; i++) { bot(A.sim, A.id); A.sim.step(); if (A.sim.tick % 100 === 0) hashes.push(A.sim.hash()); }
-  const cmds = A.sim.cmdLog.slice(), B = setup();
+  const B = setup();
   let ci = 0, k = 0;
   while (B.sim.tick < A.sim.tick) {
     while (ci < cmds.length && cmds[ci].t === B.sim.tick) { const { t, ...c } = cmds[ci++]; B.sim.apply(c); }

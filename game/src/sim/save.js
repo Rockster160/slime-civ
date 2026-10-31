@@ -5,8 +5,9 @@
 // regrown flora, so a felled tree stays felled. Path caches are derived data
 // and not saved. Anything added to the Sim that affects future ticks must be
 // added here AND to Sim.hash(); tests/save_roundtrip.js catches omissions.
-import { Sim } from "./sim.js";
-import { seenRle, loadSeen } from "./seen.js";
+import { Sim, CMD_CAP } from "./sim.js";
+import { seenRle, loadSeen, oreSummary } from "./seen.js";
+import { dateOf, SEASON_NAMES } from "./clock.js";
 import { newDisc } from "./knowledge.js";
 import { newWild } from "./fauna.js";
 import { newExp } from "./expedition.js";
@@ -29,8 +30,10 @@ import { fillBel } from "./belief.js";
 import { ensureBoard } from "./notices.js";
 import { newClr } from "./clear.js";
 import { ASSIGN_VERBS } from "./orders.js";
+import { packDeltas, unpackDeltas } from "./deltas.js";
+import { worldDeltas, allEntities } from "./paging.js";
 
-export const SAVE_VERSION = 20;       // 20 = D58: assignments (`as` on a villager: {task, tid, x, y, z, t0, done, go}) replace the area orders of the gather verbs (a v19 order chop / forage / gather / hunt / haul is migrated into one), sim.clr (Clear area rectangles; additive). 19 = 9.33: `idea` on a villager ({CRAFT: [strength, tick]}: seen or heard of, never practised), `cw` on a job; additive, absent = none, a v18 save loads as it is. 18 = 9.31: the job board is furniture with `notes` (notices.js); an older save gets a founding board beside the yard on load, and its slimes know where it stands. 17 = 9.28: per-villager belief store `bel` (belief.js); a v16 save is seeded with the camp knowledge on load (OD-57). 16 = splitting replaces cloning: `cl` and `cg` are dropped (migrate), `sp` (split origin) is additive. 15 = 7.23: sim.cm (the core ledger: choices pending, cores left, cores harvested), delve expeditions (`kind` on an expedition record, `br` on a member): additive, a v14 save loads as it is. 14 = 7.22: monsters (fauna rows with `mon`, `ck`, `sf`, `hr`, `sh`; sim.wild.gk = slain guardians; item rows chitin, core_hide, venom_sac): additive, a v13 save loads as it is. 13 = 7.21: dungeons (the land round every core gains a labyrinth: far content only, nothing within 100 cells of a camp changes) and the trap ledger `trp` (additive: absent = empty), so a v12 save loads as it is; its edits sit on the same rock except inside a labyrinth's footprint, which nobody had dug yet. 12 = 7.20: magic cores and cave networks. Terrain changed (caves, ore weights, gems, outcrops, spires), so the cells a v11 save edited sit on different rock and it is REFUSED (OLD_TERRAIN), not migrated; a v12 save has the same shape as v11. 11 = S18b: the clock rebase (a game day is 12000 ticks, was 1800; a life 500 days): every tick-stamped field (born, nx, bt, cd, timers, chronicle) is on the new clock, so a v9/v10 save is REFUSED (OLD_CLOCK), not migrated. 10 = S17: compact (cell deltas per chunk, plants as arrays, the seen set as per-chunk bitsets, landmarks seen, chunk sleep state); a v9 save loads unchanged. 9 = S16: the endless world. Terrain is regrown from the seed (the spawn search is deterministic), so a save holds only the cells that differ from it (deltas), the list of active chunks (chunks: [key, active, changed, lastNear]) and the entities; seen = {c: revealed surface columns, l: other seen cells}. A save of the old fixed 128x128 map (v < 9) cannot be loaded: restore() refuses it with a message. 8 = S13: hidden genotype (g, gp, inb, wk), bonds (aff, mn, rel), grief (gr), hobby (hb), titles (ti), heirloom (hl), skill rust (rs, lu), grave entities. 7 = S12: biomes (sim.bio: 1 = the seed grows the biome map, 0 = a world made before it), cave-in state (ug). 6 = S7a: villager familiarity (fam), discovery state (disc), flames and hearths. 5 = 5 = S6: geology (new strata + ores), seen log, mining designations. 4 = S5: skills dig/build/craft, nine traits, clone and lesson fields
+export const SAVE_VERSION = 21;       // 21 = 8.24: the seen knowledge is per-chunk bitsets (`seen` = {c, x, rc, lm}; the unbounded cell log and the stored `known` lists are gone; ore `known` is derived on load) and the snapshot has a package form (below); v12-20 JSON loads and converts. 20 = D58: assignments (`as` on a villager: {task, tid, x, y, z, t0, done, go}) replace the area orders of the gather verbs (a v19 order chop / forage / gather / hunt / haul is migrated into one), sim.clr (Clear area rectangles; additive). 19 = 9.33: `idea` on a villager ({CRAFT: [strength, tick]}: seen or heard of, never practised), `cw` on a job; additive, absent = none, a v18 save loads as it is. 18 = 9.31: the job board is furniture with `notes` (notices.js); an older save gets a founding board beside the yard on load, and its slimes know where it stands. 17 = 9.28: per-villager belief store `bel` (belief.js); a v16 save is seeded with the camp knowledge on load (OD-57). 16 = splitting replaces cloning: `cl` and `cg` are dropped (migrate), `sp` (split origin) is additive. 15 = 7.23: sim.cm (the core ledger: choices pending, cores left, cores harvested), delve expeditions (`kind` on an expedition record, `br` on a member): additive, a v14 save loads as it is. 14 = 7.22: monsters (fauna rows with `mon`, `ck`, `sf`, `hr`, `sh`; sim.wild.gk = slain guardians; item rows chitin, core_hide, venom_sac): additive, a v13 save loads as it is. 13 = 7.21: dungeons (the land round every core gains a labyrinth: far content only, nothing within 100 cells of a camp changes) and the trap ledger `trp` (additive: absent = empty), so a v12 save loads as it is; its edits sit on the same rock except inside a labyrinth's footprint, which nobody had dug yet. 12 = 7.20: magic cores and cave networks. Terrain changed (caves, ore weights, gems, outcrops, spires), so the cells a v11 save edited sit on different rock and it is REFUSED (OLD_TERRAIN), not migrated; a v12 save has the same shape as v11. 11 = S18b: the clock rebase (a game day is 12000 ticks, was 1800; a life 500 days): every tick-stamped field (born, nx, bt, cd, timers, chronicle) is on the new clock, so a v9/v10 save is REFUSED (OLD_CLOCK), not migrated. 10 = S17: compact (cell deltas per chunk, plants as arrays, the seen set as per-chunk bitsets, landmarks seen, chunk sleep state); a v9 save loads unchanged. 9 = S16: the endless world. Terrain is regrown from the seed (the spawn search is deterministic), so a save holds only the cells that differ from it (deltas), the list of active chunks (chunks: [key, active, changed, lastNear]) and the entities; seen = {c: revealed surface columns, l: other seen cells}. A save of the old fixed 128x128 map (v < 9) cannot be loaded: restore() refuses it with a message. 8 = S13: hidden genotype (g, gp, inb, wk), bonds (aff, mn, rel), grief (gr), hobby (hb), titles (ti), heirloom (hl), skill rust (rs, lu), grave entities. 7 = S12: biomes (sim.bio: 1 = the seed grows the biome map, 0 = a world made before it), cave-in state (ug). 6 = S7a: villager familiarity (fam), discovery state (disc), flames and hearths. 5 = 5 = S6: geology (new strata + ores), seen log, mining designations. 4 = S5: skills dig/build/craft, nine traits, clone and lesson fields
 
 /** What a save of the old fixed-size world says when it is opened (S16 decision: the endless world does not emulate the 128 x 128 map). */
 export const OLD_WORLD = "This save was made in the old fixed-size world, which no longer exists: the world is endless now. Start a new game.";
@@ -110,30 +113,6 @@ function v5to6(data) {
 
 // ---- compact forms (S17) ----
 
-/** [idx, mat, flags, ...] (any order) -> [[chunkKey, [localDelta, mat, flags, ...]]] ascending: a cell's number inside its chunk (z << 8 | y << 4 | x), delta-coded. */
-export function packDeltas(flat) {
-  const by = new Map();
-  for (let k = 0; k < flat.length; k += 3) {
-    const [x, y, z] = cellXyz(flat[k]), ck = chunkKey(x >> 4, y >> 4);
-    let a = by.get(ck); if (!a) by.set(ck, a = []);
-    a.push([(z << 8) | ((y & 15) << 4) | (x & 15), flat[k + 1], flat[k + 2]]);
-  }
-  return [...by.keys()].sort((a, b) => a - b).map(ck => {
-    const a = by.get(ck).sort((p, q) => p[0] - q[0]), out = [];
-    let prev = 0;
-    for (const [l, m, f] of a) { out.push(l - prev, m, f); prev = l; }
-    return [ck, out];
-  });
-}
-export function unpackDeltas(dc) {
-  const out = [];
-  for (const [ck, a] of dc) {
-    const X0 = chunkKX(ck) << 4, Y0 = chunkKY(ck) << 4;
-    let l = 0;
-    for (let k = 0; k < a.length; k += 3) { l += a[k]; out.push(cellIdx(X0 + (l & 15), Y0 + ((l >> 4) & 15), l >> 8), a[k + 1], a[k + 2]); }
-  }
-  return out;
-}
 /** Entities with their plants as per-chunk arrays: {nextId, list (the rest), pl: [[chunkKey, [[id, ...packPlant]]]]}. */
 export function packEnts(j) {
   const list = [], by = new Map();
@@ -160,8 +139,8 @@ export function snapshot(sim) {
     seed: sim.seed,
     tick: sim.tick,
     rng: sim.rng.counters(),
-    dc: packDeltas(sim.world.deltas()),
-    entities: packEnts(sim.ents.toJSON()),
+    dc: packDeltas(worldDeltas(sim)),
+    entities: packEnts(allEntities(sim)),
     stock: sim.stock,
     board: sim.board,
     chron: sim.chron,
@@ -185,15 +164,135 @@ export function snapshot(sim) {
     trp: sim.trp,
     cm: sim.cm,
     ironman: sim.ironman ? 1 : 0,
-    cmds: sim.cmdLog,
+    cmds: sim.cmdLog.length > CMD_CAP ? sim.cmdLog.slice(-CMD_CAP) : sim.cmdLog,       // 8.27: capped, only the newest commands travel (OD-54)
   };
 }
+
+// ---- the package (8.24): manifest + global record + chunk records ----
+//
+// toPackage(snap) slices the flat snapshot into records and fromPackage(pkg) puts it back together exactly; both are pure and synchronous (the gzip, the base64 and the
+// storage live outside sim/: src/store/codec.js). A package is {v, m, g, c: {"<chunkKey>": record}, cmds?}:
+//   m     manifest: {v, seed, tick, gen, meta: {label, day, pop}, g: hash, c: [[chunkKey, hash]], x: hash}  (every record's mix32 hash; `gen` is the write generation 8.25 uses)
+//   g     global record: everything that is not tied to a place (villagers and their memory, the stock, board and notices, the chronicle, discovery, crews, ledgers, rng, rooms, ...)
+//   c     chunk record, one per 16 x 16 column that has anything to say: {k, mt (a dormant chunk's meta; an awake chunk's is in g.chm), dc (terrain deltas), pl (packed plants), e (place-bound entities), sc/sx (seen), ore}
+//   cmds  the command log, a record of its own (OD-54; capped in 8.27)
+// Villagers, fauna, wagons, fire and anything mid-job stay global (OD-55); plants, loose and stocked items, furniture, graves, plots and sites belong to the chunk they stand in.
+// `ore` is a summary only (counts and a rough centre per material); the exact lists are derived again from the seen cells on load.
+
+export const PKG_VERSION = 21;
+/** Entity kinds that belong to a place (OD-55): they travel in the chunk record of the chunk they stand in. Plants are packed separately (`pl`). */
+const PLACED = new Set(["item", "furniture", "grave", "plot", "site", "csite", "dsite"]);
+
+/** The record hash: mix32 folded over the canonical JSON text of the record. */
+export function recHash(rec) { return hashText(JSON.stringify(rec)); }
+/** The hash of a record's JSON text (a string is immutable, so the autosave can hash it in slices after the sim has moved on). */
+export function hashText(t) {
+  let h = t.length >>> 0;
+  for (let i = 0; i < t.length; i++) h = mix32(h, t.charCodeAt(i));
+  return h;
+}
+
+/** What the Menu and a save browser show for a save without opening it. */
+export function saveMeta(sim) {
+  const d = dateOf(sim.tick), pop = sim.ents.ofKind("villager").length;
+  return { label: "Y" + d.year + " D" + d.day + " " + SEASON_NAMES[d.season] + ", " + pop + " villagers", day: d.day, year: d.year, pop };
+}
+
+export function savePackage(sim, gen = 1) { return toPackage(snapshot(sim), saveMeta(sim), gen, oreSummary(sim)); }
+
+/**
+ * The autosave's cut (8.27), in two steps so the main thread never holds a long slice. `cutPackage` is the one atomic step: it snapshots the sim, slices it into records and
+ * writes each record's JSON text (the text is a frozen copy, so the sim may move on). The hashes are NOT computed here (the slow part: a JS loop over every character).
+ * `texts` is [{name, json, at}] with `at` = where the hash goes in the manifest ("g", "x" or the index into m.c). `sealPackage(cut, hashes)` puts the hashes in
+ * (hashes[i] for texts[i]); the manifest then equals the one savePackage gives for the same sim.
+ */
+export function cutPackage(sim, gen = 1) {
+  const pkg = toPackage(snapshot(sim), saveMeta(sim), gen, oreSummary(sim), () => 0);
+  const texts = [{ name: "g", json: JSON.stringify(pkg.g), at: "g" }];
+  if (pkg.cmds) texts.push({ name: "x", json: JSON.stringify(pkg.cmds), at: "x" });
+  pkg.m.c.forEach(([k], i) => texts.push({ name: "c" + k, json: JSON.stringify(pkg.c[k]), at: i }));
+  return { pkg, texts };
+}
+export function sealPackage(cut, hashes) {
+  const m = cut.pkg.m;
+  cut.texts.forEach((t, i) => { if (t.at === "g") m.g = hashes[i]; else if (t.at === "x") m.x = hashes[i]; else m.c[t.at][1] = hashes[i]; });
+  return cut.pkg;
+}
+
+export function toPackage(snap, meta, gen = 1, ore = new Map(), hashOf = recHash) {
+  const ck = new Map();                                                       // chunkKey -> record
+  const rec = (k) => { let r = ck.get(k); if (!r) ck.set(k, r = { k }); return r; };
+  const awake = [];                                                           // 8.25: an awake chunk's meta [key, act, mod, last] changes every few ticks (`last` follows the villagers), so it travels in the village record, not in the chunk record it would otherwise rewrite every autosave
+  for (const e of snap.chunks) { if (e.length > 4) rec(e[0]).mt = e.slice(1); else awake.push(e); }      // (a dormant chunk's meta carries its packed plants and items: that stays with the chunk)
+  for (const [k, dc] of snap.dc) rec(k).dc = dc;
+  for (const [k, pl] of snap.entities.pl) rec(k).pl = pl;
+  const list = [];
+  for (const e of snap.entities.list) {
+    if (PLACED.has(e.kind)) { const r = rec(chunkKey(e.x >> 4, e.y >> 4)); (r.e || (r.e = [])).push(e); } else list.push(e);
+  }
+  for (const [k, c] of snap.seen.c) rec(k).sc = c;
+  for (const [k, x] of snap.seen.x) rec(k).sx = x;
+  for (const [k, o] of ore) rec(k).ore = o;
+  const g = {};
+  for (const key of Object.keys(snap)) if (!SPLIT_KEYS.has(key)) g[key] = snap[key];
+  g.ents = { nextId: snap.entities.nextId, list };
+  g.rc = snap.seen.rc; g.lm = snap.seen.lm; g.chm = awake;
+  const c = {}, mc = [];
+  for (const k of [...ck.keys()].sort((a, b) => a - b)) { c[k] = ck.get(k); mc.push([k, hashOf(c[k])]); }
+  const m = { v: PKG_VERSION, seed: snap.seed, tick: snap.tick, gen, meta: meta || {}, g: hashOf(g), c: mc, x: snap.cmds ? hashOf(snap.cmds) : 0 };
+  const out = { v: PKG_VERSION, m, g, c };
+  if (snap.cmds) out.cmds = snap.cmds;
+  return out;
+}
+const SPLIT_KEYS = new Set(["chunks", "dc", "entities", "seen", "cmds"]);
+
+/** Check every record against the manifest. -> "" or a plain description of what is damaged. */
+export function verifyPackage(pkg) {
+  const m = pkg && pkg.m;
+  if (!m || !pkg.g || !pkg.c) return "This save file is incomplete: it has no " + (!m ? "manifest" : !pkg.g ? "village record" : "map records") + ".";
+  if (recHash(pkg.g) !== m.g) return "This save is damaged: the village record does not match its checksum.";
+  const bad = [];
+  for (const [k, h] of m.c) if (!pkg.c[k] || recHash(pkg.c[k]) !== h) bad.push(k);
+  if (bad.length) return "This save is damaged: " + bad.length + " map piece" + (bad.length === 1 ? "" : "s") + " (chunk " + bad.slice(0, 3).map(k => chunkKX(k) + "," + chunkKY(k)).join("; ") + (bad.length > 3 ? "; ..." : "") + ") do not match their checksums.";
+  if (Object.keys(pkg.c).length !== m.c.length) return "This save is damaged: its map pieces do not match its manifest.";
+  if (m.x && (!pkg.cmds || recHash(pkg.cmds) !== m.x)) return "This save is damaged: the command history does not match its checksum.";
+  return "";
+}
+
+/** The inverse of toPackage: the flat snapshot. Throws a plain-text Error if a record is damaged. */
+export function fromPackage(pkg) {
+  const bad = verifyPackage(pkg);
+  if (bad) throw new Error(bad);
+  const snap = {}, g = pkg.g;
+  snap.v = pkg.v;
+  for (const key of Object.keys(g)) if (key !== "ents" && key !== "rc" && key !== "lm" && key !== "chm") snap[key] = g[key];
+  const chunks = (g.chm || []).slice(), dc = [], pl = [], seenC = [], seenX = [], list = g.ents.list.slice();
+  for (const k of Object.keys(pkg.c).map(Number).sort((a, b) => a - b)) {
+    const r = pkg.c[k];
+    if (r.mt) chunks.push([k, ...r.mt]);
+    if (r.dc) dc.push([k, r.dc]);
+    if (r.pl) pl.push([k, r.pl]);
+    if (r.e) for (const e of r.e) list.push(e);
+    if (r.sc !== undefined) seenC.push([k, r.sc]);
+    if (r.sx) seenX.push([k, r.sx]);
+  }
+  list.sort((p, q) => p.id - q.id);
+  chunks.sort((p, q) => p[0] - q[0]);
+  snap.chunks = chunks; snap.dc = dc;
+  snap.entities = { nextId: g.ents.nextId, list, pl };
+  snap.seen = { c: seenC, x: seenX, rc: g.rc, lm: g.lm };
+  snap.cmds = pkg.cmds;
+  return snap;
+}
+/** A package container has no `entities` (a flat save does); one that lost a part is still treated as a package, so it is reported as damaged. */
+const isPackage = (d) => !!d && typeof d === "object" && d.v === PKG_VERSION && !d.entities && !!(d.m || d.g || d.c);
 
 /** Deep-copies through JSON so the loaded sim shares nothing with the saved one. */
 export function toJSON(sim) { return JSON.stringify(snapshot(sim)); }
 
 export function restore(data) {
   data = JSON.parse(typeof data === "string" ? data : JSON.stringify(data));   // never share state with the caller
+  if (isPackage(data)) data = fromPackage(data);                                // 8.24: a package (the .slime / save code form) is put back together first
   if (!(data.v >= 2 && data.v <= SAVE_VERSION)) throw new Error("Unsupported save version " + data.v);
   data = migrate(data);
   const sim = Sim.create(data.seed, { villagers: 0, restore: true, spawn: { x: data.spawn[0], y: data.spawn[1] }, biomes: data.bio !== 0, depth: !!(data.dp && data.dp.on), pond: data.pond === 1 });      // S14: a world made without the depth content regrows without it

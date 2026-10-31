@@ -127,7 +127,7 @@ ok("a loaded old save and spawned slimes start with the camp's knowledge, within
 // 7. the save keeps bel; a v16 save migrates (seeded)
 {
   const v = vs[7];
-  assert.equal(SAVE_VERSION, 20);
+  assert.equal(SAVE_VERSION, 21);
   const json = toJSON(sim), back = restore(json);
   assert.deepEqual(back.ents.get(v.id).bel, v.bel, "bel round-trips");
   assert.equal(back.hash(), sim.hash(), "hash equal after load");

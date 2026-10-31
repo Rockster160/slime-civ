@@ -142,7 +142,7 @@ export function createFpv(game) {
     const k = game.keys;
     if (!S.locked) { const diff = S.tyaw - S.yaw, step = (Math.PI / 2) / (TURN_MS / 1000) * dt; S.yaw = (game.access && game.access.calm) || Math.abs(diff) <= step ? S.tyaw : S.yaw + Math.sign(diff) * step; }     // the smooth 90 degree turn (calm: at once)
     if (S.pitchFix !== null && S.pitchFix !== undefined) S.pitch = S.pitchFix;
-    const f = faceOfYaw(camYaw()); ui.face = { dx: f[0], dy: f[1] };          // movement and the default target follow the facing, never the look offset
+    const f = faceOfYaw(S.yaw); ui.face = { dx: f[0], dy: f[1] };          // movement and the default target follow the facing, never the look offset
     { const L = S.lk, calm = !!(game.access && game.access.calm), cell = v.x + "," + v.y;
       if (L.cell && L.cell !== cell) resetLook(); L.cell = cell;
       let ty = L.ty, tp = L.tp;

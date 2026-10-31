@@ -67,6 +67,7 @@ export class Entities {
     this.oc = new Uint16Array(OCC);   // occupancy counts by hashed cell (derived, never saved)
     this.kinds = new Map();    // kind -> entities of that kind, id order (derived; rebuilt on load)
     this.gv = 0;               // 9.32: grid version: bumped when anything but a villager is indexed, unindexed or moved (belief.js caches patch lookups by it; never saved)
+    this.dk = null;            // 8.25: the world's dirty-chunk set (sim.js wires it): every add, remove and chunk-crossing move of a placed thing marks the chunk(s)
     this.hook = null;          // S16: (e, op) called after an add (1), before a remove (0) and after a move (2): chunks.js marks a chunk the people have changed
   }
 
@@ -76,8 +77,19 @@ export class Entities {
     this.list.push(e);         // ids only grow, so push keeps id order
     this._index(e);
     this._kind(e.kind).push(e);
+    if (this.dk && e.kind !== "villager" && e.kind !== "fauna") this.dk.add(((e.x >> 4) + 32768) * 65536 + (e.y >> 4) + 32768);
     if (this.hook) this.hook(e, 1);
     return e;
+  }
+
+  /** 8.26: put back an entity that paging.js took out (same object, same id): list and per-kind list stay in id order. No hook (the caller holds sim.quiet). */
+  adopt(e) {
+    this.byId.set(e.id, e);
+    insertById(this.list, e);
+    this._index(e);
+    insertById(this._kind(e.kind), e);
+    if (this.dk && e.kind !== "villager" && e.kind !== "fauna") this.dk.add(((e.x >> 4) + 32768) * 65536 + (e.y >> 4) + 32768);
+    if (this.hook) this.hook(e, 1);
   }
 
   get(id) { return this.byId.get(id); }
@@ -85,6 +97,7 @@ export class Entities {
   remove(id) {
     const e = this.byId.get(id);
     if (!e) return false;
+    if (this.dk && e.kind !== "villager" && e.kind !== "fauna") this.dk.add(((e.x >> 4) + 32768) * 65536 + (e.y >> 4) + 32768);
     if (this.hook) this.hook(e, 0);
     this._unindex(e);
     this.byId.delete(id);
@@ -104,6 +117,7 @@ export class Entities {
     const cx = e.x >> 4, cy = e.y >> 4;
     e.x = x; e.y = y; e.z = z;
     this._index(e);
+    if (this.dk && e.kind !== "villager" && e.kind !== "fauna") { this.dk.add(((cx) + 32768) * 65536 + cy + 32768); this.dk.add(((x >> 4) + 32768) * 65536 + (y >> 4) + 32768); }
     if (this.hook && ((x >> 4) !== cx || (y >> 4) !== cy)) this.hook(e, 2);
   }
 
@@ -150,3 +164,8 @@ export class Entities {
   }
 }
 const EMPTY = Object.freeze([]);
+function insertById(a, e) {
+  let lo = 0, hi = a.length;
+  while (lo < hi) { const mid = (lo + hi) >> 1; if (a[mid].id < e.id) lo = mid + 1; else hi = mid; }
+  a.splice(lo, 0, e);
+}

@@ -1,4 +1,4 @@
-# Phase 8: Saving (PROPOSED, awaiting the user's approval)
+# Phase 8: Saving (APPROVED, 2026-10-30)
 
 Author direction (2026-10-29): "We need to ensure we save the world state as well, since the world is destructible and buildable. Should likely do chunk based saving/loading as well as B64 encode + gzip the files."
 
@@ -29,7 +29,7 @@ Every built, dug, burnt or collapsed cell, and everything on it, persists, at an
 
 ## Design
 
-### Save package (SAVE_VERSION 16)
+### Save package (SAVE_VERSION 21)
 A save becomes a **package**: one small manifest plus many records.
 
 | record | contents | key |
@@ -48,7 +48,7 @@ A save becomes a **package**: one small manifest plus many records.
   - **IndexedDB:** raw gzip bytes as a Blob
   - **Export file `.slime`:** raw gzip
   - **Copy/paste "save code":** base64
-- **Sniffing on load:** gzip magic `1f 8b`, base64, or plain JSON. A plain-JSON v15 save still loads.
+- **Sniffing on load:** gzip magic `1f 8b`, base64, or plain JSON. A plain-JSON v20 save still loads.
 - **Integrity:** each record carries a 32-bit hash (`mix32` over the JSON). A bad record is reported, never silently loaded.
 - **No `sim/` code is involved.** Compression is async and lives in `ui/` plus a new `store/`. The sim stays pure and synchronous: it only produces and consumes plain record objects.
 
@@ -86,14 +86,14 @@ On re-activation, the chunk is regrown from the seed and its deltas and entities
 ### 8.24 Package format and codec
 - Split `snapshot`/`restore` into manifest, global and chunk records (pure, in `sim/save.js`).
 - A new `src/store/codec.js` with gzip, base64, sniffing and record hashes.
-- SAVE_VERSION 16 with a v12–15 → 16 migration.
+- SAVE_VERSION 21 (the package format) with a v12–20 → 21 migration; built 8.24 (D62-D67).
 - **Batched seen knowledge (author, 2026-10-30: "save batches of information so that we don't have to store every seen block"):**
   - drop `seen.log`, the per-cell list of every newly seen cell, which only grows;
   - keep the per-chunk seen bitsets, RLE-packed, in each chunk record;
   - replace the stored `known[mat]` cell lists with a per-chunk ore summary (counts per material plus a rough centre) and derive any exact list on load;
   - prune the per-villager chronicle flags (`mem:<id>:…`) and records of long-dead villagers to a bounded tail.
 - `.slime` export and import, and the save code.
-- **Tests:** round-trip hash equality on every fixture; a regrow test proving a reloaded world rebuilds identically, dungeons included (see `tests/dungeon_regrow.js`); seen-size stays flat on a long walk; v15 fixtures still load; codec round-trip (Node `CompressionStream`); corrupt-record refusal with plain text; size report (raw / gz / b64) per fixture.
+- **Tests:** round-trip hash equality on every fixture; a regrow test proving a reloaded world rebuilds identically, dungeons included (see `tests/dungeon_regrow.js`); seen-size stays flat on a long walk; v12-20 fixtures still load; codec round-trip (Node `CompressionStream`); corrupt-record refusal with plain text; size report (raw / gz / b64) per fixture.
 
 ### 8.25 Chunked store and incremental autosave
 - IndexedDB backend with the localStorage fallback.
@@ -146,10 +146,13 @@ On re-activation, the chunk is regrown from the seed and its deltas and entities
 ## Fit with the hard rules
 - The sim stays pure and deterministic. Records are plain data, and all async work lives outside `sim/`.
 - Tests follow the testing rules: fixture-based, one process at a time, each run ≤5 min. Eviction tests use pre-situated fixtures with a mined area far from camp, made by editing state, not by simulating up to it.
-- Save compatibility: v15 JSON saves load and convert. Nothing older than v12 changes: it is refused as before.
+- Save compatibility: v12-20 JSON saves load and convert. Nothing older than v12 changes: it is refused as before.
 
 ## Effort (ASSUMPTION)
 - 8.24: 0.3–0.5 FTE-months
 - 8.25: 0.4–0.7 FTE-months
 - 8.26: 0.5–0.9 FTE-months (the riskiest)
 - 8.27: 0.2–0.4 FTE-months
+
+## Phase 8 complete (8.27, Sonnet)
+8.24-8.27 are built: a package format and codec, a chunked content-addressed store with incremental autosave, chunk paging, and hardening (save browser, one-generation recovery, command log capped at 200, an autosave that holds the main thread for at most about 5 ms per slice). Decisions D62-D79; OD-51..55 resolved by their defaults (OD-54 as "newest 200 commands", D75). Left open: building only dirty records (D74; not needed for the budget), Safari / Firefox IndexedDB on `file://` (unmeasured, the fallback is automatic), a first save of a large world takes many seconds of wall clock off-thread because each record is its own IndexedDB transaction (batching them is the obvious next step).

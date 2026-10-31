@@ -11,7 +11,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
 await page.goto(pathToFileURL(join(root, "slime-civ.html")).href + "?tools=all&seed=1&spawn=64,64");
 await page.waitForFunction(() => window.__game);
 const G = (f, a) => page.evaluate(f, a), shot = async (n) => { await page.waitForTimeout(700); await page.screenshot({ path: join(root, "tmp", "ui-s19b-" + n + ".png") }); };
-const load = async (f) => { await page.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", f + ".json"), "utf8")); await page.keyboard.press("Shift+O"); await page.waitForTimeout(600); await G(() => { __game.state.paused = true; __game.clearSelection(); __game.ui.digest = null; __game.ui.concerns = []; }); };
+const load = async (f) => { await page.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), readFileSync(join(root, "tests", "fixtures", f + ".json"), "utf8")); await page.keyboard.press("Shift+O"); await page.waitForTimeout(600); await G(() => { __game.state.paused = true; __game.clearSelection(); __game.ui.digest = null; __game.ui.concerns = []; }); };
 await load("settled");
 await G(() => { const g = __game; g.cam.zoom = 22; g.cam.x = g.sim.site.x + 6; g.cam.y = g.sim.site.y; g.setLevel(g.D - 1); });
 await shot("camp-day");

@@ -45,6 +45,6 @@ export function activateChunk(world, ents, def, cx, cy, tick = 0) {
     if (ents) newPlant(ents, p.sp, p.x, p.y, p.z);
     if (p.sp === "tree") world.setFlagsQuiet(p.x, p.y, p.z, world.flags(p.x, p.y, p.z) | F.OBSTACLE);
   }
-  c.act = 1; c.last = tick;
+  c.act = 1; c.last = tick; world.dk.add(chunkKey(cx, cy));
   return true;
 }

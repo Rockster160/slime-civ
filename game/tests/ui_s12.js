@@ -53,7 +53,7 @@ const store = () => { const m = memoryStorage(); return { m, get: (k) => m.get("
   const game = { keymap: km, ui: { help: true } };
   const help = createHelp(root, game);
   help.update();
-  assert.match(html, /<kbd>Tab \/ Shift-Tab<\/kbd>/); assert.match(html, /<kbd>F or double-click<\/kbd>/); assert.match(html, /Close \(H \/ \?\)/);
+  assert.match(html, /<kbd>Tab \/ Shift-Tab<\/kbd>/); assert.match(html, /<kbd>F or double-click<\/kbd>/); assert.match(html, /data-test="keys-close"/); assert.match(html, /Close\nH \/ \?/);
   km.set("follow", "j"); km.set("next", "n"); km.set("panUp", "i");
   help.update();
   assert.match(html, /<kbd>N \/ Shift-Tab<\/kbd>/, "the help follows a remap"); assert.match(html, /<kbd>J or double-click<\/kbd>/);

@@ -7,7 +7,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadFixture } from "./fixture.js";
 import { DIR } from "../tools/make_fixtures.js";
-import { restore, toJSON } from "../src/sim/save.js";
+import { restore, toJSON, savePackage } from "../src/sim/save.js";
+import { encodeBytes, importSave } from "../src/store/codec.js";
 import { dungeonOf, dungeonsIn, trapList, cacheList, lootAt } from "../src/sim/dungeon.js";
 import { coresNear, coreKey } from "../src/sim/core.js";
 import { nodeOf, CRS } from "../src/sim/caves.js";
@@ -131,6 +132,14 @@ function cells(sim, dun, order) {
   assert.ok(!trapHere(B, t1.x, t1.y, t1.z), "the disarmed trap is set again"); assert.ok(isSeenTrap(B, t2.x, t2.y, t2.z), "the spotted trap is unseen again");
   { const j2 = JSON.parse(toJSON(B)), j1 = JSON.parse(json), keys = Object.keys(j1).filter(k => JSON.stringify(j1[k]) !== JSON.stringify(j2[k])); assert.deepEqual(keys, [], "re-saving the loaded sim changed the save in: " + keys.join(", ")); }
   assert.equal(cells(B, dB, "rev"), cells(A, dun, "fwd"), "dungeon cells differ after a load");
+  {                                     // 8.24 (reading the dungeon above made its chunks resident in A, so compare with A as it is now): through the package (records, gzip, back) the same dungeon, the same cells, the same state
+    const C = await importSave(await encodeBytes(savePackage(A))), dC = dungeonOf(C.def, coreByKey(C, KEY));
+    assert.equal(C.hash(), A.hash(), "the state hash changed over a .slime round trip");
+    assert.deepEqual(diff(describe(dun), describe(dC)), [], "layout differs after a .slime load");
+    assert.equal(cells(C, dC, "mix"), cells(A, dun, "fwd"), "dungeon cells differ after a .slime load (chunks read in a third order)");
+    assert.equal(C.world.mat(wall[0], wall[1], wall[2]), M.AIR); assert.equal(C.world.mat(c1.x, c1.y, c1.z), M.AIR);
+    ok("a .slime round trip rebuilds the dungeon identically (layout, cells, state hash)");
+  }
   // harvest, save, load: the field fades the same
   const rest = restore(json);
   rest.cm.pend = []; rest.cm.gone.push([KEY, rest.tick]);

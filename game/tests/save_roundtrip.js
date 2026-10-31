@@ -4,7 +4,7 @@
 //   node game/tests/save_roundtrip.js
 import "./legacy.js";
 import assert from "node:assert/strict";
-import { Sim } from "../src/sim/sim.js";
+import { Sim, CMD_CAP } from "../src/sim/sim.js";
 import { toJSON, restore } from "../src/sim/save.js";
 import { run } from "./script.js";
 
@@ -16,7 +16,7 @@ for (const [SAVE_AT, AFTER] of [[5000, 3000], [8000, 3000], [24500, 3000], [4600
   const b = restore(json);
   assert.equal(b.tick, a.tick);
   assert.equal(b.hash(), a.hash(), "hash differs right after load");
-  assert.equal(b.cmdLog.length, a.cmdLog.length);
+  assert.equal(b.cmdLog.length, Math.min(a.cmdLog.length, CMD_CAP), "a save keeps the newest commands (8.27)");
   assert.equal(toJSON(b), json, "re-saving the loaded sim changed the save");
 
   for (let i = 0; i < AFTER; i++) {

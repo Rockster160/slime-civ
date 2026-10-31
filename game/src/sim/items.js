@@ -314,6 +314,7 @@ export function spoilDaily(sim) {
     let eff = base * (cel ? CELLAR_X : 1) * rmul * (d.food > 0 ? pt(sim, s.item === "hopper_meat" || s.item === "smoked_meat" || s.item === "salted_meat" || s.item === "dried_meat" ? "spoil_meat" : "spoil_plant") : 1);       // S14: this world's own spoil rates (+-10%)
     if (d.food > 0 && stored && cover > 0) { const c = Math.min(s.n, cover); cover -= c; eff = (eff * (s.n - c) + eff * JAR_X * c) / s.n; }
     s.sp += s.n * eff;
+    sim.world.touch(s.x, s.y);                                          // 8.25: spoilage changes the item's record
     const lose = Math.floor(s.sp);
     saved += s.n * base - s.n * eff;
     if (lose > 0) {

@@ -77,34 +77,34 @@ export const berryCap = (stage) => (stage === "seedling" ? 0 : stage === "young"
 /** Every 100 ticks: regrow berries/tufts, mature saplings, sprout or rot stumps. Iterates in id order. */
 export function growPlants(sim) {
   const t = sim.tick, season = berrySeason(t), winter = seasonIdx(t) === 3;
-  const plants = sim.ents.ofKind("plant");
+  const plants = sim.ents.ofKind("plant"), w = sim.world;
   for (let i = 0; i < plants.length; i++) {
     const p = plants[i];
     if (p.species === "berry") {
       initLife(sim, p);
       const cap = berryCap(stageOf(sim, p));
-      if (p.yield < cap && season && t >= p.nx) { p.yield++; p.nx = t + BERRY_REGROW; }
-      else if (p.yield > cap) p.yield = cap;
+      if (p.yield < cap && season && t >= p.nx) { p.yield++; p.nx = t + BERRY_REGROW; w.touch(p.x, p.y); }      // 8.25: a plant that changes dirties its chunk
+      else if (p.yield > cap) { p.yield = cap; w.touch(p.x, p.y); }
     } else if (p.species === "tuft") {
-      if (p.yield === 0 && t >= p.nx) p.yield = 1;
+      if (p.yield === 0 && t >= p.nx) { p.yield = 1; w.touch(p.x, p.y); }
     } else if (p.species === "tuber") {
-      if (p.yield < TUBER_YIELD && t >= p.nx) { p.yield = TUBER_YIELD; p.nx = t; }
+      if (p.yield < TUBER_YIELD && t >= p.nx) { p.yield = TUBER_YIELD; p.nx = t; w.touch(p.x, p.y); }
     } else if (p.species === "stump") {
       if (p.burn || winter || t < p.nx) continue;
       if (p.fl && mix32(p.id, p.nx) % 100 >= SPROUT_PCT) {              // a felled stump: some coppice, the rest rot (the cell is bare for good)
         if (t >= p.nx + STUMP_ROT - STUMP_REGROW) { sim.ents.remove(p.id); i--; }
         continue;
       }
-      p.species = "sapling"; p.fl = 0; p.nx = t + TREE_REGROW / 2; p.gr = 0; p.bt = t;
+      p.species = "sapling"; p.fl = 0; p.nx = t + TREE_REGROW / 2; p.gr = 0; p.bt = t; w.touch(p.x, p.y);
     } else if (p.species === "sapling") {
       if (t >= p.nx && !winter) {
         const here = sim.ents.at(p.x, p.y, p.z);
         let free = true;
         for (const id of here) if (id !== p.id) { free = false; break; }   // an item/villager on the cell: try later
         if (free) {
-          p.species = "tree"; p.yield = 4;
+          p.species = "tree"; p.yield = 4; w.touch(p.x, p.y);
           sim.world.setFlags(p.x, p.y, p.z, sim.world.flags(p.x, p.y, p.z) | F.OBSTACLE);
-        } else p.nx = t + DUR_DAY;
+        } else { p.nx = t + DUR_DAY; w.touch(p.x, p.y); }
       }
     }
   }
@@ -112,7 +112,7 @@ export function growPlants(sim) {
 
 /** First tick of winter: frost takes whatever fruit is left (§11.7 winter effects). */
 export function frostBerries(sim) {
-  for (const p of sim.ents.ofKind("plant")) if (p.species === "berry") { p.yield = 0; p.nx = 0; }
+  for (const p of sim.ents.ofKind("plant")) if (p.species === "berry") { p.yield = 0; p.nx = 0; sim.world.touch(p.x, p.y); }
 }
 
 /** Fell a tree: a stump is left, walkable again. It sprouts into a sapling after STUMP_REGROW or, for some, rots (growPlants). */

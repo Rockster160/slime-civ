@@ -53,7 +53,7 @@ try {
   // ---- 7.21: the labyrinth ----
   const page = await mk("?tools=all&seed=1&debug=1");
   const G = (fn, arg) => page.evaluate(fn, arg);
-  await page.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", "trap.json"), "utf8"));
+  await page.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), readFileSync(join(root, "tests", "fixtures", "trap.json"), "utf8"));
   await page.keyboard.press("Shift+O"); await page.waitForTimeout(800);
   assert.equal(await G(() => __game.sim.tick), 36000); ok("the trap fixture loaded: two villagers in a labyrinth");
   // everybody pinned and fed; the labyrinth is hidden: nothing marked, the cell card is plain
@@ -112,7 +112,7 @@ try {
   // ---- the flat canvas fallback ----
   {
     const fp = await mk("?tools=all&seed=1&debug=1&flat=1");
-    await fp.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", "trap.json"), "utf8"));
+    await fp.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), readFileSync(join(root, "tests", "fixtures", "trap.json"), "utf8"));
     await fp.keyboard.press("Shift+O"); await fp.waitForTimeout(800);
     const GF = (fn, arg) => fp.evaluate(fn, arg);
     await GF((a) => {
@@ -138,7 +138,7 @@ try {
   {
     const mp = await mk("?tools=all&seed=1&debug=1");
     const GM = (fn, arg) => mp.evaluate(fn, arg);
-    await mp.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", "monsters.json"), "utf8"));
+    await mp.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), readFileSync(join(root, "tests", "fixtures", "monsters.json"), "utf8"));
     await mp.keyboard.press("Shift+O"); await mp.waitForTimeout(800);
     assert.equal(await GM(() => __game.sim.ents.ofKind("fauna").filter(e => e.mon).length > 3), true); ok("the monsters fixture loaded: a swarm and a spitter east of the camp");
     // step until somebody has just been struck, then freeze (the hit ring and number are drawn from the entity's last hit, so they hold while paused)
@@ -182,7 +182,7 @@ try {
     await mp.close();
     // the flat canvas fallback
     const fp = await mk("?tools=all&seed=1&debug=1&flat=1");
-    await fp.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", "monsters.json"), "utf8"));
+    await fp.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), readFileSync(join(root, "tests", "fixtures", "monsters.json"), "utf8"));
     await fp.keyboard.press("Shift+O"); await fp.waitForTimeout(800);
     const h2 = await fp.evaluate(() => { const g = __game, s = g.sim; g.state.paused = true; g.ui.follow = 0; g.clearSelection(); const m = s.ents.ofKind("fauna").find(e => e.sp === "crawler"); g.cam.zoom = 30; g.cam.x = m.x + 0.5; g.cam.y = m.y + 0.5; return { x: m.x, y: m.y, z: m.z }; });
     await fp.waitForTimeout(900);
@@ -197,7 +197,7 @@ try {
   {
     const cp = await mk("?tools=all&seed=1&debug=1");
     const GC = (fn, arg) => cp.evaluate(fn, arg);
-    await cp.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", "coreslain.json"), "utf8"));
+    await cp.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), readFileSync(join(root, "tests", "fixtures", "coreslain.json"), "utf8"));
     await cp.keyboard.press("Shift+O"); await cp.waitForTimeout(900);
     const info = await GC(() => { const g = __game, s = g.sim; g.state.paused = true; g.ui.follow = 0; const v = s.ents.ofKind("villager")[0]; g.selectOnly(v.id, true); return { key: s.cm.pend[0], shards: s.stock && 0 }; });
     assert.ok(info.key, "the coreslain fixture has the choice pending");
@@ -216,7 +216,7 @@ try {
     await cp.close();
     // a second page: Leave
     const lp = await mk("?tools=all&seed=1&debug=1");
-    await lp.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", "coreslain.json"), "utf8"));
+    await lp.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), readFileSync(join(root, "tests", "fixtures", "coreslain.json"), "utf8"));
     await lp.keyboard.press("Shift+O"); await lp.waitForTimeout(900);
     await lp.locator("[data-test=core-leave]").click(); await lp.waitForTimeout(500);
     const lv = await lp.evaluate(() => ({ left: __game.sim.cm.left.length, gone: __game.sim.cm.gone.length, cards: document.querySelectorAll("[data-test=core-choice-card]").length }));
@@ -226,7 +226,7 @@ try {
   {
     const dp = await mk("?tools=all&seed=1&debug=1");
     const GD = (fn, arg) => dp.evaluate(fn, arg);
-    await dp.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", "delve.json"), "utf8"));
+    await dp.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), readFileSync(join(root, "tests", "fixtures", "delve.json"), "utf8"));
     await dp.keyboard.press("Shift+O"); await dp.waitForTimeout(900);
     await GD(() => { const g = __game, s = g.sim; g.state.paused = true; g.ui.follow = 0; const vs = s.ents.ofKind("villager").slice(0, 3); g.clearSelection(); for (const v of vs) g.ui.sel.push(v.id); g.ui.sel.length = 3; });
     await dp.waitForTimeout(700);
@@ -279,7 +279,7 @@ try {
     feel(sim, v, "crawler", "good", 80); feel(sim, v, "gem", "good", 30); feel(sim, v, "gem", "good", 30); feel(sim, v, "cave", "good", 60);
     assert.ok(v.mem.length >= 3 && v.epi.length >= 2, "the setup gave the slime memories");
     const mp = await mk("?tools=all&seed=1&debug=1");
-    await mp.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), toJSON(sim));
+    await mp.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), toJSON(sim));
     await mp.keyboard.press("Shift+O"); await mp.waitForTimeout(800);
     await mp.evaluate((id) => { const g = __game; g.state.paused = true; g.selectOnly(id, false); }, v.id);
     await mp.waitForTimeout(900);
@@ -334,7 +334,7 @@ try {
   {
     const ap = await mk("?tools=all&seed=1&debug=1");
     const Ga = (fn, arg) => ap.evaluate(fn, arg);
-    await ap.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", "settled.json"), "utf8"));
+    await ap.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), readFileSync(join(root, "tests", "fixtures", "settled.json"), "utf8"));
     await ap.keyboard.press("Shift+O"); await ap.waitForTimeout(800);
     const A2 = await Ga(() => {
       const g = __game, s = g.sim; g.state.paused = true; g.ui.follow = 0; g.clearSelection();

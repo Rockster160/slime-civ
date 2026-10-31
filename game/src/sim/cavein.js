@@ -21,16 +21,21 @@ export const MAX_VENTS = 6;
 /** Every 20 ticks (sim.js): re-check what changed, collapse what has cracked long enough, let light show the way. */
 export function ugTick(sim) {
   const w = sim.world, ug = sim.ug, t = sim.tick;
-  if (w.ugd.length) {
-    const cand = new Set(), crOn = ug.cr.length > 0;
-    for (const i of w.ugd) {
+  // 8.26: a cell whose 5 x 5 footprint touches asleep or evicted land is judged when that land wakes (its far side may not be loaded): the digging that raised it waits in ug.wt
+  const asleep = (x, y) => w.dormantAt(x - SPAN_R, y - SPAN_R) || w.dormantAt(x + SPAN_R, y - SPAN_R) || w.dormantAt(x - SPAN_R, y + SPAN_R) || w.dormantAt(x + SPAN_R, y + SPAN_R);
+  const src = ug.wt ? ug.wt.concat(w.ugd) : w.ugd;
+  if (src.length) {
+    const cand = new Set(), crOn = ug.cr.length > 0, wait = new Set();
+    for (const i of src) {
       const [x, y, z] = World.xyz(i);
       if (!crOn && w.mat(x, y, z) !== M.AIR) continue;                     // a new solid can only matter to a roof that is already cracked
       for (let dz = -1; dz <= 1; dz++) for (let dy = -SPAN_R; dy <= SPAN_R; dy++) for (let dx = -SPAN_R; dx <= SPAN_R; dx++) {
-        if (World.inBounds(x + dx, y + dy, z + dz)) cand.add(idx(x + dx, y + dy, z + dz));
+        if (!World.inBounds(x + dx, y + dy, z + dz)) continue;
+        if (asleep(x + dx, y + dy)) wait.add(i); else cand.add(idx(x + dx, y + dy, z + dz));
       }
     }
     w.ugd.length = 0;
+    if (wait.size) ug.wt = [...wait].sort((a, b) => a - b); else delete ug.wt;
     const cr = new Map(ug.cr);
     let changed = false;
     for (const i of [...cand].sort((a, b) => a - b)) {
@@ -43,7 +48,7 @@ export function ugTick(sim) {
     if (changed) ug.cr = [...cr].sort((a, b) => a[0] - b[0]);
   }
   if (ug.cr.length) {
-    const due = ug.cr.filter(e => t - e[1] >= CRACK_TICKS).map(e => e[0]);
+    const due = ug.cr.filter(e => t - e[1] >= CRACK_TICKS).map(e => e[0]).filter(i => { const [x, y] = World.xyz(i); return !w.dormantAt(x, y); });      // 8.26: a roof over asleep or evicted land falls when it wakes
     if (due.length) collapse(sim, due);
   }
   for (const [x, y, z, r] of lightSources(sim)) if (r >= TORCH_R && underground(w, x, y, z)) look(sim, x, y, z, r);       // a torch maps the tunnel as far as it shines

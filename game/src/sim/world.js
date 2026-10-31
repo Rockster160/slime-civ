@@ -150,6 +150,10 @@ export class World extends CellReader {
     this.log = null;       // Set of changed cell indices once logging starts
     this.dirty = [];       // cell indices whose material changed since rooms.js last looked (derived, not saved)
     this.ugd = [];         // S12: the same, for underground.js (which cells to re-check for unstable roofs); derived, not saved
+    this.dk = new Set();   // 8.25: dirty chunk keys: chunks whose saved record may have changed since the store last wrote (cells, entities, plants, items, chunk meta). Derived, never saved or hashed; the store clears it after a write
+    this.ev = new Set();   // 8.26: keys of EVICTED chunks (changed, far from everyone, held as a record in the pager's cold store): not resident, read as unloaded land until paged in. Derived, never saved
+    this.pager = null;     // 8.26: (cx, cy) -> bool: pages an evicted chunk back in (paging.js). A WRITE to an evicted chunk calls it; a read does not
+    this.lost = 0;         // 8.26: evicted chunks that could not be paged in when written to (the record was missing): must stay 0
     this.genCount = 0;     // chunks generated so far (tests: the cache must not grow without bound)
   }
 
@@ -179,10 +183,15 @@ export class World extends CellReader {
     const k = chunkKey(cx, cy);
     let c = this.chunks.get(k);
     if (c) return c;
+    if (this.ev.size && this.ev.has(k)) {                                  // 8.26: somebody writes to an evicted chunk: its record comes back first
+      if (!(this.pager && this.pager(cx, cy) && this.chunks.get(k))) { this.ev.delete(k); this.lost++; }
+      else return this.chunks.get(k);
+    }
     c = this.gc.get(k);
     if (c) this.gc.delete(k);
     else { c = this.gen(cx, cy); c.mod = 0; c.act = 0; c.last = 0; c.dz = 0; c.pk = null; c.pi = null; this.genCount++; }
     this.chunks.set(k, c);
+    this.dk.add(k);
     this.resVer++;
     this._cx = 1e9; this._c = null;
     return c;
@@ -192,14 +201,16 @@ export class World extends CellReader {
   peekResident(cx, cy) { return this.chunks.get(chunkKey(cx, cy)) || null; }
   /** Throw a resident chunk away (only ever a pristine one: sim.js decides). It regrows identically on the next read. */
   drop(cx, cy) {
-    if (this.chunks.delete(chunkKey(cx, cy))) { this.resVer++; this._cx = 1e9; this._c = null; this.version++; }
+    if (this.chunks.delete(chunkKey(cx, cy))) { this.dk.add(chunkKey(cx, cy)); this.resVer++; this._cx = 1e9; this._c = null; this.version++; }
   }
   /** Resident chunk keys, ascending. */
   chunkKeys() { return [...this.chunks.keys()].sort((a, b) => a - b); }
   /** Is the column in an activated chunk? */
   activeAt(x, y) { const c = this.chunks.get(chunkKey(x >> 4, y >> 4)); return !!c && c.act === 1 && !c.dz; }
+  /** 8.26: is the column in an evicted chunk? (An evicted chunk was asleep or never woken: it counts as dormant everywhere.) */
+  evictedAt(x, y) { return this.ev.size > 0 && this.ev.has(chunkKey(x >> 4, y >> 4)); }
   /** S17: is the column in a dormant chunk (changed, far from everyone: frozen until somebody comes back)? */
-  dormantAt(x, y) { const c = this.chunks.get(chunkKey(x >> 4, y >> 4)); return !!c && c.dz > 0; }
+  dormantAt(x, y) { const k = chunkKey(x >> 4, y >> 4), c = this.chunks.get(k); return c ? c.dz > 0 : this.ev.size > 0 && this.ev.has(k); }
 
   /** Write a cell. `flags` undefined keeps the existing flags. */
   set(x, y, z, mat, flags) {
@@ -208,8 +219,11 @@ export class World extends CellReader {
     c.mats[l] = mat;
     if (flags !== undefined) c.flgs[l] = flags;
     this.version++;
+    this.dk.add(chunkKey(x >> 4, y >> 4));
     if (this.log) { const i = cellIdx(x, y, z); this.log.add(i); this.dirty.push(i); this.ugd.push(i); c.mod = 1; }
   }
+  /** 8.25: the chunk holding column (x, y) may have changed in a way `set` does not see (a plant grew, an item rotted, a chunk's state moved). */
+  touch(x, y) { this.dk.add(chunkKey(x >> 4, y >> 4)); }
   /** Tell rooms.js a cell's surroundings changed without a material change (a door entity appeared). */
   markDirty(x, y, z) { this.dirty.push(cellIdx(x, y, z)); }
   setFlags(x, y, z, flags) {
@@ -217,12 +231,47 @@ export class World extends CellReader {
     const c = this._res(x >> 4, y >> 4);
     c.flgs[(z << 8) | ((y & 15) << 4) | (x & 15)] = flags;
     this.version++;
+    this.dk.add(chunkKey(x >> 4, y >> 4));
     if (this.log) { this.log.add(cellIdx(x, y, z)); c.mod = 1; }
   }
   /** Flags written by generation (a tree's OBSTACLE at activation): not a player-visible change, so not in the delta log and the chunk stays pristine. */
   setFlagsQuiet(x, y, z, flags) {
     const c = this._res(x >> 4, y >> 4);
     c.flgs[(z << 8) | ((y & 15) << 4) | (x & 15)] = flags;
+    this.version++;
+  }
+
+  // ---- paging (8.26) ----
+
+  /** The logged cells of the chunks in `keys` (a Set), as {key -> flat [idx, mat, flags, ...]}; they leave the log (the chunk is about to be evicted and its record carries them). */
+  takeDeltas(keys) {
+    const out = new Map();
+    if (!this.log) return out;
+    const gone = [];
+    for (const i of this.log) {
+      const [x, y, z] = cellXyz(i), k = chunkKey(x >> 4, y >> 4);
+      if (!keys.has(k)) continue;
+      let a = out.get(k); if (!a) out.set(k, a = []);
+      a.push(i, this.mat(x, y, z), this.flags(x, y, z));
+      gone.push(i);
+    }
+    for (const i of gone) this.log.delete(i);
+    return out;
+  }
+  /** Throw a CHANGED resident chunk away into the evicted set (its record is the caller's). */
+  evictChunk(cx, cy) {
+    const k = chunkKey(cx, cy);
+    if (!this.chunks.delete(k)) return;
+    this.ev.add(k); this.dk.add(k); this.resVer++; this.version++; this._cx = 1e9; this._c = null;
+  }
+  /** Lay recorded cells back into a resident chunk without telling rooms or the cave-in check (paging is invisible to the sim). Flat [idx, mat, flags, ...]. */
+  putCells(flat) {
+    for (let k = 0; k < flat.length; k += 3) {
+      const [x, y, z] = cellXyz(flat[k]);
+      const c = this._res(x >> 4, y >> 4), l = (z << 8) | ((y & 15) << 4) | (x & 15);
+      c.mats[l] = flat[k + 1]; c.flgs[l] = flat[k + 2];
+      if (this.log) this.log.add(flat[k]);
+    }
     this.version++;
   }
 

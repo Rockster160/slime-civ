@@ -30,4 +30,22 @@ export function once(sim, flag, kind, text, actors, data, sev) {
   return true;
 }
 
+export const MAX_RECS = 200;           // 8.24: dead villagers' records kept (the newest by death); older ones are the story's far past
+/**
+ * 8.24: bound what a long game stores about the dead. Keeps the MAX_RECS newest records in recs and drops the per-villager milestone flags
+ * (`mem:<id>:...`) of anyone who is neither alive nor recorded. Daily, so the live sim and a loaded one agree (it is part of the hashed state).
+ */
+export function pruneChron(sim) {
+  const c = sim.chron, ids = Object.keys(c.recs);
+  if (ids.length > MAX_RECS) {
+    ids.sort((a, b) => c.recs[b].death - c.recs[a].death || b - a);
+    for (const id of ids.slice(MAX_RECS)) delete c.recs[id];
+  }
+  for (const f of Object.keys(c.f)) {
+    if (!f.startsWith("mem:")) continue;
+    const id = Number(f.split(":")[1]);
+    if (!c.recs[id] && !sim.ents.get(id)) delete c.f[f];
+  }
+}
+
 export function yearDay(sim) { const d = dateOf(sim.tick); return "Year " + d.year + ", day " + d.day; }

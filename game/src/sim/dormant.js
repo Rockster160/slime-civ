@@ -94,7 +94,7 @@ export function sleepChunks(sim, cs) {
     for (const p of by.get(k)) sim.ents.remove(p.id);
     for (const e of itemsBy.get(k)) sim.ents.remove(e.id);
     for (const id of wild.get(k) || []) sim.ents.remove(id);
-    c.dz = sim.tick;
+    c.dz = sim.tick; sim.world.dk.add(k);
     n++;
   }
   sim.quiet = false;
@@ -176,7 +176,7 @@ export function wakeChunks(sim, cs, spawnWild) {
       e.n -= n; sp.t[e.item] = (sp.t[e.item] || 0) + n;
       if (e.n <= 0) sim.ents.remove(e.id);
     }
-    c.pk = null; c.pi = null; c.dz = 0; c.last = t;
+    c.pk = null; c.pi = null; c.dz = 0; c.last = t; sim.world.dk.add(chunkKey(c.cx, c.cy));
   }
   for (const c of cs) spawnWild(sim, c, 1 + Math.floor(t / DUR_DAY));
   sim.quiet = false;

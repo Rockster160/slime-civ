@@ -17,7 +17,7 @@ try {
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   await page.goto(pathToFileURL(join(root, "slime-civ.html")).href + "?tools=all&seed=1");
   await page.waitForFunction(() => window.__game);
-  const load = async (name) => { await page.evaluate((j) => localStorage.setItem("slimeciv.save.1", j), readFileSync(join(root, "tests", "fixtures", name + ".json"), "utf8")); await page.keyboard.press("Shift+O"); await page.waitForTimeout(700); };
+  const load = async (name) => { await page.evaluate((j) => (localStorage.setItem("slimeciv.save.1", j), localStorage.setItem("slimeciv.save.1.meta", '{"tick":1000000000,"seed":0,"day":0,"pop":0,"kb":1,"iron":0}')), readFileSync(join(root, "tests", "fixtures", name + ".json"), "utf8")); await page.keyboard.press("Shift+O"); await page.waitForTimeout(700); };
   const run = (fn, arg) => page.evaluate(fn, arg);
   for (const sc of scenes) {
     if (await run(() => !!__game.possessed())) await page.keyboard.press("Escape");

@@ -24,6 +24,7 @@ import { createWhisper } from "./ui/whisper.js";
 import { createVillageHud } from "./ui/village_hud.js";
 import { createBook } from "./ui/book.js";
 import { createHelp } from "./ui/help.js";
+import { createSaveBrowser } from "./ui/savebrowser.js";
 import { btn } from "./ui/kit.js";
 import { concernPlaces } from "./ui/concernplace.js";
 import { pickAt } from "./ui/pick.js";
@@ -45,6 +46,7 @@ import { createSettings } from "./ui/settings.js";
 import { autosaveTick, randomSeed } from "./ui/saves.js";
 import { setupInput, panKeys } from "./ui/input.js";
 import { createSkip, SLICE_MS } from "./ui/skip.js";
+import { createPaging } from "./ui/paging.js";
 import { createMinimap } from "./ui/minimap.js";
 import { createPossess } from "./ui/possess.js";
 import { createFpv } from "./ui/fpv.js";
@@ -79,7 +81,7 @@ const game = {
     sel: [], focus: 0, other: null,           // selected villager ids, the one shown in the panels, a selected non-villager {kind:"entity",id}|{kind:"stock"}
     hover: null, mouse: null, press: null, box: null, markers: [], targeting: null, follow: 0,
     overlays: { zones: false, jobs: false, temp: false }, hoverStock: false,
-    help: false, digest: null, attn: { tick: 0, id: 0 }, toastedId: 0, autoPause: false,
+    help: false, saves: false, digest: null, attn: { tick: 0, id: 0 }, toastedId: 0, autoPause: false,
     editKeep: null, partsOpen: false, showTrace: false, crewTarget: 0,
     progression: params.get("tools") !== "all", showAll: remember("showall") === "1",     // S11: tools appear as the village earns them (ui/reveal.js); ?tools=all or the Game menu setting shows everything
     mode: "select",                           // "select" | "build" (game.setMode switches; build is registered by ui/build.js)
@@ -213,6 +215,7 @@ installSprite();
 createAccess(game);                     // S12: UI scale, contrast, colour-blind marks, reduced flashing
 const slots = createHud(game, params);  // the HUD grid (ui/hud.js): every panel is mounted into one of its slots
 createSkip(game);
+const paging = createPaging(game, cam);                 // 8.26: the cold store behind chunk paging, and what the camera and the anchors need in memory
 const possessCtl = createPossess(game);
 createFpv(game);                          // S18: the first-person view (a second renderer on the same sim; off until the player asks)
 
@@ -240,6 +243,7 @@ const digest = createDigest($("digest"), game);
 const book = createBook($("book"), game);
 const help = createHelp($("helpOverlay"), game);
 const settings = createSettings($("settingsOverlay"), game);
+const saveSheet = createSaveBrowser($("savesOverlay"), game);
 const tip = $("tip");
 document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("button"); if (b && !(b instanceof HTMLInputElement)) b.blur(); });   // so Space pauses, not "presses" the last button
 
@@ -312,6 +316,7 @@ function frame(now) {
   if (live.length !== ui.sel.length) { ui.sel = live; sync(); }
   if (ui.other && ui.other.kind === "entity" && !sim.ents.get(ui.other.id)) ui.other = null;
 
+  paging.frame();
   panKeys(game, dtMs / 1000);
   followSplit();
   possessCtl.frame();
@@ -333,7 +338,7 @@ function frame(now) {
     panelT = now;
     bar.update({ tick: sim.tick });
     possessCtl.update();
-    revealer.update(); levels.update(); guide.update(); village.update(); bps.update(); expd.update(); cchoice.update(); buildbar.update(); inspector.update(); notables.update(); orderbar.update(); digest.update(); book.update(); help.update(); settings.update(); pointers.update();
+    revealer.update(); levels.update(); guide.update(); village.update(); bps.update(); expd.update(); cchoice.update(); buildbar.update(); inspector.update(); notables.update(); orderbar.update(); digest.update(); book.update(); help.update(); settings.update(); saveSheet.update(); pointers.update();
     slots.popover.style.display = ui.mode === "build" && ui.bpOpen && game.unlocked("blueprints") ? "block" : "none";
     slots.dock.style.display = game.possessed() ? "none" : "flex";
     buildBtn.classList.toggle("on", game.ui.mode === "build");

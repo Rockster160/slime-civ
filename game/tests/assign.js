@@ -130,7 +130,7 @@ const gone = (sim, T) => { const e = sim.ents.get(T.id); return !e || e.species 
 {
   const { sim, vs: [v], N } = scene();
   sim.apply({ type: "assign", ids: [v.id], task: "chop", tid: N.id });
-  assert.equal(SAVE_VERSION, 20);
+  assert.equal(SAVE_VERSION, 21);
   const back = restore(toJSON(sim)), b = back.ents.get(v.id);
   assert.deepEqual(b.as, v.as);
   const old = JSON.parse(toJSON(sim)); old.v = 19;

@@ -317,7 +317,7 @@ for (const seed of SEEDS) {
   ok("workshop: seen -> a Curiosity and evidence (" + craft + "); a cache spilled " + n + " units");
   // save round trip keeps the ledger
   const j = JSON.parse(toJSON(sim));
-  assert.equal(j.v, SAVE_VERSION); assert.equal(SAVE_VERSION, 20);
+  assert.equal(j.v, SAVE_VERSION); assert.equal(SAVE_VERSION, 21);
   assert.ok(j.trp && j.trp.ws.length === 1);
   const back = restore(JSON.stringify(j));
   assert.equal(back.hash(), sim.hash(), "the ledger survives a save");

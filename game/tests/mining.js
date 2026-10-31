@@ -189,7 +189,7 @@ const feed = (sim) => { storeInZone(sim, "dried", 120); sim.cache.iv++; };     /
   const json = toJSON(a), b = restore(json);
   assert.equal(b.hash(), a.hash(), "hash differs right after load");
   assert.equal(toJSON(b), json, "re-saving the loaded sim changed the save");
-  assert.equal(b.seen.log.length, new Set(a.seen.log).size);
+  assert.deepEqual(b.seen.log, a.seen.log.slice(-500), "8.24: the loaded sim keeps the newest 500 cells seen, in order");
   assert.deepEqual(b.seen.known[M.MALACHITE].slice().sort(), a.seen.known[M.MALACHITE].filter((i, k, arr) => arr.indexOf(i) === k && a.world.mat(...World.xyz(i)) === M.MALACHITE).sort().filter(i => b.seen.known[M.MALACHITE].includes(i)), "sighted ore survives a save");
   for (let i = 0; i < 600; i++) { a.step(); b.step(); assert.equal(a.hash(), b.hash(), "diverged " + (i + 1) + " ticks after load"); }
   const c = loadFixture("mine"); feed(c);
