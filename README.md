@@ -4,7 +4,7 @@ A colony sim in the Dwarf Fortress tradition, played with slimes. You do not com
 
 It is a single HTML file, built from plain JavaScript with no dependencies.
 
-> Status: playable prototype (version 7.23, shown in the in-game Menu). Phases 1 to 7 and an experience/memory system are built. Balance numbers are first guesses. See [Not yet](#not-yet-and-known-gaps).
+> Status: playable prototype (version 9.33, shown in the in-game Menu). Phases 1 to 9 are built, including per-slime knowledge and chunked saving. Balance numbers are first guesses. See [Not yet](#not-yet-and-known-gaps).
 
 ## Run it
 

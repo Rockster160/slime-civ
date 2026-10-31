@@ -36,6 +36,7 @@ A previous session crashed the user's machine by running many sims in parallel.
 - **Balance** is a best guess. The user tunes later; features must work and be visible.
 
 ## Finish every stage with
+- `game/VERSION` set to your stage number (e.g. `9.33`), and the version in the root README's status line to match. The Menu and the live site read it.
 - The quick set green, the HTML building, and ui_smoke green, extended with one check for your stage's main feature.
 - 1–3 screenshots in game/tmp/ that you have looked at.
 - tests/ui_text.js green (plain text for every new blocker, job and class).
