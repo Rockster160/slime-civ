@@ -9,12 +9,16 @@
 // drain normally and nothing relieves them automatically.
 //
 // State lives on the villager entity (saved + hashed for free):
-//   v.poss = {since, hold:[entityIds], fb:[blocker, tick]}   present only while possessed
-//   v.pin  = {dx, dy, tid, verb, x, y, z}                    latest player intent; dx/dy persist until changed
+//   v.poss = {since, hold:[entityIds], fb:[blocker, tick], ox, oy}   present only while possessed; ox/oy = where in its cell the slime stands (SUB units, 0..SUB-1)
+//   v.pin  = {dx, dy, mx, my, tid, verb, x, y, z}            latest player intent; dx/dy (cell steps) and mx/my (free walk) persist until changed
+// Free walk (first person): mx/my is a walking direction (integers, length about WALK_UNIT); each tick the slime moves a fraction of a cell
+// (ox/oy are integers, so the sim stays exact), and crossing an edge moves it into the next cell by the same stepCell rule the cell steps use.
+// Its cell (v.x, v.y, v.z) is therefore always the cell it stands in and everything that reads the cell keeps working. Release drops ox/oy with poss:
+// the slime is then simply in that cell.
 // Commands (all through sim.apply, so they are in the command log):
 //   possess {id}   release {}   pinput {id, dx, dy, tid, verb, x, y, z}
 import { World, M } from "./world.js";
-import { Move } from "./actions.js";
+import { Move, TICKS_PER_CELL } from "./actions.js";
 import { Task, HERE, diggable, stockCount } from "./tasks.js";
 import { cancelAction, reserve } from "./jobstate.js";
 import { INSPIRE } from "./inspire.js";
@@ -24,6 +28,9 @@ import { costOf, checkPlace, placeGhosts, csiteAt } from "./build.js";
 import { log } from "./chronicle.js";
 import { noteSeen } from "./belief.js";
 
+export const SUB = 1024;              // sub-cell units per cell (free walk position inside a cell)
+export const WALK_UNIT = 64;          // length of a full-speed free-walk vector (pinput mx, my)
+const EDGE = 150;                     // keep this far (SUB units) from a blocked edge so the eye does not poke into the wall
 export const COLLAPSE_HP = 0.10;      // below this share of max health the body gives out and the guidance ends
 
 /** The villager being guided, or null. */
@@ -51,8 +58,8 @@ export const POSSESS_COMMANDS = {
     if (v.job) v.job.res = v.job.res.filter(id => !hold.includes(id));
     cancelAction(sim, v);
     v.job = null; v.why = null;
-    v.poss = { since: sim.tick, hold, fb: ["", 0] };
-    v.pin = { dx: 0, dy: 0, tid: 0, verb: "", x: 0, y: 0, z: 0 };
+    v.poss = { since: sim.tick, hold, fb: ["", 0], ox: SUB >> 1, oy: SUB >> 1 };
+    v.pin = { dx: 0, dy: 0, mx: 0, my: 0, tid: 0, verb: "", x: 0, y: 0, z: 0 };
     sim.board.ep++;
     return true;
   },
@@ -66,7 +73,8 @@ export const POSSESS_COMMANDS = {
     const v = sim.ents.get(c.id);
     if (!v || !v.poss) return false;
     const i = (n) => (Number.isInteger(n) ? n : 0);
-    v.pin = { dx: Math.sign(i(c.dx)), dy: Math.sign(i(c.dy)), tid: i(c.tid), verb: typeof c.verb === "string" ? c.verb : "", x: i(c.x), y: i(c.y), z: i(c.z) };
+    const m = (n) => Math.max(-WALK_UNIT, Math.min(WALK_UNIT, i(n)));
+    v.pin = { dx: Math.sign(i(c.dx)), dy: Math.sign(i(c.dy)), mx: m(c.mx), my: m(c.my), tid: i(c.tid), verb: typeof c.verb === "string" ? c.verb : "", x: i(c.x), y: i(c.y), z: i(c.z) };
     return true;
   },
 };
@@ -98,10 +106,17 @@ export function playerStep(sim, v) {
     noteSeen(sim, v, tid ? sim.ents.get(tid) : null);          // 9.32: what the player points its slime at is something the slime has seen
     const r = interact(sim, v, tid, verb, cell);
     if (r.blocker) { p.fb = [r.blocker, t]; return; }
+    const pc = tid ? "" : cell.join();
+    if (v.action && v.action.type === "Task" && v.job && v.job.c === "player" && v.job.k === r.task.k && v.job.tid === tid && (v.job.pc || "") === pc) return;     // the same press on the work in progress carries on; it never restarts the countdown
     if (v.action) cancelAction(sim, v);
-    v.job = { k: r.task.k, c: "player", key: "player:" + r.task.k, t0: t, tid, g: "", kp: "", res: [] };
+    v.job = { k: r.task.k, c: "player", key: "player:" + r.task.k, t0: t, tid, pc, g: "", kp: "", res: [] };
     for (const e of r.res) reserve(sim, v, e);
     v.action = r.task;
+    return;
+  }
+  if (pin.mx || pin.my) {
+    if (v.action) cancelAction(sim, v);                                  // walking stops the work
+    freeWalk(sim, v, pin.mx, pin.my);
     return;
   }
   if (pin.dx || pin.dy) {
@@ -111,6 +126,30 @@ export function playerStep(sim, v) {
       if (c) v.action = Move(c[0], c[1], c[2], [World.idx(c[0], c[1], c[2])], v.mv);
     }
   }
+}
+
+/** The slime's exact position in cells (x, y): its cell plus where it stands in it. */
+export function subPos(v) { const o = v.poss && v.poss.ox !== undefined ? v.poss : { ox: SUB >> 1, oy: SUB >> 1 };
+  return [v.x + o.ox / SUB, v.y + o.oy / SUB]; }
+
+/** One tick of free walk: a fraction of a cell along (mx, my), one axis at a time so a wall is slid along. Integer maths only. */
+function freeWalk(sim, v, mx, my) {
+  const p = v.poss, tpc = v.mv || TICKS_PER_CELL;
+  if (p.ox === undefined) { p.ox = p.oy = SUB >> 1; }
+  const per = SUB / (WALK_UNIT * tpc);
+  const sp = (n) => Math.trunc(n * per);
+  axis(sim, v, "x", sp(mx));
+  axis(sim, v, "y", sp(my));
+}
+function axis(sim, v, a, d) {
+  if (!d) return;
+  const p = v.poss, o = a === "x" ? "ox" : "oy", n = p[o] + d;
+  if (n >= EDGE && n <= SUB - EDGE) { p[o] = n; return; }
+  const sg = Math.sign(d), c = stepCell(sim, v, a === "x" ? sg : 0, a === "y" ? sg : 0);
+  if (!c) { p[o] = sg > 0 ? Math.max(p[o], SUB - EDGE) : Math.min(p[o], EDGE); return; }       // blocked: stop short of the edge
+  if (n >= 0 && n < SUB) { p[o] = n; return; }                        // inside the margin of an open edge: keep going
+  sim.ents.move(v, c[0], c[1], c[2]);
+  p[o] = n - sg * SUB;
 }
 
 /** The neighbouring stand cell one step in (dx,dy): same level, or up/down one (the pathfinder's rule). */

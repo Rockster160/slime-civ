@@ -23,6 +23,9 @@ import { installTip } from "./ui/tip.js";
 import { createWhisper } from "./ui/whisper.js";
 import { createVillageHud } from "./ui/village_hud.js";
 import { createBook } from "./ui/book.js";
+import { concernPlaces } from "./ui/concernplace.js";
+import { pickAt } from "./ui/pick.js";
+import { LABEL } from "./ui/village_hud.js";
 import { createPointers } from "./ui/pointers.js";
 import { createInspector } from "./ui/inspector.js";
 import { createDigest, watch } from "./ui/chronicle.js";
@@ -246,7 +249,14 @@ setupInput(game, canvas);
 function tooltip() {
   const { sim, ui } = game, h = ui.hover;
   let text = "";
-  if (h && ui.mouse && ui.mouse.over && !ui.press && !ui.box) {
+  if (ui.mouse && ui.mouse.over && !ui.press && !ui.box) {                       // a map blip (concern marker) shows the same tip as its pill in the Village panel
+    for (const pl of concernPlaces(game)) {
+      if (!pl.on) continue;
+      const dx = ui.mouse.x - pl.sx, dy = ui.mouse.y - (pl.sy - 22);
+      if (dx * dx + dy * dy <= 16 * 16) { text = LABEL[pl.c.k] + "\n" + pl.c.text; break; }
+    }
+  }
+  if (!text && h && ui.mouse && ui.mouse.over && !ui.press && !ui.box) {
     if (h.villager) {
       const x = explain(sim, h.villager);
       text = describe(sim, h.villager) + (x ? "\n" + x.headline : "");
@@ -335,6 +345,8 @@ requestAnimationFrame(frame);
 window.__game = game;
 game.bel = (id) => audit(game.sim, game.sim.ents.get(id));        // dev: how many of a slime's beliefs still match the truth ({right, gone})
 game.D = D; game.F = F; game.M = M;
+game.pickAt = (x, y) => pickAt(game, x, y);
+game.concernPlaces = () => concernPlaces(game);        // dev/test: where the map's concern blips are drawn (screen px)
 game.mapNote = mapNote;
 /** The map pixel under a screen point as [r, g, b, a]: the angled view's GL canvas under the overlay canvas, or just the 2D canvas (tests and screenshots). */
 game.mapPixel = (sx, sy) => {

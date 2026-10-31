@@ -163,7 +163,15 @@ export function createMinimap(root, game) {
   cv.addEventListener("wheel", (e) => {
     e.preventDefault(); e.stopPropagation();
     const i = MM_SCALES.indexOf(mm.scale), j = Math.max(0, Math.min(MM_SCALES.length - 1, i + (e.deltaY > 0 ? 1 : -1)));
-    if (j !== i) { mm.scale = MM_SCALES[j]; mm.auto = false; remember("mm.scale", String(mm.scale)); mm.last = 0; }
+    if (j === i) return;
+    const r = cv.getBoundingClientRect(), k = MM_SIZE / r.width, qx = (e.clientX - r.left) * k, qy = (e.clientY - r.top) * k;
+    const wx = mm.pox + qx * mm.ps, wy = mm.poy + qy * mm.ps;              // the map point under the cursor stays under the cursor: the minimap is centred on the camera, so the camera moves
+    mm.scale = MM_SCALES[j]; mm.auto = false; remember("mm.scale", String(mm.scale));
+    const s = mm.scale;
+    cam.x = wx - (qx - MM_SIZE / 2) * s; cam.y = wy - (qy - MM_SIZE / 2) * s;
+    mm.ox = Math.floor(cam.x) - Math.floor((MM_SIZE * s) / 2); mm.oy = Math.floor(cam.y) - Math.floor((MM_SIZE * s) / 2);
+    mm.key = mm.ox + "," + mm.oy + "," + s + "," + game.sim.seen.ver; mm.last = performance.now();
+    paintLand();                                                          // repaint now so a click straight after maps to what is drawn
   }, { passive: false });
   cv.addEventListener("mousemove", (e) => {
     const r = cv.getBoundingClientRect(), k = MM_SIZE / r.width, [x, y] = cellAt((e.clientX - r.left) * k, (e.clientY - r.top) * k);

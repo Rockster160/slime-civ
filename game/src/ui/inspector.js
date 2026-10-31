@@ -104,7 +104,7 @@ export function createInspector(parent, game) {
     if (a === "focus") game.selectOnly(Number(arg), true);
     if (a === "possess") game.possess(game.ui.focus);
     if (a === "release") game.release();
-    if (a === "teach") game.sim.apply({ type: "teach", id: game.ui.focus, pupil: Number(arg) });
+    if (a === "teach") { const pu = Number(arg); game.sim.apply({ type: "teach", id: game.ui.focus, pupil: pu }); game.toast(pu ? "Teaching" : "Stopped"); }
     if (a === "split") game.sim.apply({ type: "split", id: game.ui.focus });
     if (a === "fieldcr") { const [fid, cr] = arg.split(","); game.sim.apply({ type: "fieldcfg", id: Number(fid), cr }); }
     if (a === "penkeep") { const [pid, k] = arg.split(","); game.sim.apply({ type: "pencfg", id: Number(pid), keep: Number(k) }); }
@@ -148,7 +148,7 @@ function villagerHtml(game, v) {
   let h = "", vr = "", selH = "";
   if (ui.sel.length > 1) {
     selH += `<div class="kin" data-test="selection">`;
-    const CHIPS = 14;                                                          // S11: at 20-60 selected the chip list would fill the panel
+    const CHIPS = 5;                                                          // S11: at 20-60 selected the chip list would fill the panel
     const shownIds = ui.sel.slice(0, CHIPS); if (ui.focus && !shownIds.includes(ui.focus)) shownIds.push(ui.focus);
     shownIds.forEach((id) => { const o = sim.ents.get(id); if (o) selH += `<button data-act="focus:${id}" class="${id === ui.focus ? "on" : ""}"${tipAttr(o.name)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}${id === ui.focus ? `<span class="nm">${esc(o.name.split(" ")[0])}</span>` : sr(o.name)}</button>`; });
     if (ui.sel.length > CHIPS) selH += `<span class="rel">+${ui.sel.length - CHIPS}</span>`;
@@ -207,7 +207,7 @@ function villagerHtml(game, v) {
   if (know.length) vr += `<div class="knows" data-test="knows"><div class="sub">Knows</div><p class="ttls">` + know.map(c => `<span class="ttl kn${c.stale ? " stale" : ""}"${tipAttr(c.tip)}>${svg(c.icon, 12)} ${esc(c.label)} ${c.n}${c.stale ? "?" : ""}</span>`).join(" ") + `</p></div>`;
   // actions: teach / split
   const pupils = ui.sel.filter(id => id !== v.id).map(id => sim.ents.get(id)).filter(o => o && isAdult(sim, o));
-  const acts = (isAdult(sim, v) && pupils.length ? pupils.slice(0, 2).map(o => `<button class="btn" data-act="teach:${o.id}"${tipAttr("Teach " + o.name + "\nWork the same craft beside them and they learn 3x faster; you work at 80%. Give you both the same order (e.g. dig) so you end up side by side.")}>${svg("knowledge", 14)}${avatar(o.hue, o.lin, 16)}<span class="bl">Teach ${esc(o.name.split(" ")[0])}</span></button>`).join("") : "")
+  const acts = (isAdult(sim, v) && pupils.length ? pupils.slice(0, 2).map(o => { const on = !!(v.tch && v.tch.p === o.id && v.tch.u > sim.tick); return `<button class="btn${on ? " on" : ""}" data-act="teach:${on ? 0 : o.id}"${tipAttr((on ? "Stop teaching " : "Teach ") + o.name + "\nWork the same craft beside them and they learn 3x faster; you work at 80%. Give you both the same order (e.g. dig) so you end up side by side.")}>${svg("knowledge", 14)}${avatar(o.hue, o.lin, 16)}<span class="bl">${on ? "Teaching" : "Teach"} ${esc(o.name.split(" ")[0])}</span></button>`; }).join("") : "")
     + (isAdult(sim, v) ? splitButton(sim, v) : "");
   if (acts) vr += `<div class="actions">${acts}</div>`;
   // the old prose, hidden

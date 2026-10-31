@@ -88,7 +88,7 @@ export function createPossess(game) {
   }
   function send(extra) {
     const v = game.possessed(); if (!v) return;
-    game.sim.apply({ type: "pinput", id: v.id, dx: ui.sent.dx, dy: ui.sent.dy, tid: 0, verb: "", ...extra });
+    game.sim.apply({ type: "pinput", id: v.id, dx: ui.sent.dx, dy: ui.sent.dy, mx: ui.sent.mx || 0, my: ui.sent.my || 0, tid: 0, verb: "", ...extra });
   }
   game.possessKey = (act) => {                           // called by input.js with the guide ACTION the pressed key is bound to (ui/keys.js)
     const verbs = { eat: "eat", drink: "drink", sleep: "sleep", drop: "drop", tool: "equip" };
@@ -127,6 +127,11 @@ export function createPossess(game) {
       if (!v) { if (ui.mode === "possess") { game.toast("The guiding spirit let go of " + (ui.pname || "the villager") + "."); ui.mode = "select"; if (ui.prevZoom) cam.zoom = ui.prevZoom; ui.prevZoom = 0; ui.follow = 0; } return; }
       if (ui.mode !== "possess") return;
       let dx = 0, dy = 0;
+      const fm = game.fpvMove ? game.fpvMove() : null;
+      if (fm) {                                               // first person: free walk, fractions of a cell along where the camera looks
+        if (fm[0] !== ui.sent.mx || fm[1] !== ui.sent.my) { ui.sent = { dx: 0, dy: 0, mx: fm[0], my: fm[1] }; game.sim.apply({ type: "pinput", id: v.id, dx: 0, dy: 0, mx: fm[0], my: fm[1], tid: 0, verb: "" }); }
+        return;
+      }
       const fd = game.fpvDir ? game.fpvDir() : null;                // S18: in first person the held keys are relative to where you look
       if (fd) { dx = fd[0]; dy = fd[1]; } else for (const k of game.keys) {                                  // insertion order: the most recently pressed wins (the walk actions, whatever keys they are bound to)
         if (k === "panLeft") { dx = -1; dy = 0; } else if (k === "panRight") { dx = 1; dy = 0; }

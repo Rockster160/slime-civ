@@ -82,7 +82,7 @@
   .pn > header .phint { margin-left:auto; color:var(--tx2); font-weight:400; font-size:12px; } .pn > header .phint:empty { display:none; }
   .pn > header .phint.badge { background:var(--s3); border-radius:var(--rp); padding:0 7px; color:var(--tx); font-weight:600; font-size:11.5px; }
   .pn > header .chev { color:var(--tx2); display:inline-flex; transition:transform .12s; } .pn.closed > header .chev { transform:rotate(-90deg); }
-  .pn.closed > header { border-bottom:0; } .pn.closed > .pbody { display:none; }
+  .pn.closed > header { border-bottom:0; } .pn.closed > .pbody { display:none !important; } #slotV > .pn.closed, #slotI > .pn.closed { flex:none; height:auto; }
   .pn.flat > header { display:none; }
   .pbody { padding:var(--sp3); } .pbody p { margin:3px 0; }
   .pn.flash { box-shadow:0 0 0 2px var(--know), var(--e1); }
@@ -348,13 +348,13 @@
   .sec-body:not(:has(> .fx)) { display:block; overflow-y:auto; scrollbar-width:thin; }
   .sec-body:has(> .fx) { overflow-y:auto; scrollbar-width:thin; }          /* a slime card: the whole body scrolls inside the fixed-height card (Memories, Knows and Ideas used to get a 24px scroller under the rings and skills at 720 high) */
   .sec-body > .fx { flex:none; } .sec-body > .vr { flex:none; }
-  .sec-now .chain { height:46px; flex-wrap:nowrap; overflow:hidden; margin:0; box-sizing:border-box; } .sec-now .chain .cls { width:96px; flex:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; line-height:18px; }
+  .sec-now .chain { height:46px; flex-wrap:nowrap; overflow:hidden; margin:0; box-sizing:border-box; } .sec-now .chain .cls { width:104px; flex:none; overflow:hidden; white-space:normal; display:block; line-height:13px; max-height:28px; }
   .sec-now .chain .score { min-width:0; height:36px; justify-content:center; overflow:hidden; }
-  .sec-now .rejl { height:30px; flex-wrap:nowrap; overflow:hidden; margin:0; box-sizing:border-box; } .sec-now .rejl .rj { flex:none; max-width:128px; overflow:hidden; white-space:nowrap; } .sec-now .rejl .rj.more { color:var(--tx); }
+  .sec-now .rejl { min-height:30px; flex-wrap:wrap; margin:0; box-sizing:border-box; } .sec-now .rejl .rj { flex:none; max-width:100%; white-space:nowrap; } .sec-now .rejl .rj.more { color:var(--tx); }
   .sec-now .parts { height:26px; margin:0; overflow:hidden; box-sizing:border-box; } .sec-now details.parts[open] { height:150px; overflow-y:auto; scrollbar-width:thin; }
   .fx .ins-head { height:34px; margin:0; box-sizing:border-box; flex-wrap:nowrap; overflow:hidden; } .fx .rings { height:62px; margin:0; box-sizing:border-box; overflow:hidden; } .fx .rings { gap:4px; } .fx .rings .rc:not(.mood) { width:36px; flex:none; }
   .fx .gene { height:68px; margin:4px 0; } .fx .skl { height:28px; margin:0; flex-wrap:nowrap; overflow:hidden; box-sizing:border-box; }
-  #topbar .tb-day { display:inline-block; width:116px; overflow:hidden; text-overflow:ellipsis; } #topbar .tb-tod { display:inline-block; width:84px; overflow:hidden; } #topbar .tb-tod:empty { display:inline-block; }
+  #topbar .tb-day { display:inline-block; flex:none; width:auto; min-width:0; overflow:visible; } #topbar .tb-day .ds { display:none; } @media (max-width:1000px) { #topbar .tb-day .dl { display:none; } #topbar .tb-day .ds { display:inline; } } #topbar .tb-tod { display:inline-block; width:84px; overflow:hidden; } #topbar .tb-tod:empty { display:inline-block; }
   .sheet > .card { height:min(600px, 90vh); }
   #dock .ob-count { min-width:84px; }
 </style>
@@ -374,7 +374,7 @@
 <div id="helpOverlay"></div>
 <div id="settingsOverlay" data-test="settings"></div>
 <script>
-window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10-30 15:29"};
+window.__BUILD = {"stage":"7.23","commit":"ec791ec","dirty":true,"time":"2026-10-30 18:53"};
 (function () {
   "use strict";
   
@@ -6712,7 +6712,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       }
       for (let i = b.length - 1; i >= 0; i--) {                         // the mistake is felt: a believed thing in plain view that is no longer there goes
         const f = b[i];
-        if (f[T] !== now && f[K].slice(0, 5) !== "stock" && f[K] !== "folk" && f[K] !== "dig" && f[K] !== "clear" && f[K].slice(0, 6) !== "claim:" && !isReq(f[K]) && Math.abs(f[X] - v.x) <= reach && Math.abs(f[Y] - v.y) <= reach && Math.abs(f[Z] - (f[K] === "water" ? 1 : 0) - v.z) <= 2) b.splice(i, 1);     // (a water fact sits on the air above the surface; the scan sees the water cell one below it)
+        if (f[T] !== now && f[K].slice(0, 5) !== "stock" && f[K] !== "folk" && f[K] !== "water" && f[K] !== "dig" && f[K] !== "clear" && f[K].slice(0, 6) !== "claim:" && !isReq(f[K]) && Math.abs(f[X] - v.x) <= reach && Math.abs(f[Y] - v.y) <= reach && Math.abs(f[Z] - (f[K] === "water" ? 1 : 0) - v.z) <= 2) b.splice(i, 1);     // (a water fact is the shore cell the slime drinks from, which may stand two above the water: the look's z band cannot confirm it, and a stream does not leave, so a water fact is never felt as a mistake and goes only by FORGET)
       }
     }
     
@@ -6973,6 +6973,9 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     const FARM_SHARE = 0.5;        //   the fields,
     const KEEP_SHARE = 0.2;        //   non-food standing orders while it believes food, beds or racks are short (the old KEEP_FOOD_SHARE)
     const CRIT_SHARE = 0.75;       //   foraging while it believes the larder is critical
+    const BED_NONE = 0.15;         // 10.1: the breeding weight of a pair that knows of no free bed AND has seen a bedless neighbour lately (a child would join the queue). A pair that sees everyone housed keeps the old 0.4 / 1
+    const WINTER_BANK = 42;        // 10.1: days of food per head a slime wants banked as winter arrives (target = 3 + WINTER_BANK * winterAhead). Was 22: a village that banked 20-30 days drained to nothing in a 25-day winter and its last days were spent foraging in the cold
+    const FOOD_PUSH = 1.6;         // 10.1: how hard a slime's own food shortfall pulls it to forage: demand = FOOD_PUSH * (target - reading) / target, capped at 1. Winter forage is poor, so autumn has to bank the winter's food while it can (was 1: peaked at 20 days, ran dry in the 25-day winter)
     const GRID_FROM = 300;         // villagers: above this the worker count walks the cells in sight instead of the list
     const r2 = (x) => Math.round(x * 100) / 100;
     
@@ -7006,8 +7009,8 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       const wa = winterAhead(now), need = Math.max(0.01, heads * dailyNeed(sim, v));
       let food = 0, preserve = 0, fc = 0, uvf = 0, rack = 0, short = 0;
       if (stock !== null) {                                           // it has read the larder: the same formulas as board.js, fed from the reading and its head-count
-        const eff = stock / need, critT = CRIT_BASE + CRIT_WINTER * wa, target = 3 + 22 * wa;
-        food = r2(clamp((target - eff) / target, 0, 1));
+        const eff = stock / need, critT = CRIT_BASE + CRIT_WINTER * wa, target = 3 + WINTER_BANK * wa;
+        food = r2(clamp(FOOD_PUSH * (target - eff) / target, 0, 1));
         short = Math.max(0, Math.ceil(target * need - stock));       // 9.31: the rations short of the season's target (what a board request for food says)
         fc = eff < critT ? 1 : 0;
         uvf = r2(clamp((critT - eff) / (0.75 * critT), 0, 1));
@@ -7031,13 +7034,14 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       const wa = winterAhead(sim.tick);
       if (flags.off || !a.bel || !b.bel) {
         const vl = village(sim), n = Math.max(1, vl.n);
-        return { food: clamp(sim.board.runway / (6 + 24 * wa), 0.05, 1), bed: 0.4 + 0.6 * clamp(vl.beds.length / n, 0, 1) };
+        return { food: clamp(sim.board.runway / (6 + WINTER_BANK * wa), 0.05, 1), bed: 0.4 + 0.6 * clamp(vl.beds.length / n, 0, 1) };
       }
       const da = demandOf({ sim, v: a }), db = demandOf({ sim, v: b });
       const eff = da.eff !== null && db.eff !== null ? Math.max(da.eff, db.eff) : da.eff !== null ? da.eff : db.eff;
-      const food = eff !== null ? eff / (6 + 24 * wa) : (a.hunger + b.hunger) / 2;                // never read the larder: how fed they feel themselves
-      const home = a.bed || b.bed || da.free > 0 || db.free > 0;
-      return { food: clamp(food, 0.05, 1), bed: 0.4 + 0.6 * (home ? 1 : 0) };
+      const ratio = eff !== null ? eff / (6 + WINTER_BANK * wa) : (a.hunger + b.hunger) / 2, food = Math.min(1, ratio) * Math.min(1, ratio) ** (eff !== null ? 1 : 0);       // 10.1: squared once it has read the larder: a pair far from the winter's bank holds back                // never read the larder: how fed they feel themselves
+      const room = da.free > 0 || db.free > 0;                      // a free (unowned) bed one of them believes in: room for a child
+      const queue = da.nb > 0 || db.nb > 0;                         // a bedless neighbour either has seen lately (need:bed)
+      return { food: clamp(food, 0.05, 1), bed: room ? 1 : queue ? BED_NONE : 0.4 + 0.6 * (a.bed || b.bed ? 1 : 0) };
     }
     /** The most hands of a job group it tolerates in view: a share of the slimes it knows of (at least one). With the store off `heads` is the village's adults, as it was. */
     const shareCap = (dm, share) => Math.max(1, Math.ceil(share * dm.heads));
@@ -7086,7 +7090,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     /** How many hands a slime counts on a job group: the ones in view plus the board's claims. */
     function handsOn(ctx, key) { return (tally(ctx)[key] || 0) + claimsOf(ctx, key); }
     
-    return { demandOf, pairWeights, seenWorkers, claimsOf, handsOn, HEADS_MIN, NEED_FRESH, FOOD_SHARE, HAND_SHARE, FARM_SHARE, KEEP_SHARE, CRIT_SHARE, GRID_FROM, shareCap, foodCap, bedCap, pressed, CLAIM_EXPIRY, tally };
+    return { demandOf, pairWeights, seenWorkers, claimsOf, handsOn, HEADS_MIN, NEED_FRESH, FOOD_SHARE, HAND_SHARE, FARM_SHARE, KEEP_SHARE, CRIT_SHARE, BED_NONE, WINTER_BANK, FOOD_PUSH, GRID_FROM, shareCap, foodCap, bedCap, pressed, CLAIM_EXPIRY, tally };
   })();
   
   __mod["sim/notices.js"] = (function () {
@@ -9684,7 +9688,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     const { pairWeights } = __mod["sim/local.js"];
     const { TRAITS, FOUNDER_RANGE, LIFE_DAYS, makeName, rollRange, villagerProps, inheritGeno, inheritHue, ageDays, maturity, fitness, maxHp, stepTicks, dailyNeed, pace, isAdult, lifeStage } = __mod["sim/villager.js"];
     
-    const BREED_P = 0.02 * DUR_DAY / DAY;   // per eligible adult per daily call (every 1800 ticks), before weights. Breeding is tied to AGE like a life is (S18b): 0.02 per CALENDAR day (0.025 on the 4-year life, x0.8 for the 5-year life), spread over the DAY/1800 daily calls in it
+    const BREED_P = 0.04 * DUR_DAY / DAY;   // per eligible adult per daily call (every 1800 ticks), before weights. Breeding is tied to AGE like a life is (S18b): 0.02 per CALENDAR day (0.025 on the 4-year life, x0.8 for the 5-year life), spread over the DAY/1800 daily calls in it
     const BREED_COOLDOWN = 56;        // CALENDAR days (x DAY ticks) * lifePace / fertility: 45 on the 4-year life x 1.25 for the 5-year life
     const SEASON_BREED = [1.2, 1.3, 0.9, 0.6];   // mean 1.00 (§11.7 mean-normalised rule)
     
@@ -12390,12 +12394,16 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     // drain normally and nothing relieves them automatically.
     //
     // State lives on the villager entity (saved + hashed for free):
-    //   v.poss = {since, hold:[entityIds], fb:[blocker, tick]}   present only while possessed
-    //   v.pin  = {dx, dy, tid, verb, x, y, z}                    latest player intent; dx/dy persist until changed
+    //   v.poss = {since, hold:[entityIds], fb:[blocker, tick], ox, oy}   present only while possessed; ox/oy = where in its cell the slime stands (SUB units, 0..SUB-1)
+    //   v.pin  = {dx, dy, mx, my, tid, verb, x, y, z}            latest player intent; dx/dy (cell steps) and mx/my (free walk) persist until changed
+    // Free walk (first person): mx/my is a walking direction (integers, length about WALK_UNIT); each tick the slime moves a fraction of a cell
+    // (ox/oy are integers, so the sim stays exact), and crossing an edge moves it into the next cell by the same stepCell rule the cell steps use.
+    // Its cell (v.x, v.y, v.z) is therefore always the cell it stands in and everything that reads the cell keeps working. Release drops ox/oy with poss:
+    // the slime is then simply in that cell.
     // Commands (all through sim.apply, so they are in the command log):
     //   possess {id}   release {}   pinput {id, dx, dy, tid, verb, x, y, z}
     const { World, M } = __mod["sim/world.js"];
-    const { Move } = __mod["sim/actions.js"];
+    const { Move, TICKS_PER_CELL } = __mod["sim/actions.js"];
     const { Task, HERE, diggable, stockCount } = __mod["sim/tasks.js"];
     const { cancelAction, reserve } = __mod["sim/jobstate.js"];
     const { INSPIRE } = __mod["sim/inspire.js"];
@@ -12405,6 +12413,9 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     const { log } = __mod["sim/chronicle.js"];
     const { noteSeen } = __mod["sim/belief.js"];
     
+    const SUB = 1024;              // sub-cell units per cell (free walk position inside a cell)
+    const WALK_UNIT = 64;          // length of a full-speed free-walk vector (pinput mx, my)
+    const EDGE = 150;                     // keep this far (SUB units) from a blocked edge so the eye does not poke into the wall
     const COLLAPSE_HP = 0.10;      // below this share of max health the body gives out and the guidance ends
     
     /** The villager being guided, or null. */
@@ -12432,8 +12443,8 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
         if (v.job) v.job.res = v.job.res.filter(id => !hold.includes(id));
         cancelAction(sim, v);
         v.job = null; v.why = null;
-        v.poss = { since: sim.tick, hold, fb: ["", 0] };
-        v.pin = { dx: 0, dy: 0, tid: 0, verb: "", x: 0, y: 0, z: 0 };
+        v.poss = { since: sim.tick, hold, fb: ["", 0], ox: SUB >> 1, oy: SUB >> 1 };
+        v.pin = { dx: 0, dy: 0, mx: 0, my: 0, tid: 0, verb: "", x: 0, y: 0, z: 0 };
         sim.board.ep++;
         return true;
       },
@@ -12447,7 +12458,8 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
         const v = sim.ents.get(c.id);
         if (!v || !v.poss) return false;
         const i = (n) => (Number.isInteger(n) ? n : 0);
-        v.pin = { dx: Math.sign(i(c.dx)), dy: Math.sign(i(c.dy)), tid: i(c.tid), verb: typeof c.verb === "string" ? c.verb : "", x: i(c.x), y: i(c.y), z: i(c.z) };
+        const m = (n) => Math.max(-WALK_UNIT, Math.min(WALK_UNIT, i(n)));
+        v.pin = { dx: Math.sign(i(c.dx)), dy: Math.sign(i(c.dy)), mx: m(c.mx), my: m(c.my), tid: i(c.tid), verb: typeof c.verb === "string" ? c.verb : "", x: i(c.x), y: i(c.y), z: i(c.z) };
         return true;
       },
     };
@@ -12479,10 +12491,17 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
         noteSeen(sim, v, tid ? sim.ents.get(tid) : null);          // 9.32: what the player points its slime at is something the slime has seen
         const r = interact(sim, v, tid, verb, cell);
         if (r.blocker) { p.fb = [r.blocker, t]; return; }
+        const pc = tid ? "" : cell.join();
+        if (v.action && v.action.type === "Task" && v.job && v.job.c === "player" && v.job.k === r.task.k && v.job.tid === tid && (v.job.pc || "") === pc) return;     // the same press on the work in progress carries on; it never restarts the countdown
         if (v.action) cancelAction(sim, v);
-        v.job = { k: r.task.k, c: "player", key: "player:" + r.task.k, t0: t, tid, g: "", kp: "", res: [] };
+        v.job = { k: r.task.k, c: "player", key: "player:" + r.task.k, t0: t, tid, pc, g: "", kp: "", res: [] };
         for (const e of r.res) reserve(sim, v, e);
         v.action = r.task;
+        return;
+      }
+      if (pin.mx || pin.my) {
+        if (v.action) cancelAction(sim, v);                                  // walking stops the work
+        freeWalk(sim, v, pin.mx, pin.my);
         return;
       }
       if (pin.dx || pin.dy) {
@@ -12492,6 +12511,30 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
           if (c) v.action = Move(c[0], c[1], c[2], [World.idx(c[0], c[1], c[2])], v.mv);
         }
       }
+    }
+    
+    /** The slime's exact position in cells (x, y): its cell plus where it stands in it. */
+    function subPos(v) { const o = v.poss && v.poss.ox !== undefined ? v.poss : { ox: SUB >> 1, oy: SUB >> 1 };
+      return [v.x + o.ox / SUB, v.y + o.oy / SUB]; }
+    
+    /** One tick of free walk: a fraction of a cell along (mx, my), one axis at a time so a wall is slid along. Integer maths only. */
+    function freeWalk(sim, v, mx, my) {
+      const p = v.poss, tpc = v.mv || TICKS_PER_CELL;
+      if (p.ox === undefined) { p.ox = p.oy = SUB >> 1; }
+      const per = SUB / (WALK_UNIT * tpc);
+      const sp = (n) => Math.trunc(n * per);
+      axis(sim, v, "x", sp(mx));
+      axis(sim, v, "y", sp(my));
+    }
+    function axis(sim, v, a, d) {
+      if (!d) return;
+      const p = v.poss, o = a === "x" ? "ox" : "oy", n = p[o] + d;
+      if (n >= EDGE && n <= SUB - EDGE) { p[o] = n; return; }
+      const sg = Math.sign(d), c = stepCell(sim, v, a === "x" ? sg : 0, a === "y" ? sg : 0);
+      if (!c) { p[o] = sg > 0 ? Math.max(p[o], SUB - EDGE) : Math.min(p[o], EDGE); return; }       // blocked: stop short of the edge
+      if (n >= 0 && n < SUB) { p[o] = n; return; }                        // inside the margin of an open edge: keep going
+      sim.ents.move(v, c[0], c[1], c[2]);
+      p[o] = n - sg * SUB;
     }
     
     /** The neighbouring stand cell one step in (dx,dy): same level, or up/down one (the pathfinder's rule). */
@@ -12601,7 +12644,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       }
     }
     
-    return { possessed, steadfast, playerStep, stepCell, interact, collapseCheck, COLLAPSE_HP, POSSESS_COMMANDS };
+    return { possessed, steadfast, playerStep, subPos, stepCell, interact, collapseCheck, SUB, WALK_UNIT, COLLAPSE_HP, POSSESS_COMMANDS };
   })();
   
   __mod["sim/split.js"] = (function () {
@@ -14089,7 +14132,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     const { World } = __mod["sim/world.js"];
     const { Wander } = __mod["sim/actions.js"];
     const { Task, HERE } = __mod["sim/tasks.js"];
-    const { berrySeason, isNight, tempAt } = __mod["sim/season.js"];
+    const { berrySeason, isNight, tempAt, winterAhead } = __mod["sim/season.js"];
     const { readyFrom, standCells, costOf, TIER, UNBUILD_DUR, STATIONS } = __mod["sim/build.js"];
     const { RECIPES, missing, loadedFor, heatOk, JAR_CAP } = __mod["sim/craft.js"];
     const { dryAir } = __mod["sim/depth.js"];
@@ -14140,7 +14183,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     const DIG_AREA = 2;          // a dig order covers a 5x5 patch of columns
     const ORDER_AREA = 10;       // an order covers targets within this many cells of where it was given
     // When several needs saturate at u=1 they would tie at 400; break the tie by what kills fastest (thirst, hunger, cold, then sleep).
-    const NEED_RANK = { flee: -1, defend: 0, drink: 0, eat: 1, huddle: 2, sleep: 3, leisure: 4, mend: 5, convalesce: 6 };
+    const NEED_RANK = { flee: -1, defend: 0, drink: 0, eat: 1, huddle: 2, tend_fire: 1.5, sleep: 3, leisure: 4, mend: 5, convalesce: 6 };
     const CHILL = 0.55;                // below this air warmth, villagers prefer a warm room to a nearer bed (§08 shelter)
     const MOOD_CAP = 349;              // above any order (<= 345), below village-critical (>= 350)
     const VCRIT_CAP = 395;              // a saturated personal need (400 - rank) always outranks village-critical (priority order, §09)
@@ -15112,6 +15155,8 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       else if (capped(ctx, "standing", "fire", FIRE_WORKERS)) c.blocker = "MAX_WORKERS";
       else if (!holds && v.carry) c.blocker = "NO_CAPACITY";
       else if (!holds && !fuel) c.blocker = "NO_MATERIAL";
+      const uc = urgency(v.warm, ...SOFT.warm);
+      if (!c.blocker && uc > 0) { c.cls = "need"; c.u = uc; c.grp = "need"; }         // 10.1: a cold slime with wood in the yard and a dead hearth lights the fire (a need, just above huddling): huddling beside a fire that is out only froze them
       if (c.blocker) c.mk = () => ({ blocker: c.blocker });
       else c.mk = () => {
         const stand = standNear(ctx, best);
@@ -15259,10 +15304,15 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
      * Tinker (GDD §15.4): an experiment with what is in reach. Leisure class normally; standing when the player asked this villager to
      * investigate. Only offered while something nags at the village (an itch) and there is something new to try; the Why panel says why not.
      */
+    const TINKER = { share: 20 };  // 10.1 (a test sets share 100: the mood roll is a deliberate gate)
+    const TINKER_SHARE = 20;       // 10.1: percent of spans in which an idle slime, nobody having asked, is in the mood to experiment (was every span: autonomous discovery drove steady progress)
+    const TINKER_SPAN = 6000;      // ticks: one mood lasts this long (a flat constant)
+    const TINKER_HANDS = 1;        // unasked experimenters it tolerates in view (was 3; "Investigate" still allows 3)
     function genTinker(ctx) {
       const { sim, v, sv } = ctx;
       const ask = askActive(sim), asked = !!(ask && ask.ids.includes(v.id));
       if (!asked && !itchAt(sim)) return;
+      if (!asked && mix32(v.id, Math.floor(ctx.t / TINKER_SPAN)) % 100 >= TINKER.share) return;       // 10.1: unasked, a slime is in a tinkering mood only a share of the time (its own roll per span)
       const cls = asked ? "standing" : "leisure";
       const c = { kind: "tinker", cls, urg: asked ? 0.6 : 1, grp: "tinker", skill: null, key: "tinker:0" };
       const all = tinkerCandidates(sim);
@@ -15272,7 +15322,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       if (mine) ready = ready.filter(k => k.item === mine);
       if (!all.length) c.blocker = "NO_CANDIDATE";
       else if (!ready.length) c.blocker = v.carry ? "NO_CAPACITY" : all.some(k => !cooled(k)) ? "COOLDOWN" : "NO_CANDIDATE";
-      else if (capped(ctx, cls, "tinker", 3)) c.blocker = "MAX_WORKERS";
+      else if (capped(ctx, cls, "tinker", asked ? 3 : TINKER_HANDS)) c.blocker = "MAX_WORKERS";
       if (c.blocker) { c.mk = () => ({ blocker: c.blocker }); add(ctx, c); return; }
       const top = ready[0];
       c.d = dTo(ctx, top.site);
@@ -15372,6 +15422,21 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       const run = ctx.cur ? ctx.cur.k : "";                                       // a bed or rack under way stays a candidate: others' sites coming up must not make it drop the work in its hands
       if (d.shelter > 0 || run === "build_bed") buildChain(ctx, "demand", "bed", { urg: Math.max(d.shelter, 0.1), cap: bedCap(d), grp: "shelter", pull: true });
       if (d.rack > 0 || run === "build_rack") buildChain(ctx, "demand", "rack", { urg: Math.max(d.rack, 0.1), cap: 1, grp: "rack", pull: true });
+      genWoodBank(ctx);
+    }
+    
+    const WOOD_BANK = 80;           // 10.1: logs per hearth a slime wants in the yard by midwinter (it wants WOOD_BANK * winterAhead; a log is about 1300 ticks of fire). The fire was only fed when the yard ran dry, so a village with an empty yard froze through the end of winter
+    const WOOD_HANDS = 2;           // choppers it tolerates in view while it banks wood
+    /** Autumn wood for the winter fire: a slime that knows a hearth, and sees the yard short of wood for the coming cold, chops (an idle pull, like the other shortages). */
+    function genWoodBank(ctx) {
+      const { sim, v, sv } = ctx, wa = winterAhead(ctx.t);
+      if (wa <= 0 || belFlags.off || !can(sim, "FIRE_TENDING")) return;
+      const hs = entsOf(ctx, "furn:hearth").length;
+      if (!hs) return;
+      const want = hs * WOOD_BANK * wa, have = sv.stock.log + sv.stock.stick / 2 + heldOf(ctx, "log");
+      if (have >= want) return;
+      const base = { cls: "demand", urg: clamp((want - have) / want, 0, 1), grp: "wood", pull: true };
+      chopCand(ctx, base, capped(ctx, "demand", "wood", WOOD_HANDS));
     }
     
     const ORDER_SKILL = { move: null, dig: "dig", clear: null, capture: null, scout: null, disarm: "craft", clear_area: null };
@@ -15734,7 +15799,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     /** The helper bag farmjobs.js builds its candidates with (it cannot import this file: the bundler allows no import cycles). */
     const HELP = { add, reach, dTo, isBad, capped, stockStack, standAdj, looseCand, chopCand, gatherCand, looseOf, heldOf, oneStep };
     
-    return { plan, GATHER_FIT, COMMIT, SWITCH_COST, WITHIN_CLAMP, SLEEP_DONE, FAR_SLEEP, MAX_SCAN, TEMPER_SPREAD, DIG_AREA, ORDER_AREA, ILL_AVOID };
+    return { plan, GATHER_FIT, COMMIT, SWITCH_COST, WITHIN_CLAMP, SLEEP_DONE, FAR_SLEEP, MAX_SCAN, TEMPER_SPREAD, DIG_AREA, ORDER_AREA, ILL_AVOID, TINKER, TINKER_SHARE, TINKER_SPAN, TINKER_HANDS, WOOD_BANK, WOOD_HANDS };
   })();
   
   __mod["sim/controller.js"] = (function () {
@@ -20894,7 +20959,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
         if (a === "focus") game.selectOnly(Number(arg), true);
         if (a === "possess") game.possess(game.ui.focus);
         if (a === "release") game.release();
-        if (a === "teach") game.sim.apply({ type: "teach", id: game.ui.focus, pupil: Number(arg) });
+        if (a === "teach") { const pu = Number(arg); game.sim.apply({ type: "teach", id: game.ui.focus, pupil: pu }); game.toast(pu ? "Teaching" : "Stopped"); }
         if (a === "split") game.sim.apply({ type: "split", id: game.ui.focus });
         if (a === "fieldcr") { const [fid, cr] = arg.split(","); game.sim.apply({ type: "fieldcfg", id: Number(fid), cr }); }
         if (a === "penkeep") { const [pid, k] = arg.split(","); game.sim.apply({ type: "pencfg", id: Number(pid), keep: Number(k) }); }
@@ -20938,7 +21003,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       let h = "", vr = "", selH = "";
       if (ui.sel.length > 1) {
         selH += `<div class="kin" data-test="selection">`;
-        const CHIPS = 14;                                                          // S11: at 20-60 selected the chip list would fill the panel
+        const CHIPS = 5;                                                          // S11: at 20-60 selected the chip list would fill the panel
         const shownIds = ui.sel.slice(0, CHIPS); if (ui.focus && !shownIds.includes(ui.focus)) shownIds.push(ui.focus);
         shownIds.forEach((id) => { const o = sim.ents.get(id); if (o) selH += `<button data-act="focus:${id}" class="${id === ui.focus ? "on" : ""}"${tipAttr(o.name)}>${avatar(o.hue, o.lin, 18, !isAdult(sim, o))}${id === ui.focus ? `<span class="nm">${esc(o.name.split(" ")[0])}</span>` : sr(o.name)}</button>`; });
         if (ui.sel.length > CHIPS) selH += `<span class="rel">+${ui.sel.length - CHIPS}</span>`;
@@ -20997,7 +21062,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       if (know.length) vr += `<div class="knows" data-test="knows"><div class="sub">Knows</div><p class="ttls">` + know.map(c => `<span class="ttl kn${c.stale ? " stale" : ""}"${tipAttr(c.tip)}>${svg(c.icon, 12)} ${esc(c.label)} ${c.n}${c.stale ? "?" : ""}</span>`).join(" ") + `</p></div>`;
       // actions: teach / split
       const pupils = ui.sel.filter(id => id !== v.id).map(id => sim.ents.get(id)).filter(o => o && isAdult(sim, o));
-      const acts = (isAdult(sim, v) && pupils.length ? pupils.slice(0, 2).map(o => `<button class="btn" data-act="teach:${o.id}"${tipAttr("Teach " + o.name + "\nWork the same craft beside them and they learn 3x faster; you work at 80%. Give you both the same order (e.g. dig) so you end up side by side.")}>${svg("knowledge", 14)}${avatar(o.hue, o.lin, 16)}<span class="bl">Teach ${esc(o.name.split(" ")[0])}</span></button>`).join("") : "")
+      const acts = (isAdult(sim, v) && pupils.length ? pupils.slice(0, 2).map(o => { const on = !!(v.tch && v.tch.p === o.id && v.tch.u > sim.tick); return `<button class="btn${on ? " on" : ""}" data-act="teach:${on ? 0 : o.id}"${tipAttr((on ? "Stop teaching " : "Teach ") + o.name + "\nWork the same craft beside them and they learn 3x faster; you work at 80%. Give you both the same order (e.g. dig) so you end up side by side.")}>${svg("knowledge", 14)}${avatar(o.hue, o.lin, 16)}<span class="bl">${on ? "Teaching" : "Teach"} ${esc(o.name.split(" ")[0])}</span></button>`; }).join("") : "")
         + (isAdult(sim, v) ? splitButton(sim, v) : "");
       if (acts) vr += `<div class="actions">${acts}</div>`;
       // the old prose, hidden
@@ -22316,7 +22381,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
         <span class="tb-prog" data-test="skip-progress"></span>
         <span class="tb-spacer"></span>
         ${btn({ icon: "build", label: "Build", tip: "Build\nPlan walls, floors, roofs, doors and beds", key: "", cls: "tb-build", test: "build-toggle", attrs: 'data-key="B"' })}
-        ${btn({ icon: "book", label: "Book", tip: "Book\nThe story, what the village knows, its people, the keys", cls: "tb-book", test: "book-btn", attrs: 'data-key="K"' })}
+        ${btn({ icon: "book", label: "Log", tip: "Log\nThe story, what the village knows, its people, the keys", cls: "tb-book", test: "book-btn", attrs: 'data-key="K"' })}
         <span class="tb-menuwrap">${btn({ icon: "layers", tip: "Layers\nWhat to draw on the map", cls: "tb-layers", test: "layers" })}<div class="pop layers-pop" data-test="layers-pop"></div></span>
         <span class="tb-menuwrap">${btn({ icon: "menu", tip: "Menu\nSave, load, new game, settings, keys", cls: "tb-game", test: "menu" })}
           <div class="pop menu" data-test="menu-pop">
@@ -22408,7 +22473,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
           const t = dateOf(tick), full = `Day ${t.day}, ${SEASON_NAMES[t.season]}, Year ${t.year}`;
           html(dialw, "dial", dialSvg(tick, state.paused && !game.skipper.active, performance.now() - (game.skipper.msgT || 0) < 900) + `<span class="sr">${full}</span>`);
           dialw.dataset.tip = full + (state.paused ? "\nPaused" : "");
-          put(dayEl, "d", SEASON_NAMES[t.season] + " · Year " + t.year + " · Day " + t.day);
+          html(dayEl, "d", `<span class="dl">${SEASON_NAMES[t.season]} · Year ${t.year} · Day ${t.day}</span><span class="ds">${SEASON_NAMES[t.season]} · Y${t.year} · D${t.day}</span>`);
           put(todEl, "tod", timeOfDay(tick));
           const pb = q(".tb-pause"), pi = state.paused ? "play" : "pause";
           if (last.pi !== pi) { last.pi = pi; pb.innerHTML = svg(pi, 16); pb.dataset.tip = state.paused ? "Play\nSpace resumes" : "Pause\nSpace pauses"; }
@@ -23268,7 +23333,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
         const wa = winterAhead(sim.tick), crit = CRIT_BASE + CRIT_WINTER * wa, d = dayF(sim.tick), t = dateOf(sim.tick);
         // population: a number, then one pip per villager grouped by life stage
         let h = `<div class="vh-pop"><div class="vh-count"${tipAttr(`${vs.length} villagers\n${adults} adults, ${elders} elders, ${kids} children`)}>${svg("people", 18)}<b data-test="pop">${vs.length}</b><span class="cap">${vs.length === 1 ? "slime" : "slimes"}</span></div>`
-          + `<div class="pips"${tipAttr(`Adults ${adults}\nElders ${elders}\nChildren ${Math.max(0, kids)}`)}>${"<i></i>".repeat(adults)}${'<i class="e"></i>'.repeat(elders)}${'<i class="k"></i>'.repeat(Math.max(0, kids))}</div></div>`;
+          + `<div class="pips"${tipAttr(`Adults ${adults}\nElders ${elders}\nChildren ${Math.max(0, kids)}`)}>${vs.length > 12 ? `<span class="more-l">${adults} adult${elders ? " · " + elders + " elder" : ""}${kids > 0 ? " · " + kids + " kid" : ""}</span>` : "<i></i>".repeat(adults) + '<i class="e"></i>'.repeat(elders) + '<i class="k"></i>'.repeat(Math.max(0, kids))}</div></div>`;
         // season ribbon: the year in four segments, the day marker; winter hatched. A two-word caption row names it (6.19c)
         const toWinter = t.season === 3 ? 0 : Math.max(0, WINTER_START - d), run = b.runway >= 99 ? 99 : b.runway;
         const nextS = SEASON_NAMES[(t.season + 1) % 4], toNext = Math.max(1, Math.ceil(t.season === 3 ? DAYS_PER_YEAR - d : (t.season + 1) * DAYS_PER_SEASON - d));
@@ -23305,8 +23370,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
         const bedsBuilt = vl.beds.length, bedsSite = vl.sites.filter(s => s.what === "bed").length;
         h += `<div class="vrows" data-sec="rows">`;
         h += `<div class="row beds" data-test="beds"${tipAttr(`Beds: ${bedsBuilt} for ${vl.adults} adults` + (bedsSite ? ` (+${bedsSite} being built)` : ""))}>${svg("bed", 16)}<b class="rl">Beds ${bedsBuilt}/${vl.adults}</b>`;
-        for (let i = 0; i < Math.min(vl.adults, 10); i++) h += `<span class="bedi ${i < bedsBuilt ? "" : i < bedsBuilt + bedsSite ? "build" : "need"}">${svg("bed", 14)}</span>`;
-        if (vl.adults > 10) h += `<span class="more-l">+${vl.adults - 10}</span>`;
+        if (bedsSite) h += `<span class="more-l">+${bedsSite} building</span>`;
         h += `</div>`;
         h += `<div class="row inl" data-test="racks"${tipAttr(`Drying racks: ${vl.racks.length}`)}>${svg("rack", 16)}<b class="rl">Racks ${vl.racks.length}</b></div>`;
         const shelters = [...sim.rooms.list.values()].filter(r => r.enclosed).length;
@@ -23314,7 +23378,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
         const pl = sim.ents.ofKind("plot");
         if (pl.length) {
           const raw = pl.filter(q => !q.tl).length, tilled = pl.filter(q => q.tl && !q.cr).length, ripeN = pl.filter(q => q.cr && q.gr >= CROP[q.cr].days).length, sown = pl.filter(q => q.cr).length;
-          h += `<div class="row" data-test="fields"${tipAttr(`Fields: ${pl.length} plots: ${raw} raw, ${tilled} tilled, ${sown} sown${ripeN ? ", " + ripeN + " ripe" : ""}`)}>${svg("field", 16)}<b class="rl">Fields ${pl.length}</b><span class="plots">` + pl.slice(0, 24).map(q => `<i class="${!q.tl ? "" : !q.cr ? "t" : q.gr >= CROP[q.cr].days ? "r" : "s"}"></i>`).join("") + `</span>${pl.length > 24 ? `<span class="more-l">+${pl.length - 24}</span>` : ""}</div>`;
+          h += `<div class="row" data-test="fields"${tipAttr(`Fields: ${pl.length} plots: ${raw} raw, ${tilled} tilled, ${sown} sown${ripeN ? ", " + ripeN + " ripe" : ""}`)}>${svg("field", 16)}<b class="rl">Fields ${pl.length}</b>${[[raw, "raw"], [tilled, "tilled"], [sown - ripeN, "sown"], [ripeN, "ripe"]].filter(c => c[0]).map(c => `<span class="more-l">${c[0]} ${c[1]}</span>`).join("")}</div>`;
         }
         if (sim.farm.pens.length) {
           const hs = sim.ents.ofKind("fauna").filter(e => e.tame);
@@ -23711,7 +23775,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       ["Settings (top bar)", "every key can be changed (click Change, press a key; kept in this browser, not in the save), and: interface size, high contrast, colour-blind marks (letters and patterns beside colour) and reduced flashing. Game menu: New game has an Ironman option (one autosave slot, no loading), and every normal game autosaves once a game day into three slots"],
       ["Almanac (top bar)", "what the village knows and who holds it, Curiosities (things seen and not understood, with a hint), failed experiments, the era, and a debug trace of every discovery roll. Investigate sends 1-3 selected villagers to try things out for three days. Game menu > Force lightning makes the first fire happen now"],
       [(k) => k.label("panels"), "hide or show all panels"],
-      [(k) => k.label("book"), "open or close the Book: the story, what the village knows, its people, these keys"],
+      [(k) => k.label("book"), "open or close the Log: the story, what the village knows, its people, these keys"],
       ["Shift-S, Shift-O", "save to / load from this browser (Game menu: file download and upload)"],
     ];
     const HOW = [
@@ -23802,6 +23866,121 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     }
     
     return { createBook };
+  })();
+  
+  __mod["ui/pick.js"] = (function () {
+    // Hit-testing: what is under a screen point? Reads the renderer's per-frame
+    // column tops, so it only ever finds things that are actually drawn.
+    const { inZone, stockZoneAt } = __mod["sim/items.js"];
+    const { provisionalRoom } = __mod["sim/proom.js"];
+    
+    const PRIORITY = { fauna: -1, item: 0, furniture: 1, grave: 1, wagon: 1, csite: 2, site: 2, plant: 3, plot: 4 };
+    
+    /**
+     * -> {x, y, z, wx, wy, villager, ents, ent, kind}
+     *    villager: nearest drawn villager within ~0.6 cell (or null)
+     *    ents: other entities on the clicked cell (items first, plants last)
+     *    ent / kind: the best single thing ("villager", "item", ..., "stock", "ground")
+     */
+    function pickAt(game, sx, sy) {
+      const { sim, cam, renderer } = game;
+      if (cam.oblique && renderer.cellAt) return pickAngled(game, sx, sy);
+      const [wx, wy] = cam.toWorld(sx, sy);
+      const x = Math.floor(wx), y = Math.floor(wy);
+      const out = { x, y, z: -1, wx, wy, villager: null, ents: [], ent: null, kind: "none", room: null };
+      const top = renderer.topAt(x, y);
+      if (top < 0) return out;
+      out.z = top + 1;
+    
+      let best = null, bd = 0.62 * 0.62 * 2;                 // generous: blobs are small when zoomed out
+      const reach = Math.max(0.62, 5 / cam.zoom);             // at least ~5 px
+      bd = reach * reach;
+      for (const v of sim.ents.ofKind("villager")) {
+        if (!renderer.isShown(v)) continue;
+        const dx = v.x + 0.5 - wx, dy = v.y + 0.5 - wy, d = dx * dx + dy * dy;
+        if (d < bd) { bd = d; best = v; }
+      }
+      if (best) { out.villager = best; out.ent = best; out.kind = "villager"; }
+    
+      const ids = sim.ents.at(x, y, out.z);
+      for (let i = 0; i < ids.length; i++) {
+        const e = sim.ents.get(ids[i]);
+        if (e.kind !== "villager") out.ents.push(e);
+      }
+      for (const f of sim.ents.ofKind("fauna")) {          // creatures move: pick the nearest drawn one under the pointer, not only on the clicked cell
+        if (!renderer.isShown(f) || out.ents.includes(f)) continue;
+        const dx = f.x + 0.5 - wx, dy = f.y + 0.5 - wy;
+        if (dx * dx + dy * dy < reach * reach) out.ents.push(f);
+      }
+      return finish(game, out, best, x, y);
+    }
+    
+    /** What stands on the cell and what the cell is, once the cell, the best villager and the nearby things are known (shared by the flat and the angled view). */
+    function finish(game, out, best, x, y) {
+      const { sim } = game;
+      out.ents.sort((a, b) => PRIORITY[a.kind] - PRIORITY[b.kind] || a.id - b.id);
+      if (!best) {
+        if (out.ents.length) { out.ent = out.ents[0]; out.kind = out.ent.kind; }
+        else if (sim.stock && stockZoneAt(sim, x, y, out.z)) out.kind = "stock";
+        else if (sim.farm.pens.find(p => p.z === out.z && inZone(p, x, y))) { out.pen = sim.farm.pens.find(p => p.z === out.z && inZone(p, x, y)); out.kind = "pen"; }
+        else if (sim.farm.cellar && sim.farm.cellar.z === out.z && inZone(sim.farm.cellar, x, y)) out.kind = "cellar";
+        else out.kind = "ground";
+      }
+      // A room: the stand cell under the pointer, whichever level is viewed (the roof hides the floor from above).
+      for (let dz = 0; dz < 5 && !out.room; dz++) out.room = sim.rooms.at(x, y, out.z - dz) || null;
+      if (out.kind === "ground" && out.room) out.kind = "room";
+      else if (out.kind === "ground") { const pr = provisionalRoom(sim, x, y, out.z); if (pr) { out.prov = pr; out.kind = "proom"; } }   // walls + roof but no door yet
+      return out;
+    }
+    
+    /** Villagers drawn inside a screen rectangle. */
+    function villagersIn(game, x0, y0, x1, y1) {
+      const { sim, cam, renderer } = game, out = [];
+      if (cam.oblique && renderer.drawn) {                                                  // the angled view: a slime is in the box when its DRAWN sprite rectangle overlaps it (any overlap counts)
+        const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);
+        for (const d of renderer.drawn) { if (d.pri !== "villager") continue; if (d.r >= ax && d.l <= bx && d.b >= ay && d.t <= by && renderer.isShown(d.e) && !out.includes(d.e)) out.push(d.e); }
+        return out;
+      }
+      const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);   // the flat view: the same rule in screen space, on the DRAWN disc (its glided position when the renderer has one), any overlap counts
+      const rad = Math.max(2, cam.zoom * 0.38);
+      for (const v of sim.ents.ofKind("villager")) {
+        if (!renderer.isShown(v)) continue;
+        const p = renderer.drawPos ? renderer.drawPos(v) : [v.x + 0.5, v.y + 0.5], [sx, sy] = cam.toScreen(p[0], p[1], v.z);
+        if (sx + rad >= ax && sx - rad <= bx && sy + rad >= ay && sy - rad <= by) out.push(v);
+      }
+      return out;
+    }
+    
+    /**
+     * The angled view (6.19b): the cell is exact (a ray through the grid from the pixel, down the line of sight, stopping at the first solid or water cell that is not cut away by the
+     * slice), the things are what their sprites cover on screen (a tree's crown picks the tree, a slime's body the slime). {face, cz} describe the cell face hit (for the hover outline).
+     */
+    function pickAngled(game, sx, sy) {
+      const { sim, cam, renderer } = game;
+      const hit = renderer.cellAt(sx, sy);
+      const [gx, gy] = cam.toWorld(sx, sy);
+      const x = hit ? hit.x : Math.floor(gx), y = hit ? hit.y : Math.floor(gy);
+      const out = { x, y, z: hit ? hit.z + 1 : -1, wx: hit ? (hit.ny || hit.nx ? x + 0.5 : gx) : gx, wy: hit ? (hit.ny || hit.nx ? y + 0.5 : gy) : gy, villager: null, ents: [], ent: null, kind: "none", room: null, cz: hit ? hit.z : undefined, face: hit ? [hit.nx, hit.ny, hit.nz] : null };
+      if (!hit) return out;
+      let best = null, bd = 1e9;
+      for (const d of renderer.drawn) {
+        if (d.pri !== "villager" || sx < d.l - 4 || sx > d.r + 4 || sy < d.t - 4 || sy > d.b + 4 || !renderer.isShown(d.e)) continue;
+        const dd = Math.hypot(sx - d.fx, sy - (d.fy - 0.3 * (d.fy - d.t)));          // nearest to the lower body: overlapping slimes resolve to the one you aimed at
+        const key = Math.round(dd / 3) * 1e6 + d.e.id;                         // within 3 px it is a tie: the older slime wins, so two on one cell resolve the same way each time
+        if (key < bd) { bd = key; best = d.e; }
+      }
+      if (best) { out.villager = best; out.ent = best; out.kind = "villager"; }
+      const ids = sim.ents.at(x, y, out.z);
+      for (let i = 0; i < ids.length; i++) { const e = sim.ents.get(ids[i]); if (e.kind !== "villager" && !out.ents.includes(e)) out.ents.push(e); }
+      for (let i = renderer.drawn.length - 1; i >= 0; i--) {                              // sprites under the pointer (front to back): a tree's crown, a creature, a stack of logs
+        const d = renderer.drawn[i];
+        if (d.pri === "villager" || d.pri === "plot" || sx < d.l - 3 || sx > d.r + 3 || sy < d.t - 3 || sy > d.b + 3 || out.ents.includes(d.e) || !renderer.isShown(d.e)) continue;
+        out.ents.push(d.e);
+      }
+      return finish(game, out, best, x, y);
+    }
+    
+    return { pickAt, villagersIn };
   })();
   
   __mod["ui/pointers.js"] = (function () {
@@ -23950,6 +24129,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     const { SEEK_ALL: SEEK_ITEMS } = __mod["sim/mine.js"];
     const { can } = __mod["sim/knowledge.js"];
     const { orderable } = __mod["ui/orders.js"];
+    const { pickAt } = __mod["ui/pick.js"];
     
     const TOOLS = [
       ["wall", "Wall", "Walls block movement and keep the wind out. Drag a rectangle to outline a room."],
@@ -24080,24 +24260,29 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     
       // ---- geometry helpers ----
       const level = () => renderer.z;
-      function cellAt(e) {
-        const [wx, wy] = cam.toWorld(e.clientX, e.clientY, level());              // the viewed level is the plane you build on (6.19b: the angled view)
-        return { x: Math.floor(wx), y: Math.floor(wy) };
+      /** The cell under a pixel and the height a piece sits at. Surface view: on top of the clicked block (that column's surface); a layer or underground view: the viewed level is the plane you build on (6.19b). */
+      function cellOf(sx, sy) {
+        if (renderer.z >= game.D - 1) { const p = pickAt(game, sx, sy); if (p && p.z >= 0) return { x: p.x, y: p.y, z: p.z }; }
+        const [wx, wy] = cam.toWorld(sx, sy, level());
+        return { x: Math.floor(wx), y: Math.floor(wy), z: level() };
       }
-      function mouseCell() { return ui.mouse && ui.mouse.over ? (() => { const [wx, wy] = cam.toWorld(ui.mouse.x, ui.mouse.y, level()); return { x: Math.floor(wx), y: Math.floor(wy) }; })() : null; }
+      const cellAt = (e) => cellOf(e.clientX, e.clientY);
+      function mouseCell() { return ui.mouse && ui.mouse.over ? cellOf(ui.mouse.x, ui.mouse.y) : null; }
       const inMap = (c) => !!c;                          // S16: the land has no edge
     
       /** What the current drag/hover would place: [{w, m, x, y, z, bad}] */
       function pending() {
-        const z = level(), t = B.tool;
+        const t = B.tool;
         if (SHAPES[t]) {
           const a = B.drag ? B.drag.a : mouseCell(), b = B.drag ? B.drag.b : a;
           if (!inMap(a)) return [];
+          const z = a.z;
           return shapeCells(B.drag ? B.shape[t] : "point", a, b).map(c => ({ w: t, m: BMAT[B.mat[t]] ? B.mat[t] : "", ...c, z }));
         }
         if (t === "stamp" && B.bp) {
           const bp = game.sim.bps.list.find(b => b.id === B.bp.id), c = mouseCell();
           if (!bp || !inMap(c)) return [];
+          const z = c.z;
           const dims = oriented(bp, B.bp.rot, B.bp.over), out = [];
           for (let i = 0; i < B.bp.count; i++) out.push(...stampCells(bp, c.x + i * (dims.w + 1), c.y, z, B.bp.rot, B.bp.over));
           return out;
@@ -24121,7 +24306,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     
       // ---- the mode ----
       game.modes.build = {
-        enter(g) { B.prevZ = renderer.z; renderer.setZ(g.sim.stock.z); renderer.plane = true; B.drag = null; },
+        enter(g) { B.prevZ = renderer.z; if (renderer.z < game.D - 1) renderer.setZ(g.sim.stock.z); renderer.plane = true; B.drag = null; },
         leave() { B.drag = null; B.bp = null; ui.reviseBp = 0; renderer.plane = false; renderer.setZ(B.prevZ); },
         down(g, e) {
           if (e.button !== 0) return false;
@@ -24136,8 +24321,9 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
         up(g, e, p) {
           if (e.button === 2 && !p.moved) { if (B.drag || B.bp) { B.drag = null; B.bp = null; if (B.tool === "stamp") B.tool = "wall"; } else game.setMode("select"); return true; }
           if (e.button !== 0) return false;
-          const c = cellAt(e), z = level(), sim = game.sim, t = B.tool;
+          const c = cellAt(e), sim = game.sim, t = B.tool;
           const d = B.drag; B.drag = null;
+          const z = d ? d.a.z : c.z;
           if (!inMap(c)) return true;
           if (SHAPES[t] && d) {
             const cells = validate(shapeCells(B.shape[t], d.a, c).map(q => ({ w: t, m: BMAT[B.mat[t]] ? B.mat[t] : "", ...q, z })));
@@ -24209,7 +24395,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
           return true;
         },
         draw(g, ctx) {
-          const t = B.tool, z = level();
+          const t = B.tool, mc = mouseCell(), z = B.drag ? B.drag.a.z : mc ? mc.z : level();
           const cells = validate(pending());
           for (const c of cells) ghostCell(ctx, cam, c.w, c.x, c.y, { alpha: 0.5, bad: c.bad, z: c.z });
           if (t === "stockpile") for (const q of game.sim.zones.list) {                    // the zones already drawn, with what each takes
@@ -24609,7 +24795,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       { id: "pause", label: "Pause", keys: ["Space"], ctx: "global", note: "pause or resume" },
       { id: "help", label: "Help", keys: ["h", "?"], ctx: "global", note: "show or hide the help" },
       { id: "panels", label: "Hide panels", keys: ["p"], ctx: "global", note: "hide or show every panel" },
-      { id: "book", label: "Book", keys: ["k"], ctx: "global", note: "the story, what the village knows, its people, the keys" },
+      { id: "book", label: "Log", keys: ["k"], ctx: "global", note: "the story, what the village knows, its people, the keys" },
       { id: "next", label: "Next villager", keys: ["Tab"], ctx: "map" },
       { id: "prev", label: "Previous villager", keys: ["shift+Tab"], ctx: "map" },
       { id: "follow", label: "Follow", keys: ["f"], ctx: "map", note: "follow the selected villager" },
@@ -24818,121 +25004,6 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     }
     
     return { createSettings };
-  })();
-  
-  __mod["ui/pick.js"] = (function () {
-    // Hit-testing: what is under a screen point? Reads the renderer's per-frame
-    // column tops, so it only ever finds things that are actually drawn.
-    const { inZone, stockZoneAt } = __mod["sim/items.js"];
-    const { provisionalRoom } = __mod["sim/proom.js"];
-    
-    const PRIORITY = { fauna: -1, item: 0, furniture: 1, grave: 1, wagon: 1, csite: 2, site: 2, plant: 3, plot: 4 };
-    
-    /**
-     * -> {x, y, z, wx, wy, villager, ents, ent, kind}
-     *    villager: nearest drawn villager within ~0.6 cell (or null)
-     *    ents: other entities on the clicked cell (items first, plants last)
-     *    ent / kind: the best single thing ("villager", "item", ..., "stock", "ground")
-     */
-    function pickAt(game, sx, sy) {
-      const { sim, cam, renderer } = game;
-      if (cam.oblique && renderer.cellAt) return pickAngled(game, sx, sy);
-      const [wx, wy] = cam.toWorld(sx, sy);
-      const x = Math.floor(wx), y = Math.floor(wy);
-      const out = { x, y, z: -1, wx, wy, villager: null, ents: [], ent: null, kind: "none", room: null };
-      const top = renderer.topAt(x, y);
-      if (top < 0) return out;
-      out.z = top + 1;
-    
-      let best = null, bd = 0.62 * 0.62 * 2;                 // generous: blobs are small when zoomed out
-      const reach = Math.max(0.62, 5 / cam.zoom);             // at least ~5 px
-      bd = reach * reach;
-      for (const v of sim.ents.ofKind("villager")) {
-        if (!renderer.isShown(v)) continue;
-        const dx = v.x + 0.5 - wx, dy = v.y + 0.5 - wy, d = dx * dx + dy * dy;
-        if (d < bd) { bd = d; best = v; }
-      }
-      if (best) { out.villager = best; out.ent = best; out.kind = "villager"; }
-    
-      const ids = sim.ents.at(x, y, out.z);
-      for (let i = 0; i < ids.length; i++) {
-        const e = sim.ents.get(ids[i]);
-        if (e.kind !== "villager") out.ents.push(e);
-      }
-      for (const f of sim.ents.ofKind("fauna")) {          // creatures move: pick the nearest drawn one under the pointer, not only on the clicked cell
-        if (!renderer.isShown(f) || out.ents.includes(f)) continue;
-        const dx = f.x + 0.5 - wx, dy = f.y + 0.5 - wy;
-        if (dx * dx + dy * dy < reach * reach) out.ents.push(f);
-      }
-      return finish(game, out, best, x, y);
-    }
-    
-    /** What stands on the cell and what the cell is, once the cell, the best villager and the nearby things are known (shared by the flat and the angled view). */
-    function finish(game, out, best, x, y) {
-      const { sim } = game;
-      out.ents.sort((a, b) => PRIORITY[a.kind] - PRIORITY[b.kind] || a.id - b.id);
-      if (!best) {
-        if (out.ents.length) { out.ent = out.ents[0]; out.kind = out.ent.kind; }
-        else if (sim.stock && stockZoneAt(sim, x, y, out.z)) out.kind = "stock";
-        else if (sim.farm.pens.find(p => p.z === out.z && inZone(p, x, y))) { out.pen = sim.farm.pens.find(p => p.z === out.z && inZone(p, x, y)); out.kind = "pen"; }
-        else if (sim.farm.cellar && sim.farm.cellar.z === out.z && inZone(sim.farm.cellar, x, y)) out.kind = "cellar";
-        else out.kind = "ground";
-      }
-      // A room: the stand cell under the pointer, whichever level is viewed (the roof hides the floor from above).
-      for (let dz = 0; dz < 5 && !out.room; dz++) out.room = sim.rooms.at(x, y, out.z - dz) || null;
-      if (out.kind === "ground" && out.room) out.kind = "room";
-      else if (out.kind === "ground") { const pr = provisionalRoom(sim, x, y, out.z); if (pr) { out.prov = pr; out.kind = "proom"; } }   // walls + roof but no door yet
-      return out;
-    }
-    
-    /** Villagers drawn inside a screen rectangle. */
-    function villagersIn(game, x0, y0, x1, y1) {
-      const { sim, cam, renderer } = game, out = [];
-      if (cam.oblique && renderer.drawn) {                                                  // the angled view: a slime is in the box when its DRAWN sprite rectangle overlaps it (any overlap counts)
-        const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);
-        for (const d of renderer.drawn) { if (d.pri !== "villager") continue; if (d.r >= ax && d.l <= bx && d.b >= ay && d.t <= by && renderer.isShown(d.e) && !out.includes(d.e)) out.push(d.e); }
-        return out;
-      }
-      const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);   // the flat view: the same rule in screen space, on the DRAWN disc (its glided position when the renderer has one), any overlap counts
-      const rad = Math.max(2, cam.zoom * 0.38);
-      for (const v of sim.ents.ofKind("villager")) {
-        if (!renderer.isShown(v)) continue;
-        const p = renderer.drawPos ? renderer.drawPos(v) : [v.x + 0.5, v.y + 0.5], [sx, sy] = cam.toScreen(p[0], p[1], v.z);
-        if (sx + rad >= ax && sx - rad <= bx && sy + rad >= ay && sy - rad <= by) out.push(v);
-      }
-      return out;
-    }
-    
-    /**
-     * The angled view (6.19b): the cell is exact (a ray through the grid from the pixel, down the line of sight, stopping at the first solid or water cell that is not cut away by the
-     * slice), the things are what their sprites cover on screen (a tree's crown picks the tree, a slime's body the slime). {face, cz} describe the cell face hit (for the hover outline).
-     */
-    function pickAngled(game, sx, sy) {
-      const { sim, cam, renderer } = game;
-      const hit = renderer.cellAt(sx, sy);
-      const [gx, gy] = cam.toWorld(sx, sy);
-      const x = hit ? hit.x : Math.floor(gx), y = hit ? hit.y : Math.floor(gy);
-      const out = { x, y, z: hit ? hit.z + 1 : -1, wx: hit ? (hit.ny || hit.nx ? x + 0.5 : gx) : gx, wy: hit ? (hit.ny || hit.nx ? y + 0.5 : gy) : gy, villager: null, ents: [], ent: null, kind: "none", room: null, cz: hit ? hit.z : undefined, face: hit ? [hit.nx, hit.ny, hit.nz] : null };
-      if (!hit) return out;
-      let best = null, bd = 1e9;
-      for (const d of renderer.drawn) {
-        if (d.pri !== "villager" || sx < d.l - 4 || sx > d.r + 4 || sy < d.t - 4 || sy > d.b + 4 || !renderer.isShown(d.e)) continue;
-        const dd = Math.hypot(sx - d.fx, sy - (d.fy - 0.3 * (d.fy - d.t)));          // nearest to the lower body: overlapping slimes resolve to the one you aimed at
-        const key = Math.round(dd / 3) * 1e6 + d.e.id;                         // within 3 px it is a tie: the older slime wins, so two on one cell resolve the same way each time
-        if (key < bd) { bd = key; best = d.e; }
-      }
-      if (best) { out.villager = best; out.ent = best; out.kind = "villager"; }
-      const ids = sim.ents.at(x, y, out.z);
-      for (let i = 0; i < ids.length; i++) { const e = sim.ents.get(ids[i]); if (e.kind !== "villager" && !out.ents.includes(e)) out.ents.push(e); }
-      for (let i = renderer.drawn.length - 1; i >= 0; i--) {                              // sprites under the pointer (front to back): a tree's crown, a creature, a stack of logs
-        const d = renderer.drawn[i];
-        if (d.pri === "villager" || d.pri === "plot" || sx < d.l - 3 || sx > d.r + 3 || sy < d.t - 3 || sy > d.b + 3 || out.ents.includes(d.e) || !renderer.isShown(d.e)) continue;
-        out.ents.push(d.e);
-      }
-      return finish(game, out, best, x, y);
-    }
-    
-    return { pickAt, villagersIn };
   })();
   
   __mod["ui/input.js"] = (function () {
@@ -25297,7 +25368,15 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       cv.addEventListener("wheel", (e) => {
         e.preventDefault(); e.stopPropagation();
         const i = MM_SCALES.indexOf(mm.scale), j = Math.max(0, Math.min(MM_SCALES.length - 1, i + (e.deltaY > 0 ? 1 : -1)));
-        if (j !== i) { mm.scale = MM_SCALES[j]; mm.auto = false; remember("mm.scale", String(mm.scale)); mm.last = 0; }
+        if (j === i) return;
+        const r = cv.getBoundingClientRect(), k = MM_SIZE / r.width, qx = (e.clientX - r.left) * k, qy = (e.clientY - r.top) * k;
+        const wx = mm.pox + qx * mm.ps, wy = mm.poy + qy * mm.ps;              // the map point under the cursor stays under the cursor: the minimap is centred on the camera, so the camera moves
+        mm.scale = MM_SCALES[j]; mm.auto = false; remember("mm.scale", String(mm.scale));
+        const s = mm.scale;
+        cam.x = wx - (qx - MM_SIZE / 2) * s; cam.y = wy - (qy - MM_SIZE / 2) * s;
+        mm.ox = Math.floor(cam.x) - Math.floor((MM_SIZE * s) / 2); mm.oy = Math.floor(cam.y) - Math.floor((MM_SIZE * s) / 2);
+        mm.key = mm.ox + "," + mm.oy + "," + s + "," + game.sim.seen.ver; mm.last = performance.now();
+        paintLand();                                                          // repaint now so a click straight after maps to what is drawn
       }, { passive: false });
       cv.addEventListener("mousemove", (e) => {
         const r = cv.getBoundingClientRect(), k = MM_SIZE / r.width, [x, y] = cellAt((e.clientX - r.left) * k, (e.clientY - r.top) * k);
@@ -25460,7 +25539,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       }
       function send(extra) {
         const v = game.possessed(); if (!v) return;
-        game.sim.apply({ type: "pinput", id: v.id, dx: ui.sent.dx, dy: ui.sent.dy, tid: 0, verb: "", ...extra });
+        game.sim.apply({ type: "pinput", id: v.id, dx: ui.sent.dx, dy: ui.sent.dy, mx: ui.sent.mx || 0, my: ui.sent.my || 0, tid: 0, verb: "", ...extra });
       }
       game.possessKey = (act) => {                           // called by input.js with the guide ACTION the pressed key is bound to (ui/keys.js)
         const verbs = { eat: "eat", drink: "drink", sleep: "sleep", drop: "drop", tool: "equip" };
@@ -25499,6 +25578,11 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
           if (!v) { if (ui.mode === "possess") { game.toast("The guiding spirit let go of " + (ui.pname || "the villager") + "."); ui.mode = "select"; if (ui.prevZoom) cam.zoom = ui.prevZoom; ui.prevZoom = 0; ui.follow = 0; } return; }
           if (ui.mode !== "possess") return;
           let dx = 0, dy = 0;
+          const fm = game.fpvMove ? game.fpvMove() : null;
+          if (fm) {                                               // first person: free walk, fractions of a cell along where the camera looks
+            if (fm[0] !== ui.sent.mx || fm[1] !== ui.sent.my) { ui.sent = { dx: 0, dy: 0, mx: fm[0], my: fm[1] }; game.sim.apply({ type: "pinput", id: v.id, dx: 0, dy: 0, mx: fm[0], my: fm[1], tid: 0, verb: "" }); }
+            return;
+          }
           const fd = game.fpvDir ? game.fpvDir() : null;                // S18: in first person the held keys are relative to where you look
           if (fd) { dx = fd[0]; dy = fd[1]; } else for (const k of game.keys) {                                  // insertion order: the most recently pressed wins (the walk actions, whatever keys they are bound to)
             if (k === "panLeft") { dx = -1; dy = 0; } else if (k === "panRight") { dx = 1; dy = 0; }
@@ -25600,18 +25684,19 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     const { FpvRenderer, FOV } = __mod["render/fpv.js"];
     const { RenderView } = __mod["render/renderer.js"];
     const { item: paintItem } = __mod["render/sprites.js"];
-    const { lookDir, walkDir, faceOfYaw, clampLook, swayTarget, easeLook } = __mod["render/fpvmath.js"];
+    const { lookDir, walkDir, faceOfYaw, clampLook, swayTarget, easeLook, MAX_PITCH } = __mod["render/fpvmath.js"];
     const { pickTarget } = __mod["ui/fpvpick.js"];
     const { esc, remember } = __mod["ui/dom.js"];
     const { svg: iconSvg } = __mod["ui/icons.js"];
     const { ring: kitRing, meter } = __mod["ui/kit.js"];
     const { TICKS_PER_SEC } = __mod["sim/clock.js"];
+    const { subPos, WALK_UNIT } = __mod["sim/possess.js"];
     const { stepNeed } = __mod["sim/tasks.js"];
     const { describe, blockerText, itemName, shortBlocker, JOB } = __mod["ui/text.js"];
     const { doingWord, faunaWord } = __mod["ui/labels.js"];
     
-    const EYE = 0.74;                 // eye height above the floor, in cells
-    const PITCH = -0.16, TURN_MS = 150;         // UI_SPEC §12.3: a grid crawler: four facings, a fixed slight downward look, 90 degree turns that take ~150 ms; no mouse-look, no pointer lock
+    const EYE = 0.9;                  // eye height above the floor, in cells
+    const PITCH = -0.16, TURN_MS = 150;         // UI_SPEC §12.3: a grid crawler: four facings, a fixed slight downward look, 90 degree turns that take ~150 ms; D38 removed the mouse-look; it is back (pointer lock, free yaw, pitch to +-MAX_PITCH) and the arrows / , . still turn 90 degrees
     
     const IC = { warm: "warmth", hp: "health", "bad-air": "warn", "cave-in": "underground", dark: "night", strike: "hunt", take: "use" };     // the old local glyph names -> the shared registry (ui/icons.js)
     const svg = (n, cls = "") => iconSvg(IC[n] || n, 16, "fv-i " + cls);
@@ -25635,6 +25720,15 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
         const k = game.keys, f = (k.has("panUp") ? 1 : 0) - (k.has("panDown") ? 1 : 0), s = (k.has("panRight") ? 1 : 0) - (k.has("panLeft") ? 1 : 0);
         return walkDir(S.tyaw, f, s);
       };
+      /** Free walk: the held keys as a vector relative to where the camera looks, [mx, my] in -WALK_UNIT..WALK_UNIT (null: not in first person). The angle is quantised to 48 steps so turning the mouse is not a command per frame. */
+      game.fpvMove = () => {
+        if (!S.on) return null;
+        const k = game.keys, f = (k.has("panUp") ? 1 : 0) - (k.has("panDown") ? 1 : 0), s = (k.has("panRight") ? 1 : 0) - (k.has("panLeft") ? 1 : 0);
+        if (!f && !s) return [0, 0];
+        const q = Math.PI / 24;
+        const dir = Math.atan2(Math.sin(camYaw()) * f + Math.cos(camYaw()) * s, Math.cos(camYaw()) * f - Math.sin(camYaw()) * s), qa = Math.round(dir / q) * q;
+        return [Math.round(Math.cos(qa) * WALK_UNIT), Math.round(Math.sin(qa) * WALK_UNIT)];
+      };
       game.fpvEscape = () => S.on && performance.now() - S.lastUnlock < 150;      // the Esc that just released the mouse is not also "let go of the villager"
       game.fpvUse = () => {                                                   // E / click: the thing under the crosshair (false: nothing, so the caller falls back to the cell you face)
         if (!S.on || !S.target) return false;
@@ -25648,14 +25742,15 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
         if (!S.R) S.R = new FpvRenderer(canvas);
         if (!S.R.ok) { game.toast("No WebGL here, so you are guiding from above."); return false; }
         const f = ui.face || { dx: 0, dy: 1 };
-        S.face = faceOfYaw(Math.atan2(f.dy, f.dx)) && ((Math.round(Math.atan2(f.dy, f.dx) / (Math.PI / 2)) % 4) + 4) % 4; S.yaw = S.tyaw = S.face * Math.PI / 2; S.pitch = PITCH; S.pos = null; S.on = true; S.lk.yaw = S.lk.pitch = S.lk.ty = S.lk.tp = S.lk.nudge = 0; S.lk.hold = null; S.frames.length = 0; S.cpu.length = 0; S.last = 0;
+        S.face = faceOfYaw(Math.atan2(f.dy, f.dx)) && ((Math.round(Math.atan2(f.dy, f.dx) / (Math.PI / 2)) % 4) + 4) % 4; S.yaw = S.tyaw = S.face * Math.PI / 2; S.pitch = PITCH; S.pitchFix = null; S.pos = null; S.on = true; S.lk.yaw = S.lk.pitch = S.lk.ty = S.lk.tp = S.lk.nudge = 0; S.lk.hold = null; S.frames.length = 0; S.cpu.length = 0; S.last = 0;
         document.body.classList.add("fpv"); canvas.style.display = "block"; hud.style.display = "block";
-        if (!S.hinted) game.toast("First person: turn with the arrows, " + game.keymap.label("use") + " uses what is ahead.", 4000);
+        if (!S.hinted) game.toast("First person: click the view to look with the mouse, or turn with the arrows; " + game.keymap.label("use") + " uses what is ahead.", 4000);
         S.hinted = true;
         return true;
       }
       function leave() {
         S.on = false; S.target = null;
+        if (document.pointerLockElement === canvas) document.exitPointerLock();
         document.body.classList.remove("fpv"); canvas.style.display = "none"; hud.style.display = "none";
         hudHtml = "";
       }
@@ -25670,9 +25765,21 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       /** Settings > Mouse sway. */
       game.sway = remember("sway") !== "0"; game.setSway = (on) => { game.sway = !!on; remember("sway", on ? "1" : "0"); };
       /** The camera's pitch and yaw the frame shows: the facing (eased) plus the look offset. */
-      const camYaw = () => S.yaw + S.lk.yaw, camPitch = () => { const [, p] = clampLook(0, S.lk.pitch + S.lk.nudge, S.pitch); return S.pitch + p; };
+      const camYaw = () => S.yaw + S.lk.yaw, camPitch = () => Math.max(-MAX_PITCH, Math.min(MAX_PITCH, S.pitch + S.lk.pitch + S.lk.nudge));
       canvas.addEventListener("wheel", (e) => { if (!S.on) return; e.preventDefault(); if (performance.now() - (S.wheelAt || 0) > 180) { S.wheelAt = performance.now(); game.fpvTurn(e.deltaY > 0 ? 1 : -1); } }, { passive: false });
-      canvas.addEventListener("mousemove", (e) => { S.mouse = { x: e.clientX, y: e.clientY }; });
+      // Full mouse look (pointer lock): click the view to capture the mouse; yaw is free all the way round, pitch is clamped to +-MAX_PITCH. Esc frees the mouse (the next Esc lets go of the villager).
+      document.addEventListener("pointerlockchange", () => {
+        const was = S.locked; S.locked = document.pointerLockElement === canvas;
+        if (S.locked) S.mouse = null;
+        if (was && !S.locked) S.lastUnlock = performance.now();
+      });
+      document.addEventListener("mousemove", (e) => {
+        if (!S.on || !S.locked) return;
+        const k = 0.0022; S.yaw += e.movementX * k; S.tyaw = S.yaw; S.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, S.pitch - e.movementY * k)); S.pitchFix = null;
+        S.face = ((Math.round(S.tyaw / (Math.PI / 2)) % 4) + 4) & 3;
+      });
+      S.lockMouse = () => { try { const r = canvas.requestPointerLock && canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (_) { /* no lock: the mouse only points */ } };
+      canvas.addEventListener("mousemove", (e) => { if (!S.locked) S.mouse = { x: e.clientX, y: e.clientY }; });
       window.addEventListener("mousemove", (e) => {
         const h = S.lk.hold; if (!S.on || !h) return;
         if (!(e.buttons & (h.btn === 2 ? 2 : 4))) { S.lk.hold = null; S.lk.ty = S.lk.tp = 0; return; }          // the button came up out of sight
@@ -25683,7 +25790,8 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
       canvas.addEventListener("mousedown", (e) => {
         if (S.on && (e.button === 2 || e.button === 1)) { e.preventDefault(); S.lk.hold = { x: e.clientX, y: e.clientY, yaw: S.lk.ty, pitch: S.lk.tp, btn: e.button }; return; }          // hold right (or middle) and move to look around
         if (!S.on || e.button !== 0) return;
-        e.preventDefault(); S.mouse = { x: e.clientX, y: e.clientY };
+        e.preventDefault();
+        if (!S.locked) { S.mouse = { x: e.clientX, y: e.clientY }; S.lockMouse(); }
         S.target = aimTarget(game.sim, game.possessed());
         if (!game.fpvUse()) game.useTarget(null);
       });
@@ -25708,9 +25816,9 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
         const sim = game.sim, v = game.possessed();
         if (!v) { leave(); return false; }
         const k = game.keys;
-        { const diff = S.tyaw - S.yaw, step = (Math.PI / 2) / (TURN_MS / 1000) * dt; S.yaw = (game.access && game.access.calm) || Math.abs(diff) <= step ? S.tyaw : S.yaw + Math.sign(diff) * step; }     // the smooth 90 degree turn (calm: at once)
-        S.pitch = S.pitchFix === null || S.pitchFix === undefined ? PITCH : S.pitchFix;
-        const f = faceOfYaw(S.tyaw); ui.face = { dx: f[0], dy: f[1] };          // movement and the default target follow the facing, never the look offset
+        if (!S.locked) { const diff = S.tyaw - S.yaw, step = (Math.PI / 2) / (TURN_MS / 1000) * dt; S.yaw = (game.access && game.access.calm) || Math.abs(diff) <= step ? S.tyaw : S.yaw + Math.sign(diff) * step; }     // the smooth 90 degree turn (calm: at once)
+        if (S.pitchFix !== null && S.pitchFix !== undefined) S.pitch = S.pitchFix;
+        const f = faceOfYaw(camYaw()); ui.face = { dx: f[0], dy: f[1] };          // movement and the default target follow the facing, never the look offset
         { const L = S.lk, calm = !!(game.access && game.access.calm), cell = v.x + "," + v.y;
           if (L.cell && L.cell !== cell) resetLook(); L.cell = cell;
           let ty = L.ty, tp = L.tp;
@@ -25718,9 +25826,9 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
           L.yaw = easeLook(L.yaw, ty, dt, calm && !L.hold); L.pitch = easeLook(L.pitch, tp, dt, calm && !L.hold); }
         
         // the eye eases between cells (the sim moves on a grid; the camera must not teleport with it)
-        const tx = v.x + 0.5, ty = v.y + 0.5, tz = v.z + EYE;
+        const [tx, ty] = subPos(v), tz = v.z + EYE;
         if (!S.pos || Math.abs(S.pos.x - tx) + Math.abs(S.pos.y - ty) > 4 || Math.abs(S.pos.z - tz) > 3) S.pos = { x: tx, y: ty, z: tz };
-        else { const a = 1 - Math.exp(-dt * 13); S.pos.x += (tx - S.pos.x) * a; S.pos.y += (ty - S.pos.y) * a; S.pos.z += (tz - S.pos.z) * a; }
+        else { const a = 1 - Math.exp(-dt * 13); S.pos.x = tx; S.pos.y = ty; S.pos.z += (tz - S.pos.z) * a; }          // x, y are the sim's own sub-cell position (smooth already); only a step up or down is eased
         const R = S.R, rd = game.renderer;
         if (!rd.view || rd.view.world !== sim.world) rd.view = new RenderView(sim.world);        // the renderer's own chunk cache: reading land the sim has not made resident never touches the sim
         R.resize(cam.vw, cam.vh);
@@ -25874,7 +25982,7 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
           const px = cam.vw / 2, py = cam.vh / 2 + 90;
           chip.style.display = ""; chip.style.transform = `translate(${px.toFixed(0)}px,${py.toFixed(0)}px) translate(-50%,-100%)`;
           workHud(sim, v, px, py);
-        } else chip.style.display = "none";
+        } else { chip.style.display = "none"; workHud(sim, v, cam.vw / 2, cam.vh / 2 + 90); }          // the felled thing is no longer under the crosshair: its +n pop still shows
         feedback(sim, v, now);
         tags(sim, v);
         if (now - hudAt < 110) return;
@@ -26111,6 +26219,9 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     const { createWhisper } = __mod["ui/whisper.js"];
     const { createVillageHud } = __mod["ui/village_hud.js"];
     const { createBook } = __mod["ui/book.js"];
+    const { concernPlaces } = __mod["ui/concernplace.js"];
+    const { pickAt } = __mod["ui/pick.js"];
+    const { LABEL } = __mod["ui/village_hud.js"];
     const { createPointers } = __mod["ui/pointers.js"];
     const { createInspector } = __mod["ui/inspector.js"];
     const { createDigest, watch } = __mod["ui/chronicle.js"];
@@ -26334,7 +26445,14 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     function tooltip() {
       const { sim, ui } = game, h = ui.hover;
       let text = "";
-      if (h && ui.mouse && ui.mouse.over && !ui.press && !ui.box) {
+      if (ui.mouse && ui.mouse.over && !ui.press && !ui.box) {                       // a map blip (concern marker) shows the same tip as its pill in the Village panel
+        for (const pl of concernPlaces(game)) {
+          if (!pl.on) continue;
+          const dx = ui.mouse.x - pl.sx, dy = ui.mouse.y - (pl.sy - 22);
+          if (dx * dx + dy * dy <= 16 * 16) { text = LABEL[pl.c.k] + "\n" + pl.c.text; break; }
+        }
+      }
+      if (!text && h && ui.mouse && ui.mouse.over && !ui.press && !ui.box) {
         if (h.villager) {
           const x = explain(sim, h.villager);
           text = describe(sim, h.villager) + (x ? "\n" + x.headline : "");
@@ -26423,6 +26541,8 @@ window.__BUILD = {"stage":"7.23","commit":"58fe004","dirty":true,"time":"2026-10
     window.__game = game;
     game.bel = (id) => audit(game.sim, game.sim.ents.get(id));        // dev: how many of a slime's beliefs still match the truth ({right, gone})
     game.D = D; game.F = F; game.M = M;
+    game.pickAt = (x, y) => pickAt(game, x, y);
+    game.concernPlaces = () => concernPlaces(game);        // dev/test: where the map's concern blips are drawn (screen px)
     game.mapNote = mapNote;
     /** The map pixel under a screen point as [r, g, b, a]: the angled view's GL canvas under the overlay canvas, or just the 2D canvas (tests and screenshots). */
     game.mapPixel = (sx, sy) => {

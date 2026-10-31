@@ -8,18 +8,19 @@ import { hazardLines } from "../sim/underground.js";
 import { FpvRenderer, FOV } from "../render/fpv.js";
 import { RenderView } from "../render/renderer.js";
 import { item as paintItem } from "../render/sprites.js";
-import { lookDir, walkDir, faceOfYaw, clampLook, swayTarget, easeLook } from "../render/fpvmath.js";
+import { lookDir, walkDir, faceOfYaw, clampLook, swayTarget, easeLook, MAX_PITCH } from "../render/fpvmath.js";
 import { pickTarget } from "./fpvpick.js";
 import { esc, remember } from "./dom.js";
 import { svg as iconSvg } from "./icons.js";
 import { ring as kitRing, meter } from "./kit.js";
 import { TICKS_PER_SEC } from "../sim/clock.js";
+import { subPos, WALK_UNIT } from "../sim/possess.js";
 import { stepNeed } from "../sim/tasks.js";
 import { describe, blockerText, itemName, shortBlocker, JOB } from "./text.js";
 import { doingWord, faunaWord } from "./labels.js";
 
-export const EYE = 0.74;                 // eye height above the floor, in cells
-const PITCH = -0.16, TURN_MS = 150;         // UI_SPEC §12.3: a grid crawler: four facings, a fixed slight downward look, 90 degree turns that take ~150 ms; no mouse-look, no pointer lock
+export const EYE = 0.9;                  // eye height above the floor, in cells
+const PITCH = -0.16, TURN_MS = 150;         // UI_SPEC §12.3: a grid crawler: four facings, a fixed slight downward look, 90 degree turns that take ~150 ms; D38 removed the mouse-look; it is back (pointer lock, free yaw, pitch to +-MAX_PITCH) and the arrows / , . still turn 90 degrees
 
 const IC = { warm: "warmth", hp: "health", "bad-air": "warn", "cave-in": "underground", dark: "night", strike: "hunt", take: "use" };     // the old local glyph names -> the shared registry (ui/icons.js)
 const svg = (n, cls = "") => iconSvg(IC[n] || n, 16, "fv-i " + cls);
@@ -43,6 +44,15 @@ export function createFpv(game) {
     const k = game.keys, f = (k.has("panUp") ? 1 : 0) - (k.has("panDown") ? 1 : 0), s = (k.has("panRight") ? 1 : 0) - (k.has("panLeft") ? 1 : 0);
     return walkDir(S.tyaw, f, s);
   };
+  /** Free walk: the held keys as a vector relative to where the camera looks, [mx, my] in -WALK_UNIT..WALK_UNIT (null: not in first person). The angle is quantised to 48 steps so turning the mouse is not a command per frame. */
+  game.fpvMove = () => {
+    if (!S.on) return null;
+    const k = game.keys, f = (k.has("panUp") ? 1 : 0) - (k.has("panDown") ? 1 : 0), s = (k.has("panRight") ? 1 : 0) - (k.has("panLeft") ? 1 : 0);
+    if (!f && !s) return [0, 0];
+    const q = Math.PI / 24;
+    const dir = Math.atan2(Math.sin(camYaw()) * f + Math.cos(camYaw()) * s, Math.cos(camYaw()) * f - Math.sin(camYaw()) * s), qa = Math.round(dir / q) * q;
+    return [Math.round(Math.cos(qa) * WALK_UNIT), Math.round(Math.sin(qa) * WALK_UNIT)];
+  };
   game.fpvEscape = () => S.on && performance.now() - S.lastUnlock < 150;      // the Esc that just released the mouse is not also "let go of the villager"
   game.fpvUse = () => {                                                   // E / click: the thing under the crosshair (false: nothing, so the caller falls back to the cell you face)
     if (!S.on || !S.target) return false;
@@ -56,14 +66,15 @@ export function createFpv(game) {
     if (!S.R) S.R = new FpvRenderer(canvas);
     if (!S.R.ok) { game.toast("No WebGL here, so you are guiding from above."); return false; }
     const f = ui.face || { dx: 0, dy: 1 };
-    S.face = faceOfYaw(Math.atan2(f.dy, f.dx)) && ((Math.round(Math.atan2(f.dy, f.dx) / (Math.PI / 2)) % 4) + 4) % 4; S.yaw = S.tyaw = S.face * Math.PI / 2; S.pitch = PITCH; S.pos = null; S.on = true; S.lk.yaw = S.lk.pitch = S.lk.ty = S.lk.tp = S.lk.nudge = 0; S.lk.hold = null; S.frames.length = 0; S.cpu.length = 0; S.last = 0;
+    S.face = faceOfYaw(Math.atan2(f.dy, f.dx)) && ((Math.round(Math.atan2(f.dy, f.dx) / (Math.PI / 2)) % 4) + 4) % 4; S.yaw = S.tyaw = S.face * Math.PI / 2; S.pitch = PITCH; S.pitchFix = null; S.pos = null; S.on = true; S.lk.yaw = S.lk.pitch = S.lk.ty = S.lk.tp = S.lk.nudge = 0; S.lk.hold = null; S.frames.length = 0; S.cpu.length = 0; S.last = 0;
     document.body.classList.add("fpv"); canvas.style.display = "block"; hud.style.display = "block";
-    if (!S.hinted) game.toast("First person: turn with the arrows, " + game.keymap.label("use") + " uses what is ahead.", 4000);
+    if (!S.hinted) game.toast("First person: click the view to look with the mouse, or turn with the arrows; " + game.keymap.label("use") + " uses what is ahead.", 4000);
     S.hinted = true;
     return true;
   }
   function leave() {
     S.on = false; S.target = null;
+    if (document.pointerLockElement === canvas) document.exitPointerLock();
     document.body.classList.remove("fpv"); canvas.style.display = "none"; hud.style.display = "none";
     hudHtml = "";
   }
@@ -78,9 +89,21 @@ export function createFpv(game) {
   /** Settings > Mouse sway. */
   game.sway = remember("sway") !== "0"; game.setSway = (on) => { game.sway = !!on; remember("sway", on ? "1" : "0"); };
   /** The camera's pitch and yaw the frame shows: the facing (eased) plus the look offset. */
-  const camYaw = () => S.yaw + S.lk.yaw, camPitch = () => { const [, p] = clampLook(0, S.lk.pitch + S.lk.nudge, S.pitch); return S.pitch + p; };
+  const camYaw = () => S.yaw + S.lk.yaw, camPitch = () => Math.max(-MAX_PITCH, Math.min(MAX_PITCH, S.pitch + S.lk.pitch + S.lk.nudge));
   canvas.addEventListener("wheel", (e) => { if (!S.on) return; e.preventDefault(); if (performance.now() - (S.wheelAt || 0) > 180) { S.wheelAt = performance.now(); game.fpvTurn(e.deltaY > 0 ? 1 : -1); } }, { passive: false });
-  canvas.addEventListener("mousemove", (e) => { S.mouse = { x: e.clientX, y: e.clientY }; });
+  // Full mouse look (pointer lock): click the view to capture the mouse; yaw is free all the way round, pitch is clamped to +-MAX_PITCH. Esc frees the mouse (the next Esc lets go of the villager).
+  document.addEventListener("pointerlockchange", () => {
+    const was = S.locked; S.locked = document.pointerLockElement === canvas;
+    if (S.locked) S.mouse = null;
+    if (was && !S.locked) S.lastUnlock = performance.now();
+  });
+  document.addEventListener("mousemove", (e) => {
+    if (!S.on || !S.locked) return;
+    const k = 0.0022; S.yaw += e.movementX * k; S.tyaw = S.yaw; S.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, S.pitch - e.movementY * k)); S.pitchFix = null;
+    S.face = ((Math.round(S.tyaw / (Math.PI / 2)) % 4) + 4) & 3;
+  });
+  S.lockMouse = () => { try { const r = canvas.requestPointerLock && canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (_) { /* no lock: the mouse only points */ } };
+  canvas.addEventListener("mousemove", (e) => { if (!S.locked) S.mouse = { x: e.clientX, y: e.clientY }; });
   window.addEventListener("mousemove", (e) => {
     const h = S.lk.hold; if (!S.on || !h) return;
     if (!(e.buttons & (h.btn === 2 ? 2 : 4))) { S.lk.hold = null; S.lk.ty = S.lk.tp = 0; return; }          // the button came up out of sight
@@ -91,7 +114,8 @@ export function createFpv(game) {
   canvas.addEventListener("mousedown", (e) => {
     if (S.on && (e.button === 2 || e.button === 1)) { e.preventDefault(); S.lk.hold = { x: e.clientX, y: e.clientY, yaw: S.lk.ty, pitch: S.lk.tp, btn: e.button }; return; }          // hold right (or middle) and move to look around
     if (!S.on || e.button !== 0) return;
-    e.preventDefault(); S.mouse = { x: e.clientX, y: e.clientY };
+    e.preventDefault();
+    if (!S.locked) { S.mouse = { x: e.clientX, y: e.clientY }; S.lockMouse(); }
     S.target = aimTarget(game.sim, game.possessed());
     if (!game.fpvUse()) game.useTarget(null);
   });
@@ -116,9 +140,9 @@ export function createFpv(game) {
     const sim = game.sim, v = game.possessed();
     if (!v) { leave(); return false; }
     const k = game.keys;
-    { const diff = S.tyaw - S.yaw, step = (Math.PI / 2) / (TURN_MS / 1000) * dt; S.yaw = (game.access && game.access.calm) || Math.abs(diff) <= step ? S.tyaw : S.yaw + Math.sign(diff) * step; }     // the smooth 90 degree turn (calm: at once)
-    S.pitch = S.pitchFix === null || S.pitchFix === undefined ? PITCH : S.pitchFix;
-    const f = faceOfYaw(S.tyaw); ui.face = { dx: f[0], dy: f[1] };          // movement and the default target follow the facing, never the look offset
+    if (!S.locked) { const diff = S.tyaw - S.yaw, step = (Math.PI / 2) / (TURN_MS / 1000) * dt; S.yaw = (game.access && game.access.calm) || Math.abs(diff) <= step ? S.tyaw : S.yaw + Math.sign(diff) * step; }     // the smooth 90 degree turn (calm: at once)
+    if (S.pitchFix !== null && S.pitchFix !== undefined) S.pitch = S.pitchFix;
+    const f = faceOfYaw(camYaw()); ui.face = { dx: f[0], dy: f[1] };          // movement and the default target follow the facing, never the look offset
     { const L = S.lk, calm = !!(game.access && game.access.calm), cell = v.x + "," + v.y;
       if (L.cell && L.cell !== cell) resetLook(); L.cell = cell;
       let ty = L.ty, tp = L.tp;
@@ -126,9 +150,9 @@ export function createFpv(game) {
       L.yaw = easeLook(L.yaw, ty, dt, calm && !L.hold); L.pitch = easeLook(L.pitch, tp, dt, calm && !L.hold); }
     
     // the eye eases between cells (the sim moves on a grid; the camera must not teleport with it)
-    const tx = v.x + 0.5, ty = v.y + 0.5, tz = v.z + EYE;
+    const [tx, ty] = subPos(v), tz = v.z + EYE;
     if (!S.pos || Math.abs(S.pos.x - tx) + Math.abs(S.pos.y - ty) > 4 || Math.abs(S.pos.z - tz) > 3) S.pos = { x: tx, y: ty, z: tz };
-    else { const a = 1 - Math.exp(-dt * 13); S.pos.x += (tx - S.pos.x) * a; S.pos.y += (ty - S.pos.y) * a; S.pos.z += (tz - S.pos.z) * a; }
+    else { const a = 1 - Math.exp(-dt * 13); S.pos.x = tx; S.pos.y = ty; S.pos.z += (tz - S.pos.z) * a; }          // x, y are the sim's own sub-cell position (smooth already); only a step up or down is eased
     const R = S.R, rd = game.renderer;
     if (!rd.view || rd.view.world !== sim.world) rd.view = new RenderView(sim.world);        // the renderer's own chunk cache: reading land the sim has not made resident never touches the sim
     R.resize(cam.vw, cam.vh);
@@ -282,7 +306,7 @@ export function createFpv(game) {
       const px = cam.vw / 2, py = cam.vh / 2 + 90;
       chip.style.display = ""; chip.style.transform = `translate(${px.toFixed(0)}px,${py.toFixed(0)}px) translate(-50%,-100%)`;
       workHud(sim, v, px, py);
-    } else chip.style.display = "none";
+    } else { chip.style.display = "none"; workHud(sim, v, cam.vw / 2, cam.vh / 2 + 90); }          // the felled thing is no longer under the crosshair: its +n pop still shows
     feedback(sim, v, now);
     tags(sim, v);
     if (now - hudAt < 110) return;

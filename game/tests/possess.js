@@ -194,4 +194,59 @@ function playerFight(seed, ai) {
   }
   INSPIRE.speed = saved;
 }
+
+// ---- repeated E on the work in progress continues it (never restarts the countdown) ----
+{
+  const { sim, v, tree } = world(3);
+  sim.apply({ type: "possess", id: v.id });
+  const pin = (o) => sim.apply({ type: "pinput", id: v.id, dx: 0, dy: 0, tid: 0, verb: "", ...o });
+  // walk beside the tree with free walk, then chop
+  for (let i = 0; i < 2000 && Math.abs(tree.x - v.x) + Math.abs(tree.y - v.y) > 1; i++) {
+    pin({ mx: Math.sign(tree.x - v.x) * 64, my: Math.abs(tree.x - v.x) ? 0 : Math.sign(tree.y - v.y) * 64 });
+    sim.step();
+  }
+  pin({ mx: 0, my: 0 });
+  assert.ok(Math.abs(tree.x - v.x) + Math.abs(tree.y - v.y) <= 1, "free walk got beside the tree");
+  pin({ tid: tree.id }); sim.step();
+  for (let i = 0; i < 60; i++) sim.step();
+  const p0 = v.action.p, a0 = v.action;
+  assert.ok(p0 > 0, "chop is under way");
+  pin({ tid: tree.id }); sim.step();
+  assert.equal(v.action, a0, "a repeated E keeps the same action object");
+  assert.ok(v.action.p >= p0, "the countdown carried on (" + v.action.p + " >= " + p0 + ")");
+  assert.ok(!v.poss.fb[0] || v.poss.fb[1] < sim.tick - 5, "no refusal");
+}
+
+// ---- free walk: fractions of a cell, walls block, the cell stays authoritative, release leaves it in that cell ----
+{
+  const { sim, v } = world(3);
+  sim.apply({ type: "possess", id: v.id });
+  const x0 = v.x, y0 = v.y, z0 = v.z;
+  assert.equal(v.poss.ox, 512, "starts mid-cell");
+  sim.apply({ type: "pinput", id: v.id, dx: 0, dy: 0, mx: 64, my: 0, tid: 0, verb: "" });
+  sim.step();
+  assert.ok(v.poss.ox > 512 && v.poss.ox < 1024 && v.x === x0, "one tick is a fraction of a cell (ox " + v.poss.ox + ")");
+  const route = [];
+  for (let i = 0; i < 40; i++) { sim.step(); route.push(v.x + "," + v.y + "," + v.z); }
+  assert.ok(v.x > x0 || v.x === x0, "walked east or was blocked");
+  assert.ok(v.poss.ox >= 0 && v.poss.ox < 1024 && v.poss.oy >= 0 && v.poss.oy < 1024, "offset stays inside its cell");
+  assert.ok(sim.world.isWalkable(v.x, v.y, v.z), "the cell it stands in is walkable");
+  // determinism: an identical run gives the identical hash
+  const run = () => { const q = world(3); q.sim.apply({ type: "possess", id: q.v.id }); for (let i = 0; i < 120; i++) { if (i % 30 === 0) q.sim.apply({ type: "pinput", id: q.v.id, dx: 0, dy: 0, mx: [64, 45, 0, -45][(i / 30) | 0], my: [0, 45, 64, -45][(i / 30) | 0], tid: 0, verb: "" }); q.sim.step(); } return q.sim.hash(); };
+  assert.equal(run(), run(), "free walk is deterministic");
+  // a wall: walk into a solid neighbour and stop short of its edge
+  const cx = v.x, cy = v.y, cz = v.z;
+  for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    if (sim.world.isWalkable(cx + dx, cy + dy, cz) || sim.world.isWalkable(cx + dx, cy + dy, cz + 1) || sim.world.isWalkable(cx + dx, cy + dy, cz - 1)) continue;
+    sim.apply({ type: "pinput", id: v.id, dx: 0, dy: 0, mx: dx * 64, my: dy * 64, tid: 0, verb: "" });
+    for (let i = 0; i < 60; i++) sim.step();
+    assert.deepEqual([v.x, v.y, v.z], [cx, cy, cz], "a wall blocks free walk");
+    assert.ok(dx ? (dx > 0 ? v.poss.ox < 1024 - 100 : v.poss.ox > 100) : (dy > 0 ? v.poss.oy < 1024 - 100 : v.poss.oy > 100), "stops short of the wall");
+    break;
+  }
+  const at = [v.x, v.y, v.z];
+  sim.apply({ type: "release" });
+  assert.deepEqual([v.x, v.y, v.z], at, "released in the cell it stands in");
+  assert.ok(v.poss === undefined, "no sub-cell state left");
+}
 console.log("possess ok");

@@ -34,7 +34,7 @@ export function createTopBar(root, game) {
     <span class="tb-prog" data-test="skip-progress"></span>
     <span class="tb-spacer"></span>
     ${btn({ icon: "build", label: "Build", tip: "Build\nPlan walls, floors, roofs, doors and beds", key: "", cls: "tb-build", test: "build-toggle", attrs: 'data-key="B"' })}
-    ${btn({ icon: "book", label: "Book", tip: "Book\nThe story, what the village knows, its people, the keys", cls: "tb-book", test: "book-btn", attrs: 'data-key="K"' })}
+    ${btn({ icon: "book", label: "Log", tip: "Log\nThe story, what the village knows, its people, the keys", cls: "tb-book", test: "book-btn", attrs: 'data-key="K"' })}
     <span class="tb-menuwrap">${btn({ icon: "layers", tip: "Layers\nWhat to draw on the map", cls: "tb-layers", test: "layers" })}<div class="pop layers-pop" data-test="layers-pop"></div></span>
     <span class="tb-menuwrap">${btn({ icon: "menu", tip: "Menu\nSave, load, new game, settings, keys", cls: "tb-game", test: "menu" })}
       <div class="pop menu" data-test="menu-pop">
@@ -126,7 +126,7 @@ export function createTopBar(root, game) {
       const t = dateOf(tick), full = `Day ${t.day}, ${SEASON_NAMES[t.season]}, Year ${t.year}`;
       html(dialw, "dial", dialSvg(tick, state.paused && !game.skipper.active, performance.now() - (game.skipper.msgT || 0) < 900) + `<span class="sr">${full}</span>`);
       dialw.dataset.tip = full + (state.paused ? "\nPaused" : "");
-      put(dayEl, "d", SEASON_NAMES[t.season] + " · Year " + t.year + " · Day " + t.day);
+      html(dayEl, "d", `<span class="dl">${SEASON_NAMES[t.season]} · Year ${t.year} · Day ${t.day}</span><span class="ds">${SEASON_NAMES[t.season]} · Y${t.year} · D${t.day}</span>`);
       put(todEl, "tod", timeOfDay(tick));
       const pb = q(".tb-pause"), pi = state.paused ? "play" : "pause";
       if (last.pi !== pi) { last.pi = pi; pb.innerHTML = svg(pi, 16); pb.dataset.tip = state.paused ? "Play\nSpace resumes" : "Pause\nSpace pauses"; }

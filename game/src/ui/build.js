@@ -18,6 +18,7 @@ import { itemName, BLOCKER_TEXT } from "./text.js";
 import { SEEK_ALL as SEEK_ITEMS } from "../sim/mine.js";
 import { can } from "../sim/knowledge.js";
 import { orderable } from "./orders.js";
+import { pickAt } from "./pick.js";
 
 const TOOLS = [
   ["wall", "Wall", "Walls block movement and keep the wind out. Drag a rectangle to outline a room."],
@@ -148,24 +149,29 @@ export function createBuildMode(game, root) {
 
   // ---- geometry helpers ----
   const level = () => renderer.z;
-  function cellAt(e) {
-    const [wx, wy] = cam.toWorld(e.clientX, e.clientY, level());              // the viewed level is the plane you build on (6.19b: the angled view)
-    return { x: Math.floor(wx), y: Math.floor(wy) };
+  /** The cell under a pixel and the height a piece sits at. Surface view: on top of the clicked block (that column's surface); a layer or underground view: the viewed level is the plane you build on (6.19b). */
+  function cellOf(sx, sy) {
+    if (renderer.z >= game.D - 1) { const p = pickAt(game, sx, sy); if (p && p.z >= 0) return { x: p.x, y: p.y, z: p.z }; }
+    const [wx, wy] = cam.toWorld(sx, sy, level());
+    return { x: Math.floor(wx), y: Math.floor(wy), z: level() };
   }
-  function mouseCell() { return ui.mouse && ui.mouse.over ? (() => { const [wx, wy] = cam.toWorld(ui.mouse.x, ui.mouse.y, level()); return { x: Math.floor(wx), y: Math.floor(wy) }; })() : null; }
+  const cellAt = (e) => cellOf(e.clientX, e.clientY);
+  function mouseCell() { return ui.mouse && ui.mouse.over ? cellOf(ui.mouse.x, ui.mouse.y) : null; }
   const inMap = (c) => !!c;                          // S16: the land has no edge
 
   /** What the current drag/hover would place: [{w, m, x, y, z, bad}] */
   function pending() {
-    const z = level(), t = B.tool;
+    const t = B.tool;
     if (SHAPES[t]) {
       const a = B.drag ? B.drag.a : mouseCell(), b = B.drag ? B.drag.b : a;
       if (!inMap(a)) return [];
+      const z = a.z;
       return shapeCells(B.drag ? B.shape[t] : "point", a, b).map(c => ({ w: t, m: BMAT[B.mat[t]] ? B.mat[t] : "", ...c, z }));
     }
     if (t === "stamp" && B.bp) {
       const bp = game.sim.bps.list.find(b => b.id === B.bp.id), c = mouseCell();
       if (!bp || !inMap(c)) return [];
+      const z = c.z;
       const dims = oriented(bp, B.bp.rot, B.bp.over), out = [];
       for (let i = 0; i < B.bp.count; i++) out.push(...stampCells(bp, c.x + i * (dims.w + 1), c.y, z, B.bp.rot, B.bp.over));
       return out;
@@ -189,7 +195,7 @@ export function createBuildMode(game, root) {
 
   // ---- the mode ----
   game.modes.build = {
-    enter(g) { B.prevZ = renderer.z; renderer.setZ(g.sim.stock.z); renderer.plane = true; B.drag = null; },
+    enter(g) { B.prevZ = renderer.z; if (renderer.z < game.D - 1) renderer.setZ(g.sim.stock.z); renderer.plane = true; B.drag = null; },
     leave() { B.drag = null; B.bp = null; ui.reviseBp = 0; renderer.plane = false; renderer.setZ(B.prevZ); },
     down(g, e) {
       if (e.button !== 0) return false;
@@ -204,8 +210,9 @@ export function createBuildMode(game, root) {
     up(g, e, p) {
       if (e.button === 2 && !p.moved) { if (B.drag || B.bp) { B.drag = null; B.bp = null; if (B.tool === "stamp") B.tool = "wall"; } else game.setMode("select"); return true; }
       if (e.button !== 0) return false;
-      const c = cellAt(e), z = level(), sim = game.sim, t = B.tool;
+      const c = cellAt(e), sim = game.sim, t = B.tool;
       const d = B.drag; B.drag = null;
+      const z = d ? d.a.z : c.z;
       if (!inMap(c)) return true;
       if (SHAPES[t] && d) {
         const cells = validate(shapeCells(B.shape[t], d.a, c).map(q => ({ w: t, m: BMAT[B.mat[t]] ? B.mat[t] : "", ...q, z })));
@@ -277,7 +284,7 @@ export function createBuildMode(game, root) {
       return true;
     },
     draw(g, ctx) {
-      const t = B.tool, z = level();
+      const t = B.tool, mc = mouseCell(), z = B.drag ? B.drag.a.z : mc ? mc.z : level();
       const cells = validate(pending());
       for (const c of cells) ghostCell(ctx, cam, c.w, c.x, c.y, { alpha: 0.5, bad: c.bad, z: c.z });
       if (t === "stockpile") for (const q of game.sim.zones.list) {                    // the zones already drawn, with what each takes

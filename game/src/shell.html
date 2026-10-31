@@ -82,7 +82,7 @@
   .pn > header .phint { margin-left:auto; color:var(--tx2); font-weight:400; font-size:12px; } .pn > header .phint:empty { display:none; }
   .pn > header .phint.badge { background:var(--s3); border-radius:var(--rp); padding:0 7px; color:var(--tx); font-weight:600; font-size:11.5px; }
   .pn > header .chev { color:var(--tx2); display:inline-flex; transition:transform .12s; } .pn.closed > header .chev { transform:rotate(-90deg); }
-  .pn.closed > header { border-bottom:0; } .pn.closed > .pbody { display:none; }
+  .pn.closed > header { border-bottom:0; } .pn.closed > .pbody { display:none !important; } #slotV > .pn.closed, #slotI > .pn.closed { flex:none; height:auto; }
   .pn.flat > header { display:none; }
   .pbody { padding:var(--sp3); } .pbody p { margin:3px 0; }
   .pn.flash { box-shadow:0 0 0 2px var(--know), var(--e1); }
@@ -348,13 +348,13 @@
   .sec-body:not(:has(> .fx)) { display:block; overflow-y:auto; scrollbar-width:thin; }
   .sec-body:has(> .fx) { overflow-y:auto; scrollbar-width:thin; }          /* a slime card: the whole body scrolls inside the fixed-height card (Memories, Knows and Ideas used to get a 24px scroller under the rings and skills at 720 high) */
   .sec-body > .fx { flex:none; } .sec-body > .vr { flex:none; }
-  .sec-now .chain { height:46px; flex-wrap:nowrap; overflow:hidden; margin:0; box-sizing:border-box; } .sec-now .chain .cls { width:96px; flex:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:block; line-height:18px; }
+  .sec-now .chain { height:46px; flex-wrap:nowrap; overflow:hidden; margin:0; box-sizing:border-box; } .sec-now .chain .cls { width:104px; flex:none; overflow:hidden; white-space:normal; display:block; line-height:13px; max-height:28px; }
   .sec-now .chain .score { min-width:0; height:36px; justify-content:center; overflow:hidden; }
-  .sec-now .rejl { height:30px; flex-wrap:nowrap; overflow:hidden; margin:0; box-sizing:border-box; } .sec-now .rejl .rj { flex:none; max-width:128px; overflow:hidden; white-space:nowrap; } .sec-now .rejl .rj.more { color:var(--tx); }
+  .sec-now .rejl { min-height:30px; flex-wrap:wrap; margin:0; box-sizing:border-box; } .sec-now .rejl .rj { flex:none; max-width:100%; white-space:nowrap; } .sec-now .rejl .rj.more { color:var(--tx); }
   .sec-now .parts { height:26px; margin:0; overflow:hidden; box-sizing:border-box; } .sec-now details.parts[open] { height:150px; overflow-y:auto; scrollbar-width:thin; }
   .fx .ins-head { height:34px; margin:0; box-sizing:border-box; flex-wrap:nowrap; overflow:hidden; } .fx .rings { height:62px; margin:0; box-sizing:border-box; overflow:hidden; } .fx .rings { gap:4px; } .fx .rings .rc:not(.mood) { width:36px; flex:none; }
   .fx .gene { height:68px; margin:4px 0; } .fx .skl { height:28px; margin:0; flex-wrap:nowrap; overflow:hidden; box-sizing:border-box; }
-  #topbar .tb-day { display:inline-block; width:116px; overflow:hidden; text-overflow:ellipsis; } #topbar .tb-tod { display:inline-block; width:84px; overflow:hidden; } #topbar .tb-tod:empty { display:inline-block; }
+  #topbar .tb-day { display:inline-block; flex:none; width:auto; min-width:0; overflow:visible; } #topbar .tb-day .ds { display:none; } @media (max-width:1000px) { #topbar .tb-day .dl { display:none; } #topbar .tb-day .ds { display:inline; } } #topbar .tb-tod { display:inline-block; width:84px; overflow:hidden; } #topbar .tb-tod:empty { display:inline-block; }
   .sheet > .card { height:min(600px, 90vh); }
   #dock .ob-count { min-width:84px; }
 </style>

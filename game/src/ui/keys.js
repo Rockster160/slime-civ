@@ -10,7 +10,7 @@ export const ACTIONS = [
   { id: "pause", label: "Pause", keys: ["Space"], ctx: "global", note: "pause or resume" },
   { id: "help", label: "Help", keys: ["h", "?"], ctx: "global", note: "show or hide the help" },
   { id: "panels", label: "Hide panels", keys: ["p"], ctx: "global", note: "hide or show every panel" },
-  { id: "book", label: "Book", keys: ["k"], ctx: "global", note: "the story, what the village knows, its people, the keys" },
+  { id: "book", label: "Log", keys: ["k"], ctx: "global", note: "the story, what the village knows, its people, the keys" },
   { id: "next", label: "Next villager", keys: ["Tab"], ctx: "map" },
   { id: "prev", label: "Previous villager", keys: ["shift+Tab"], ctx: "map" },
   { id: "follow", label: "Follow", keys: ["f"], ctx: "map", note: "follow the selected villager" },

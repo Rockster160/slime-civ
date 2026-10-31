@@ -31,7 +31,7 @@ const CONTROLS = [
   ["Settings (top bar)", "every key can be changed (click Change, press a key; kept in this browser, not in the save), and: interface size, high contrast, colour-blind marks (letters and patterns beside colour) and reduced flashing. Game menu: New game has an Ironman option (one autosave slot, no loading), and every normal game autosaves once a game day into three slots"],
   ["Almanac (top bar)", "what the village knows and who holds it, Curiosities (things seen and not understood, with a hint), failed experiments, the era, and a debug trace of every discovery roll. Investigate sends 1-3 selected villagers to try things out for three days. Game menu > Force lightning makes the first fire happen now"],
   [(k) => k.label("panels"), "hide or show all panels"],
-  [(k) => k.label("book"), "open or close the Book: the story, what the village knows, its people, these keys"],
+  [(k) => k.label("book"), "open or close the Log: the story, what the village knows, its people, these keys"],
   ["Shift-S, Shift-O", "save to / load from this browser (Game menu: file download and upload)"],
 ];
 const HOW = [

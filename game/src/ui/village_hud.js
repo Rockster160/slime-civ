@@ -103,7 +103,7 @@ export function createVillageHud(parent, game) {
     const wa = winterAhead(sim.tick), crit = CRIT_BASE + CRIT_WINTER * wa, d = dayF(sim.tick), t = dateOf(sim.tick);
     // population: a number, then one pip per villager grouped by life stage
     let h = `<div class="vh-pop"><div class="vh-count"${tipAttr(`${vs.length} villagers\n${adults} adults, ${elders} elders, ${kids} children`)}>${svg("people", 18)}<b data-test="pop">${vs.length}</b><span class="cap">${vs.length === 1 ? "slime" : "slimes"}</span></div>`
-      + `<div class="pips"${tipAttr(`Adults ${adults}\nElders ${elders}\nChildren ${Math.max(0, kids)}`)}>${"<i></i>".repeat(adults)}${'<i class="e"></i>'.repeat(elders)}${'<i class="k"></i>'.repeat(Math.max(0, kids))}</div></div>`;
+      + `<div class="pips"${tipAttr(`Adults ${adults}\nElders ${elders}\nChildren ${Math.max(0, kids)}`)}>${vs.length > 12 ? `<span class="more-l">${adults} adult${elders ? " · " + elders + " elder" : ""}${kids > 0 ? " · " + kids + " kid" : ""}</span>` : "<i></i>".repeat(adults) + '<i class="e"></i>'.repeat(elders) + '<i class="k"></i>'.repeat(Math.max(0, kids))}</div></div>`;
     // season ribbon: the year in four segments, the day marker; winter hatched. A two-word caption row names it (6.19c)
     const toWinter = t.season === 3 ? 0 : Math.max(0, WINTER_START - d), run = b.runway >= 99 ? 99 : b.runway;
     const nextS = SEASON_NAMES[(t.season + 1) % 4], toNext = Math.max(1, Math.ceil(t.season === 3 ? DAYS_PER_YEAR - d : (t.season + 1) * DAYS_PER_SEASON - d));
@@ -140,8 +140,7 @@ export function createVillageHud(parent, game) {
     const bedsBuilt = vl.beds.length, bedsSite = vl.sites.filter(s => s.what === "bed").length;
     h += `<div class="vrows" data-sec="rows">`;
     h += `<div class="row beds" data-test="beds"${tipAttr(`Beds: ${bedsBuilt} for ${vl.adults} adults` + (bedsSite ? ` (+${bedsSite} being built)` : ""))}>${svg("bed", 16)}<b class="rl">Beds ${bedsBuilt}/${vl.adults}</b>`;
-    for (let i = 0; i < Math.min(vl.adults, 10); i++) h += `<span class="bedi ${i < bedsBuilt ? "" : i < bedsBuilt + bedsSite ? "build" : "need"}">${svg("bed", 14)}</span>`;
-    if (vl.adults > 10) h += `<span class="more-l">+${vl.adults - 10}</span>`;
+    if (bedsSite) h += `<span class="more-l">+${bedsSite} building</span>`;
     h += `</div>`;
     h += `<div class="row inl" data-test="racks"${tipAttr(`Drying racks: ${vl.racks.length}`)}>${svg("rack", 16)}<b class="rl">Racks ${vl.racks.length}</b></div>`;
     const shelters = [...sim.rooms.list.values()].filter(r => r.enclosed).length;
@@ -149,7 +148,7 @@ export function createVillageHud(parent, game) {
     const pl = sim.ents.ofKind("plot");
     if (pl.length) {
       const raw = pl.filter(q => !q.tl).length, tilled = pl.filter(q => q.tl && !q.cr).length, ripeN = pl.filter(q => q.cr && q.gr >= CROP[q.cr].days).length, sown = pl.filter(q => q.cr).length;
-      h += `<div class="row" data-test="fields"${tipAttr(`Fields: ${pl.length} plots: ${raw} raw, ${tilled} tilled, ${sown} sown${ripeN ? ", " + ripeN + " ripe" : ""}`)}>${svg("field", 16)}<b class="rl">Fields ${pl.length}</b><span class="plots">` + pl.slice(0, 24).map(q => `<i class="${!q.tl ? "" : !q.cr ? "t" : q.gr >= CROP[q.cr].days ? "r" : "s"}"></i>`).join("") + `</span>${pl.length > 24 ? `<span class="more-l">+${pl.length - 24}</span>` : ""}</div>`;
+      h += `<div class="row" data-test="fields"${tipAttr(`Fields: ${pl.length} plots: ${raw} raw, ${tilled} tilled, ${sown} sown${ripeN ? ", " + ripeN + " ripe" : ""}`)}>${svg("field", 16)}<b class="rl">Fields ${pl.length}</b>${[[raw, "raw"], [tilled, "tilled"], [sown - ripeN, "sown"], [ripeN, "ripe"]].filter(c => c[0]).map(c => `<span class="more-l">${c[0]} ${c[1]}</span>`).join("")}</div>`;
     }
     if (sim.farm.pens.length) {
       const hs = sim.ents.ofKind("fauna").filter(e => e.tame);

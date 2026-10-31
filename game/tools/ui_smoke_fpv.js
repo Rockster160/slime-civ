@@ -78,6 +78,7 @@ try {
     const b = s.ents.add("plant", { species: "berry", x: a.X + 1, y: a.Y, z: a.z, yield: 4, nx: 0, rv: 0, rt: 0 });
     w.setFlags(a.X + 1, a.Y, a.z, w.flags(a.X + 1, a.Y, a.z) | g.F.OBSTACLE); v.action = null; v.job = null; g.state.speed = 1;
   }, info);
+  await G(() => __game.fpv.look(0, -0.5));            // the eye is higher now and a bush is low and close: look down at it, as a player with the mouse would
   await page.waitForTimeout(500);
   await page.keyboard.press("e");
   let cnt = ""; for (let i = 0; i < 40 && !/^\d\/\d$/.test(cnt); i++) { await page.waitForTimeout(250); const r = await read(); cnt = r ? r.cnt : ""; }

@@ -519,9 +519,16 @@ export const FIXTURES = {
   memory: { from: "settled", prep: prepMemory },                      // experiment: a cave (stair + 44-cell tunnel, unseen) east of camp, a crawler 14 cells in, two armed slimes at the stair head
   trap: { from: "settled", prep: prepTrap },                         // 7.21: two villagers in a labyrinth, each two cells from a hidden trap (a dart plate and another kind) in a straight corridor                           // S15: a bench, a penned grazer, FRAMING, timber and wheels, raw meat
   crowd: { from: "settled", prep: prepCrowd },                         // S11: 60 villagers (spawned adults) for the scale checks
+  // 10.2 NATURAL saves: the sim played on by itself (seed 7 via year2, no player input, no edits; each is its own run of <= 5 min).
+  // `autumn`: year2 (year-day 4) + 68 days = year-day 72, three days before winter. `midwinter3`: autumn + 15 days, year-day 87, the coldest stretch.
+  autumn: { from: "year2", natural: true, days: 68, prep: (s) => runDays(s, 68) },
+  midwinter3: { from: "autumn", natural: true, days: 15, prep: (s) => runDays(s, 15) },
   // A roofed shelter with beds, a stockpile and its purpose set, built by the scripted shelter player (separate run).
   hut: { bot: true, until: (s) => s.tick >= 14 * DUR_DAY && s.rooms.all().some(r => r.enclosed) },
 };
+
+/** 10.2: let the sim play on by itself (no input, no edits) for n game days. */
+export function runDays(sim, n) { const end = sim.tick + n * DAY_TICKS; while (sim.tick < end) sim.step(); }
 
 /**
  * S12: the played-through fixtures are written from a TIDIED copy: what the village's own hunts and sprouts taught it by now (farming, husbandry,
@@ -568,7 +575,7 @@ export function makeFixtures() {
     if (main[i][1].until(sim)) { write(main[i][0], tidy(sim)); i++; continue; }
     sim.step();
   }
-  for (const name of Object.keys(FIXTURES).filter(n => FIXTURES[n].from)) makeDerived(name);      // cheap: a saved fixture plus a scripted edit
+  for (const name of Object.keys(FIXTURES).filter(n => FIXTURES[n].from && !FIXTURES[n].natural)) makeDerived(name);      // cheap: a saved fixture plus a scripted edit
   for (const [name, f] of Object.entries(FIXTURES).filter(([, f]) => f.bot)) {
     const s = Sim.create(SEED), bot = shelterBot();
     for (let t = 0; t < YEAR && !f.until(s); t++) { bot(s); s.step(); }
@@ -576,4 +583,10 @@ export function makeFixtures() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) makeFixtures();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  // `natural` (or the names autumn / midwinter3) writes just the natural saves, each step its own run from the committed year2 file; no other fixture is touched.
+  const names = process.argv.slice(2).filter(n => FIXTURES[n] && FIXTURES[n].natural);
+  if (process.argv[2] === "natural") for (const n of Object.keys(FIXTURES).filter(n => FIXTURES[n].natural)) makeDerived(n);
+  else if (names.length) for (const n of names) makeDerived(n);
+  else makeFixtures();
+}
