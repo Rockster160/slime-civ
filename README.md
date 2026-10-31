@@ -8,7 +8,9 @@ It is a single HTML file, built from plain JavaScript with no dependencies.
 
 ## Run it
 
-1. Open `game/slime-civ.html` in a desktop browser (Chrome or Firefox are the ones it is built for). Double-click it. There is no install and no server.
+Play online: https://rockster160.github.io/slime-civ/ (rebuilt from `master` on every push).
+
+1. Or open `game/slime-civ.html` in a desktop browser (Chrome or Firefox are the ones it is built for). Double-click it. There is no install and no server.
 2. The map is drawn with WebGL2. Without WebGL the older flat 2D map is used as a fallback (you can also force it with `?flat=1`).
 3. Add `?seed=N` to the address to pick a world seed (the same seed makes the same land). New worlds started from the Menu take a random seed or one you enter.
 4. If `slime-civ.html` is missing or old, rebuild it with `node game/tools/build.js` (see [Under the hood](#under-the-hood)). `game/run` rebuilds and serves it at `http://localhost:5714/slime-civ.html`.
