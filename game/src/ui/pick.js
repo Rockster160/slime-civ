@@ -67,7 +67,7 @@ export function villagersIn(game, x0, y0, x1, y1) {
   const { sim, cam, renderer } = game, out = [];
   if (cam.oblique && renderer.drawn) {                                                  // the angled view: a slime is in the box when its DRAWN sprite rectangle overlaps it (any overlap counts)
     const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);
-    for (const d of renderer.drawn) { if (d.pri !== "villager") continue; if (d.r >= ax && d.l <= bx && d.b >= ay && d.t <= by && renderer.isShown(d.e) && !out.includes(d.e)) out.push(d.e); }
+    for (const d of renderer.drawn) { if (d.pri !== "villager") continue; if (d.r + 3 >= ax && d.l - 3 <= bx && d.b + 3 >= ay && d.t - 3 <= by && (d.sil || renderer.isShown(d.e)) && !out.includes(d.e)) out.push(d.e); }
     return out;
   }
   const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);   // the flat view: the same rule in screen space, on the DRAWN disc (its glided position when the renderer has one), any overlap counts
@@ -93,7 +93,7 @@ function pickAngled(game, sx, sy) {
   if (!hit) return out;
   let best = null, bd = 1e9;
   for (const d of renderer.drawn) {
-    if (d.pri !== "villager" || sx < d.l - 4 || sx > d.r + 4 || sy < d.t - 4 || sy > d.b + 4 || !renderer.isShown(d.e)) continue;
+    if (d.pri !== "villager" || sx < d.l - 4 || sx > d.r + 4 || sy < d.t - 4 || sy > d.b + 4 || !(d.sil || renderer.isShown(d.e))) continue;
     const dd = Math.hypot(sx - d.fx, sy - (d.fy - 0.3 * (d.fy - d.t)));          // nearest to the lower body: overlapping slimes resolve to the one you aimed at
     const key = Math.round(dd / 3) * 1e6 + d.e.id;                         // within 3 px it is a tie: the older slime wins, so two on one cell resolve the same way each time
     if (key < bd) { bd = key; best = d.e; }

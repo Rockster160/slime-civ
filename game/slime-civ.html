@@ -379,7 +379,7 @@
 <div id="settingsOverlay" data-test="settings"></div>
 <div id="savesOverlay" class="sheet" data-test="saves-sheet"></div>
 <script>
-window.__BUILD = {"stage":"9.33","commit":"9555476","dirty":true,"time":"2026-10-31 15:37"};
+window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10-31 16:03"};
 (function () {
   "use strict";
   
@@ -19827,8 +19827,8 @@ window.__BUILD = {"stage":"9.33","commit":"9555476","dirty":true,"time":"2026-10
           for (let q = 0; q < 4; q++) { const i = so + q * FLOATS, v = SPp[q]; sh[i] = v[0]; sh[i + 1] = yy - hop; sh[i + 2] = v[1]; sh[i + 3] = sh[i + 4] = sh[i + 5] = 1; sh[i + 6] = v[2]; sh[i + 7] = v[3]; sh[i + 8] = sky; sh[i + 9] = 0; sh[i + 10] = 0; }
           ns++;
           const [sx, sy0] = cam.toScreen(px, py, ez + 0.02 + hop), zm = cam.zoom, sy = sy0;       // the quad's real base (hop and the 0.02 lift included), so a hopping slime's rect rides with its sprite
-          drawn.push({ e, l: sx - hw * zm, r: sx + hw * zm, t: sy - h * zm, b: sy + 2, fx: sx, fy: sy, pri: kind, idx, hop });
-          if (kind === "villager" && ez >= this.topAt(e.x, e.y)) sil.push(idx);
+          drawn.push({ e, l: sx - hw * zm, r: sx + hw * zm, t: sy - h * zm, b: sy + 2, fx: sx, fy: sy, pri: kind, idx, hop, sil: false });
+          if (kind === "villager" && ez >= this.topAt(e.x, e.y)) { sil.push(idx); drawn[drawn.length - 1].sil = true; }       // sil: standing on the land but hidden by it (drawn as a silhouette): still on screen, so still pickable
         };
         const kinds = PICKABLE_KINDS, headFx = 0, headFy = -1;
         for (const kind of kinds) {
@@ -22022,6 +22022,7 @@ window.__BUILD = {"stage":"9.33","commit":"9555476","dirty":true,"time":"2026-10
     
       if (ui.box) {
         const b = ui.box;
+        if (ui.boxLive) { ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,255,.65)"; for (const id of ui.boxLive) { const v = sim.ents.get(id); if (v) { const [sx, sy] = at(v); ring(ctx, sx, sy, ts * 0.55, cam.sinP); } } }      // the slimes the box covers right now
         ctx.fillStyle = "rgba(255,226,122,.10)"; ctx.strokeStyle = "rgba(255,226,122,.9)"; ctx.lineWidth = 1;
         ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0); ctx.strokeRect(b.x0 + .5, b.y0 + .5, b.x1 - b.x0, b.y1 - b.y0);
       }
@@ -25048,7 +25049,7 @@ window.__BUILD = {"stage":"9.33","commit":"9555476","dirty":true,"time":"2026-10
       const { sim, cam, renderer } = game, out = [];
       if (cam.oblique && renderer.drawn) {                                                  // the angled view: a slime is in the box when its DRAWN sprite rectangle overlaps it (any overlap counts)
         const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);
-        for (const d of renderer.drawn) { if (d.pri !== "villager") continue; if (d.r >= ax && d.l <= bx && d.b >= ay && d.t <= by && renderer.isShown(d.e) && !out.includes(d.e)) out.push(d.e); }
+        for (const d of renderer.drawn) { if (d.pri !== "villager") continue; if (d.r + 3 >= ax && d.l - 3 <= bx && d.b + 3 >= ay && d.t - 3 <= by && (d.sil || renderer.isShown(d.e)) && !out.includes(d.e)) out.push(d.e); }
         return out;
       }
       const ax = Math.min(x0, x1), bx = Math.max(x0, x1), ay = Math.min(y0, y1), by = Math.max(y0, y1);   // the flat view: the same rule in screen space, on the DRAWN disc (its glided position when the renderer has one), any overlap counts
@@ -25074,7 +25075,7 @@ window.__BUILD = {"stage":"9.33","commit":"9555476","dirty":true,"time":"2026-10
       if (!hit) return out;
       let best = null, bd = 1e9;
       for (const d of renderer.drawn) {
-        if (d.pri !== "villager" || sx < d.l - 4 || sx > d.r + 4 || sy < d.t - 4 || sy > d.b + 4 || !renderer.isShown(d.e)) continue;
+        if (d.pri !== "villager" || sx < d.l - 4 || sx > d.r + 4 || sy < d.t - 4 || sy > d.b + 4 || !(d.sil || renderer.isShown(d.e))) continue;
         const dd = Math.hypot(sx - d.fx, sy - (d.fy - 0.3 * (d.fy - d.t)));          // nearest to the lower body: overlapping slimes resolve to the one you aimed at
         const key = Math.round(dd / 3) * 1e6 + d.e.id;                         // within 3 px it is a tie: the older slime wins, so two on one cell resolve the same way each time
         if (key < bd) { bd = key; best = d.e; }
@@ -26234,7 +26235,7 @@ window.__BUILD = {"stage":"9.33","commit":"9555476","dirty":true,"time":"2026-10
         const d = Math.hypot(e.clientX - p.x, e.clientY - p.y);
         if (p.btn === 0) {
           if (d > 4) p.moved = true;
-          if (p.moved) ui.box = { x0: p.x, y0: p.y, x1: e.clientX, y1: e.clientY };
+          if (p.moved) { ui.box = { x0: p.x, y0: p.y, x1: e.clientX, y1: e.clientY }; boxTrack(game); }
         } else if (p.btn === 1 || p.btn === 2) {
           if (d > 6) p.moved = true;
           if (p.moved) { cam.panBy(e.clientX - p.lx, e.clientY - p.ly); ui.follow = 0; canvas.classList.add("dragging"); }
@@ -26253,8 +26254,10 @@ window.__BUILD = {"stage":"9.33","commit":"9555476","dirty":true,"time":"2026-10
         if (mode() && mode().up && mode().up(game, e, p)) { ui.box = null; return; }
         if (p.btn === 0) {
           if (ui.box) {
-            const b = ui.box; ui.box = null;
-            const vs = villagersIn(game, b.x0, b.y0, b.x1, b.y1).map(v => v.id);
+            const b = ui.box; boxTrack(game);
+            const now = performance.now(), vs = [];
+            for (const [id, t] of ui.boxSeen) if (now - t <= GRACE && game.sim.ents.get(id)) vs.push(id);      // inside now, or inside within the last 500 ms of the drag
+            ui.box = null; ui.boxSeen = null; ui.boxLive = null;
             if (p.shift) game.selectMany(Array.from(new Set(ui.sel.concat(vs))));
             else game.selectMany(vs);
             return;
@@ -26290,9 +26293,20 @@ window.__BUILD = {"stage":"9.33","commit":"9555476","dirty":true,"time":"2026-10
       canvas.addEventListener("mouseleave", () => { ui.hover = null; });
     }
     
+    const GRACE = 500;       // ms: a slime that was inside the box this recently still counts on release (they walk fast)
+    /** While a box is dragged: stamp every slime it covers right now (called per frame and on each move, so a slime walking out between mouse events is still seen). */
+    function boxTrack(game) {
+      const { ui } = game;
+      if (!ui.box) { if (ui.boxSeen) { ui.boxSeen = null; ui.boxLive = null; } return; }
+      const now = performance.now(), b = ui.box, seen = ui.boxSeen || (ui.boxSeen = new Map()), live = villagersIn(game, b.x0, b.y0, b.x1, b.y1);
+      ui.boxLive = live.map(v => v.id);
+      for (const v of live) seen.set(v.id, now);
+    }
+    
     /** Per-frame: WASD / arrow panning. */
     function panKeys(game, dt) {
       const { cam, keys, ui } = game;
+      boxTrack(game);
       const v = (600 * dt) / cam.zoom * (game.shiftDown ? 2.5 : 1);
       if (ui.mode === "possess") {                    // WASD walks the villager; the camera only follows it
         const f = game.sim.ents.get(ui.follow);

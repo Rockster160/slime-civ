@@ -115,7 +115,7 @@ export function setupInput(game, canvas) {
     const d = Math.hypot(e.clientX - p.x, e.clientY - p.y);
     if (p.btn === 0) {
       if (d > 4) p.moved = true;
-      if (p.moved) ui.box = { x0: p.x, y0: p.y, x1: e.clientX, y1: e.clientY };
+      if (p.moved) { ui.box = { x0: p.x, y0: p.y, x1: e.clientX, y1: e.clientY }; boxTrack(game); }
     } else if (p.btn === 1 || p.btn === 2) {
       if (d > 6) p.moved = true;
       if (p.moved) { cam.panBy(e.clientX - p.lx, e.clientY - p.ly); ui.follow = 0; canvas.classList.add("dragging"); }
@@ -134,8 +134,10 @@ export function setupInput(game, canvas) {
     if (mode() && mode().up && mode().up(game, e, p)) { ui.box = null; return; }
     if (p.btn === 0) {
       if (ui.box) {
-        const b = ui.box; ui.box = null;
-        const vs = villagersIn(game, b.x0, b.y0, b.x1, b.y1).map(v => v.id);
+        const b = ui.box; boxTrack(game);
+        const now = performance.now(), vs = [];
+        for (const [id, t] of ui.boxSeen) if (now - t <= GRACE && game.sim.ents.get(id)) vs.push(id);      // inside now, or inside within the last 500 ms of the drag
+        ui.box = null; ui.boxSeen = null; ui.boxLive = null;
         if (p.shift) game.selectMany(Array.from(new Set(ui.sel.concat(vs))));
         else game.selectMany(vs);
         return;
@@ -171,9 +173,20 @@ export function setupInput(game, canvas) {
   canvas.addEventListener("mouseleave", () => { ui.hover = null; });
 }
 
+const GRACE = 500;       // ms: a slime that was inside the box this recently still counts on release (they walk fast)
+/** While a box is dragged: stamp every slime it covers right now (called per frame and on each move, so a slime walking out between mouse events is still seen). */
+function boxTrack(game) {
+  const { ui } = game;
+  if (!ui.box) { if (ui.boxSeen) { ui.boxSeen = null; ui.boxLive = null; } return; }
+  const now = performance.now(), b = ui.box, seen = ui.boxSeen || (ui.boxSeen = new Map()), live = villagersIn(game, b.x0, b.y0, b.x1, b.y1);
+  ui.boxLive = live.map(v => v.id);
+  for (const v of live) seen.set(v.id, now);
+}
+
 /** Per-frame: WASD / arrow panning. */
 export function panKeys(game, dt) {
   const { cam, keys, ui } = game;
+  boxTrack(game);
   const v = (600 * dt) / cam.zoom * (game.shiftDown ? 2.5 : 1);
   if (ui.mode === "possess") {                    // WASD walks the villager; the camera only follows it
     const f = game.sim.ents.get(ui.follow);

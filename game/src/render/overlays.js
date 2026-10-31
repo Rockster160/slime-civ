@@ -77,6 +77,7 @@ export function drawOverlays(game) {
 
   if (ui.box) {
     const b = ui.box;
+    if (ui.boxLive) { ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(255,255,255,.65)"; for (const id of ui.boxLive) { const v = sim.ents.get(id); if (v) { const [sx, sy] = at(v); ring(ctx, sx, sy, ts * 0.55, cam.sinP); } } }      // the slimes the box covers right now
     ctx.fillStyle = "rgba(255,226,122,.10)"; ctx.strokeStyle = "rgba(255,226,122,.9)"; ctx.lineWidth = 1;
     ctx.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0); ctx.strokeRect(b.x0 + .5, b.y0 + .5, b.x1 - b.x0, b.y1 - b.y0);
   }

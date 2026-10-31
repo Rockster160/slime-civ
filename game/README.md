@@ -13,7 +13,7 @@ Press `H` or `?` (or `K`, then the Keys tab) in the game for the same list. Sinc
 | Input | Action |
 |---|---|
 | click | inspect a villager, plant, item stack, bed, rack or the stockpile |
-| drag a box (Shift adds) | select several villagers |
+| drag a box (Shift adds) | select several villagers: starts anywhere off a panel (tree, grass, item, building); takes every slime whose drawn sprite (any overlap, a few px generous) is in the box, whatever its level or what stands in front of it |
 | **right-click** | order the selected villagers: tree = chop, berry bush = forage, grass tuft = gather, loose item = haul, ground = move. Orders cover an area of radius 10 around the target and clear themselves when it is exhausted. A small popup appears only when several verbs fit the clicked cell |
 | dock, Orders mode (bottom centre, with villagers selected) | one icon per verb (forage, chop, gather, haul, hunt = assignments; dig, clear den, capture, scout, disarm, move = one-off orders) and **Clear area** (a drag tool): click one, then click the map; the cross icon or `X` cancels orders and assignments |
 | `Tab` / `Shift-Tab` | next / previous villager |
