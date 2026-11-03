@@ -17,6 +17,7 @@
           --panel:var(--s1); --text:var(--tx); --dim:var(--tx2); --accent:var(--ok); --btn:var(--s2); }
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { height:100%; }
+  #view, #glview, #fadecv, #hud, #notables, #plate, #guide, #pointers, #whisper, #dock { user-select:none; -webkit-user-select:none; -webkit-user-drag:none; }      /* a map drag never turns into a text selection or the browser's own drag-and-drop (which swallows the release) */
   body { background:var(--bg); color:var(--tx); overflow:hidden; font:13px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-variant-numeric:tabular-nums; }
   canvas { display:block; position:fixed; inset:0; }
   canvas.dragging { cursor:grabbing; }

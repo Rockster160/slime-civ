@@ -93,8 +93,9 @@ export function setupInput(game, canvas) {
   const PASS = new Set(["hud", "notables", "plate", "guide", "gauge", "pointers", "whisper", "dock", "fpvhud", "fadecv", "glview"]);
   const press = (e) => {
     closeMenu();
-    ui.press = { btn: e.button, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, shift: e.shiftKey, moved: false };
-    if (e.button === 1) e.preventDefault();
+    ui.press = { btn: e.button, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, shift: e.shiftKey, moved: false, t0: performance.now(), mv: 0 };
+    if (e.button === 1 || e.button === 0) e.preventDefault();                       // no text selection or native drag from a map press
+    const ws = window.getSelection && window.getSelection(); if (ws && ws.rangeCount) ws.removeAllRanges();
     if (mode() && mode().down && mode().down(game, e)) ui.press = null;
   };
   canvas.addEventListener("mousedown", press);
@@ -110,9 +111,12 @@ export function setupInput(game, canvas) {
   window.addEventListener("mousemove", (e) => {
     ui.mouse = { x: e.clientX, y: e.clientY, over: e.target === canvas };
     let p = ui.press;
-    if (p && !(e.buttons & (p.btn === 0 ? 1 : p.btn === 2 ? 2 : 4))) { ui.press = null; ui.box = null; canvas.classList.remove("dragging"); p = null; }      // the button came up where we could not see it (outside the window): end the drag
+    if (p && !(e.buttons & (p.btn === 0 ? 1 : p.btn === 2 ? 2 : 4))) {          // the button is already up but no release reached us (a Mac trackpad can report the lift as a move first, or it came up outside the window)
+      if (p.btn === 0 && p.moved) { p.late = 1; release({ button: 0, clientX: e.clientX, clientY: e.clientY }); return; }      // finish the box here rather than lose it
+      ui.press = null; ui.box = null; canvas.classList.remove("dragging"); p = null;
+    }
     if (!p) { ui.hover = ui.mouse.over ? pickAt(game, e.clientX, e.clientY) : null; return; }
-    const d = Math.hypot(e.clientX - p.x, e.clientY - p.y);
+    const d = Math.hypot(e.clientX - p.x, e.clientY - p.y); p.mv++;
     if (p.btn === 0) {
       if (d > 4) p.moved = true;
       if (p.moved) { ui.box = { x0: p.x, y0: p.y, x1: e.clientX, y1: e.clientY }; boxTrack(game); }
@@ -123,7 +127,10 @@ export function setupInput(game, canvas) {
     p.lx = e.clientX; p.ly = e.clientY;
     if (mode() && mode().move) mode().move(game, e);
   });
-  window.addEventListener("mouseup", (e) => {
+  window.addEventListener("dragstart", (e) => { if (ui.press) { dragLog(game, { lost: "native drag", on: e.target.id || e.target.nodeName }); e.preventDefault(); } }, true);
+  window.addEventListener("mouseup", (e) => release(e));
+  window.addEventListener("pointerup", (e) => { if (e.pointerType === "mouse" && ui.press && ui.press.btn === 0 && ui.press.moved && e.button === 0) release(e); }, true);     // a box drag ends on the first of pointerup / mouseup (the later one finds no press)
+  function release(e) {
     const p = ui.press; ui.press = null; canvas.classList.remove("dragging");
     if (!p || p.btn !== e.button) { ui.box = null; return; }
     if (p.btn === 0 && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4) { p.moved = true; ui.box = { x0: p.x, y0: p.y, x1: e.clientX, y1: e.clientY }; }      // a fast drag: the box ends where the button came up, not at the last (coalesced) move
@@ -138,6 +145,8 @@ export function setupInput(game, canvas) {
         const b = ui.box; boxTrack(game);
         const now = performance.now(), vs = [];
         for (const [id, t] of ui.boxSeen) if (now - t <= GRACE && game.sim.ents.get(id)) vs.push(id);      // inside now, or inside within the last 500 ms of the drag
+        dragLog(game, { box: [b.x0, b.y0, b.x1, b.y1].map(Math.round), ms: Math.round(now - p.t0), moves: p.mv, got: vs.length, late: p.late || 0,
+          slimes: (game.renderer.drawn || []).filter(d => d.pri === "villager").map(d => [d.e.id, Math.round(d.l), Math.round(d.t), Math.round(d.r), Math.round(d.b), d.sil || game.renderer.isShown(d.e) ? 1 : 0]) });
         ui.box = null; ui.boxSeen = null; ui.boxLive = null;
         if (p.shift) game.selectMany(Array.from(new Set(ui.sel.concat(vs))));
         else game.selectMany(vs);
@@ -162,7 +171,7 @@ export function setupInput(game, canvas) {
     } else if (p.btn === 2 && !p.moved) {
       rightClick(game, pickAt(game, e.clientX, e.clientY), e.clientX, e.clientY);
     }
-  });
+  }
   canvas.addEventListener("dblclick", (e) => {
     const pick = pickAt(game, e.clientX, e.clientY);
     if (pick.villager) { game.selectOnly(pick.villager.id); ui.follow = pick.villager.id; }
@@ -174,6 +183,8 @@ export function setupInput(game, canvas) {
   canvas.addEventListener("mouseleave", () => { ui.hover = null; });
 }
 
+/** The last few box drags, for chasing selection misses on real hardware: copy(JSON.stringify(__game.dragLog)) in the console. Also notes presses whose release never arrived. */
+function dragLog(game, rec) { const L = game.dragLog || (game.dragLog = []); L.push(rec); if (L.length > 12) L.shift(); }
 const GRACE = 500;       // ms: a slime that was inside the box this recently still counts on release (they walk fast)
 /** While a box is dragged: stamp every slime it covers right now (called per frame and on each move, so a slime walking out between mouse events is still seen). */
 function boxTrack(game) {
