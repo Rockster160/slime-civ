@@ -25,6 +25,7 @@ import { createVillageHud } from "./ui/village_hud.js";
 import { createBook } from "./ui/book.js";
 import { createHelp } from "./ui/help.js";
 import { createSaveBrowser } from "./ui/savebrowser.js";
+import { createEndCard } from "./ui/endcard.js";
 import { btn } from "./ui/kit.js";
 import { concernPlaces } from "./ui/concernplace.js";
 import { pickAt } from "./ui/pick.js";
@@ -244,6 +245,7 @@ const book = createBook($("book"), game);
 const help = createHelp($("helpOverlay"), game);
 const settings = createSettings($("settingsOverlay"), game);
 const saveSheet = createSaveBrowser($("savesOverlay"), game);
+const endCard = createEndCard($("endCard"), game);
 const tip = $("tip");
 document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("button"); if (b && !(b instanceof HTMLInputElement)) b.blur(); });   // so Space pauses, not "presses" the last button
 
@@ -338,7 +340,7 @@ function frame(now) {
     panelT = now;
     bar.update({ tick: sim.tick });
     possessCtl.update();
-    revealer.update(); levels.update(); guide.update(); village.update(); bps.update(); expd.update(); cchoice.update(); buildbar.update(); inspector.update(); notables.update(); orderbar.update(); digest.update(); book.update(); help.update(); settings.update(); saveSheet.update(); pointers.update();
+    revealer.update(); levels.update(); guide.update(); village.update(); bps.update(); expd.update(); cchoice.update(); buildbar.update(); inspector.update(); notables.update(); orderbar.update(); digest.update(); book.update(); help.update(); settings.update(); saveSheet.update(); endCard.update(); pointers.update();
     slots.popover.style.display = ui.mode === "build" && ui.bpOpen && game.unlocked("blueprints") ? "block" : "none";
     slots.dock.style.display = game.possessed() ? "none" : "flex";
     buildBtn.classList.toggle("on", game.ui.mode === "build");

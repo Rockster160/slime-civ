@@ -142,7 +142,7 @@ export const ICON = {
 };
 
 /** Event kinds for the Story list. Cut line: a one-letter emblem on a rounded badge instead of a drawn glyph (UI_SPEC §8.5). */
-export const EVENT_ICON = { BIRTH: "sprout", DEATH: "grave", DISCOVERY: "knowledge", BUILT: "build", DISASTER: "bolt", EXPEDITION: "expedition", FIRST: "star" };
+export const EVENT_ICON = { BIRTH: "sprout", DEATH: "grave", DISCOVERY: "knowledge", BUILT: "build", DISASTER: "bolt", EXPEDITION: "expedition", FIRST: "star", END: "grave" };
 /** Era emblem letters (cut line). The era badge is drawn by eraBadge(). */
 export const ERA_LETTER = { Hearth: "H", Hide: "D", Stone: "S", Clay: "C", Timber: "T", Copper: "Cu", Iron: "Fe" };
 export const eraBadge = (name, on = false) => `<span class="era-b${on ? " on" : ""}" data-tip="${name} age">${ERA_LETTER[name] || (name || "?")[0]}</span>`;

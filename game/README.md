@@ -732,3 +732,5 @@ Phase 8 stage 4, the last (`notes/impl/PHASE8_SAVING.md`, D75-D79). The saves ar
 - **Smoke upkeep**: see D79 (async saves, legacy injection with `.meta`, Surface view default, digest rows over the dock, scout arrival, Passed-over row, and the first-person facing fix: `ui.face` follows the facing, not the look offset).
 - **Seams**: building only dirty records (D74) is still open and not needed; one generation of recovery only; the first save of a large world writes each record in its own IndexedDB transaction (many seconds of wall clock, off-thread; batching would shorten it); Firefox and Safari IndexedDB on `file://` unmeasured.
 
+
+- **End card and grave wording**: when the last villager dies, `population.kill` writes one `END` chronicle entry (`once`, flag `end`, sev 3, data `{years, gens, born}`); `ui/endcard.js` shows a centred sheet (date, generations, slimes; Saves / New village / Log), pausing once per world, and a new or loaded sim dismisses it (or shows it again if that save has no villagers). Graves read "X, a founder, died year Y day D of C." / "X, born year A day B, died ...". Seam: `born` counts death records kept (capped by `MAX_RECS`).

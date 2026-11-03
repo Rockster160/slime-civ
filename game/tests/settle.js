@@ -355,7 +355,7 @@ function sim_fixup(sim) { sim.cache.iv++; }
   assert.ok(md.includes("Master digger") && md.includes(doomed.name), "the dead keep their titles");
   assert.ok(md.includes("First in firecraft") && md.includes(vs[0].name), "so do the living");
   assert.ok(md.includes("the Grey Comb") && md.includes("Old Ba -> " + vs[1].name), "heirlooms and the hands they passed through");
-  assert.ok(md.includes(doomed.name + ", from") && /died of cold/.test(md.split("## Graves")[1]), "a grave with its inscription");
+  assert.ok(md.includes(doomed.name + ", ") && /died year \d+ day \d+ of cold/.test(md.split("## Graves")[1]), "a grave with its inscription");
   assert.ok(/Worn Flute/i.test(md.split("## Heirlooms")[1]), "the dead's heirloom is accounted for (handed on or buried)");
   assert.ok(/The \w+ age/.test(md), "eras are named");
   assert.equal(chronicleMarkdown(sim), md, "pure: the same text twice");

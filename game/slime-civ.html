@@ -258,6 +258,7 @@
   .cc-card { background:var(--s1); border-radius:var(--r2); box-shadow:var(--e2); padding:var(--sp3) var(--sp4); border:1px solid #9a6bff; } .cc-head { display:flex; align-items:center; gap:var(--sp2); font-size:15px; } .cc-head .ic { color:#d68cff; } .cc-card p { margin:var(--sp2) 0; } .cc-btns { display:flex; gap:var(--sp2); } .cc-btns .btn { flex:1; justify-content:center; } .cc-sub { font-size:12px; color:var(--tx2); }
   .sheet-head { position:sticky; top:calc(-1 * var(--sp4)); z-index:2; background:#12171e; margin:calc(-1 * var(--sp4)) 0 var(--sp3); padding-top:var(--sp4); } .sheet-head .xbtn { top:var(--sp3); right:0; }
   .helpcard .sheet-head { display:flex; align-items:center; gap:var(--sp3); border-bottom:1px solid var(--line); padding-bottom:var(--sp2); } .helpcard .sheet-head h2 { margin:0; } .helpcard .hreplay { padding:4px 14px; min-height:28px; margin-right:36px; }
+  .endcard { text-align:center; min-height:0 !important; height:auto !important; width:460px !important; } .endcard .endbtn { display:flex; gap:8px; justify-content:center; margin-top:var(--sp4); } .endcard .endbtn .btn { display:inline-flex; align-items:center; gap:5px; padding:6px 16px; }
   .savecard .srow { display:flex; align-items:center; gap:var(--sp3); padding:8px 0; border-bottom:1px solid var(--line); } .savecard .sprev { flex:none; line-height:0; border-radius:4px; overflow:hidden; }
   .savecard .smain { flex:1; display:flex; flex-direction:column; gap:3px; min-width:0; } .savecard .smain b { font-size:14px; } .savecard .smeta { display:flex; gap:12px; align-items:center; } .savecard .smeta svg { vertical-align:-2px; }
   .savecard .sbtn { flex:none; display:flex; gap:6px; } .savecard .sbtn .btn { display:inline-flex; align-items:center; gap:5px; padding:4px 10px; min-height:28px; } .savecard .sbtn .btn.warn { border-color:var(--bad,#e5594f); color:var(--bad,#e5594f); } .savecard .sempty { padding:20px 0; }
@@ -374,12 +375,13 @@
 <div id="corechoice" data-test="core-choice"></div>
 <div id="tip"></div>
 <div id="footer"><span id="hint" class="sr"></span><span id="perf"></span></div>
+<div id="endCard" class="sheet" data-test="end-sheet"></div>
 <div id="book" class="sheet" data-test="book"></div>
 <div id="helpOverlay" class="sheet"></div>
 <div id="settingsOverlay" data-test="settings"></div>
 <div id="savesOverlay" class="sheet" data-test="saves-sheet"></div>
 <script>
-window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10-31 16:03"};
+window.__BUILD = {"stage":"9.33","commit":"93f4b4a","dirty":true,"time":"2026-11-02 19:10"};
 (function () {
   "use strict";
   
@@ -10145,7 +10147,7 @@ window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10
       return null;
     }
     
-    const when = (t) => { if (t < 0) return "before the landing"; const d = dateOf(t); return "year " + d.year + " day " + d.day; };
+    const when = (t) => { const d = dateOf(t); return "year " + d.year + " day " + d.day; };
     /** The words on the stone: names, dates, and the best thing the chronicle says about them (a title, else the most notable entry). */
     function inscription(sim, v, cause) {
       let deed = "";
@@ -10155,7 +10157,7 @@ window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10
         const pick = es.sort((a, b) => b.sev - a.sev || b.id - a.id)[0];
         if (pick) deed = pick.text.length > 90 ? pick.text.slice(0, 87) + "..." : pick.text;
       }
-      return v.name + ", from " + when(v.born) + " to " + when(sim.tick) + ", died of " + cause + "." + (deed ? " " + deed : "");
+      return v.name + ", " + (v.born < 0 ? "a founder" : "born " + when(v.born)) + ", died " + when(sim.tick) + " of " + cause + "." + (deed ? " " + deed : "");
     }
     
     /** Called by population.kill after the death is written, before the body goes. */
@@ -10234,14 +10236,14 @@ window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10
     // Founding, birth and death (GDD §08, §11.16, §18). Pairing is slime-village's
     // simple "want a child, find a partner" (game.js bearChild + breed cooldown),
     // weighted by food runway and free beds and never hard-gated.
-    const { DAY, DUR_DAY } = __mod["sim/clock.js"];
+    const { DAY, DUR_DAY, dateOf } = __mod["sim/clock.js"];
     const { clamp } = __mod["sim/util.js"];
     const { seasonIdx } = __mod["sim/season.js"];
     const { cancelAction } = __mod["sim/jobstate.js"];
     const { newSkills, SKILLS } = __mod["sim/skills.js"];
     const { survey, dropLoose, storeInZone } = __mod["sim/items.js"];
     const { village } = __mod["sim/board.js"];
-    const { log } = __mod["sim/chronicle.js"];
+    const { log, once } = __mod["sim/chronicle.js"];
     const { afterDeath } = __mod["sim/knowledge.js"];
     const { restricted } = __mod["sim/lair.js"];
     const { initPerson, kinship, grandparents, weakChance, makeWeak, pickPartner, onDeath } = __mod["sim/people.js"];
@@ -10406,6 +10408,10 @@ window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10
       sim.ents.remove(v.id);
       sim.cache.iv++;
       afterDeath(sim, v);                       // the last holder of a craft dying loses it (R11)
+      if (!sim.ents.ofKind("villager").length) {                                          // the last slime: one entry, once (the UI shows the end card from it)
+        const rs = Object.values(sim.chron.recs);
+        once(sim, "end", "END", "The last slime has passed away.", [], { years: dateOf(sim.tick).year, gens: rs.reduce((m, r) => Math.max(m, r.gen), 1), born: rs.length }, 3);
+      }
     }
     
     /** The "why" after a death, in plain words. */
@@ -20783,7 +20789,7 @@ window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10
     };
     
     /** Event kinds for the Story list. Cut line: a one-letter emblem on a rounded badge instead of a drawn glyph (UI_SPEC §8.5). */
-    const EVENT_ICON = { BIRTH: "sprout", DEATH: "grave", DISCOVERY: "knowledge", BUILT: "build", DISASTER: "bolt", EXPEDITION: "expedition", FIRST: "star" };
+    const EVENT_ICON = { BIRTH: "sprout", DEATH: "grave", DISCOVERY: "knowledge", BUILT: "build", DISASTER: "bolt", EXPEDITION: "expedition", FIRST: "star", END: "grave" };
     /** Era emblem letters (cut line). The era badge is drawn by eraBadge(). */
     const ERA_LETTER = { Hearth: "H", Hide: "D", Stone: "S", Clay: "C", Timber: "T", Copper: "Cu", Iron: "Fe" };
     const eraBadge = (name, on = false) => `<span class="era-b${on ? " on" : ""}" data-tip="${name} age">${ERA_LETTER[name] || (name || "?")[0]}</span>`;
@@ -24515,7 +24521,7 @@ window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10
     const { eraOf } = __mod["sim/knowledge.js"];
     const { ageDays } = __mod["sim/villager.js"];
     
-    const when = (t) => { if (t < 0) return "before the landing"; const d = dateOf(t); return "Year " + d.year + ", day " + d.day + " (" + SEASON_NAMES[Math.min(3, Math.floor((d.day - 1) / DAYS_PER_SEASON))] + ")"; };
+    const when = (t) => { if (t < 0) return "a founder"; const d = dateOf(t); return "Year " + d.year + ", day " + d.day + " (" + SEASON_NAMES[Math.min(3, Math.floor((d.day - 1) / DAYS_PER_SEASON))] + ")"; };
     const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
     const FIRST_KINDS = new Set(["BUILT_FIRST", "DISCOVERY", "LOSS"]);
     
@@ -24977,6 +24983,39 @@ window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10
     }
     
     return { previewSvg, ago, createSaveBrowser };
+  })();
+  
+  __mod["ui/endcard.js"] = (function () {
+    // The end card (UI only): when the last villager is gone (the chronicle's END entry), a centred sheet over the map with the date, generations and total slimes, and three ways on:
+    // Saves (the save browser), New village (the Menu's new-game action, random seed) and Log. The sim is paused once per world; loading a save or starting a village replaces the sim, which dismisses it.
+    const { svg } = __mod["ui/icons.js"];
+    const { newGame, randomSeed } = __mod["ui/saves.js"];
+    const { yearDay } = __mod["sim/chronicle.js"];
+    
+    function createEndCard(root, game) {
+      let seen = null, last = "";
+      root.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-end]"); if (!b) return;
+        const a = b.dataset.end;
+        if (a === "saves") game.openSaves();
+        else if (a === "log") game.openBook("story");
+        else if (a === "new") newGame(game, randomSeed());
+      });
+      return { update() {
+        const sim = game.sim, dead = !sim.ents.ofKind("villager").length && sim.chron.f.end;
+        if (dead && seen !== sim) { seen = sim; game.state.paused = true; }          // once per world: the player may resume afterwards
+        const on = !!dead;
+        root.style.display = on ? "flex" : "none";
+        if (!on) { last = ""; return; }
+        const e = sim.chron.entries.slice().reverse().find(x => x.kind === "END"), d = (e && e.data) || {};
+        const h = `<div class="card helpcard endcard" data-test="end-card"><h2 data-test="end-title">The last slime has passed away</h2>
+          <div class="dim" data-test="end-nums">${yearDay(sim)} · ${d.gens || 1} ${(d.gens || 1) === 1 ? "generation" : "generations"} · ${d.born || 0} ${d.born === 1 ? "slime" : "slimes"}</div>
+          <div class="endbtn"><button class="btn" data-end="saves" data-test="end-saves">${svg("load", 14)}Saves</button><button class="btn" data-end="new" data-test="end-new">New village</button><button class="btn" data-end="log" data-test="end-log">${svg("book", 14)}Log</button></div></div>`;
+        if (h !== last) { last = h; root.innerHTML = h; }
+      } };
+    }
+    
+    return { createEndCard };
   })();
   
   __mod["ui/pick.js"] = (function () {
@@ -26246,6 +26285,7 @@ window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10
       window.addEventListener("mouseup", (e) => {
         const p = ui.press; ui.press = null; canvas.classList.remove("dragging");
         if (!p || p.btn !== e.button) { ui.box = null; return; }
+        if (p.btn === 0 && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4) { p.moved = true; ui.box = { x0: p.x, y0: p.y, x1: e.clientX, y1: e.clientY }; }      // a fast drag: the box ends where the button came up, not at the last (coalesced) move
         if (p.fromEl) {
           if (!p.moved) return;                                                        // a click on a chip: the chip's own handler does the rest
           const eat = (c) => { c.stopPropagation(); c.preventDefault(); };                                // a drag that began on a chip is not a click on it
@@ -27479,6 +27519,7 @@ window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10
     const { createBook } = __mod["ui/book.js"];
     const { createHelp } = __mod["ui/help.js"];
     const { createSaveBrowser } = __mod["ui/savebrowser.js"];
+    const { createEndCard } = __mod["ui/endcard.js"];
     const { btn } = __mod["ui/kit.js"];
     const { concernPlaces } = __mod["ui/concernplace.js"];
     const { pickAt } = __mod["ui/pick.js"];
@@ -27698,6 +27739,7 @@ window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10
     const help = createHelp($("helpOverlay"), game);
     const settings = createSettings($("settingsOverlay"), game);
     const saveSheet = createSaveBrowser($("savesOverlay"), game);
+    const endCard = createEndCard($("endCard"), game);
     const tip = $("tip");
     document.addEventListener("click", (e) => { const b = e.target.closest && e.target.closest("button"); if (b && !(b instanceof HTMLInputElement)) b.blur(); });   // so Space pauses, not "presses" the last button
     
@@ -27792,7 +27834,7 @@ window.__BUILD = {"stage":"9.33","commit":"94513d9","dirty":true,"time":"2026-10
         panelT = now;
         bar.update({ tick: sim.tick });
         possessCtl.update();
-        revealer.update(); levels.update(); guide.update(); village.update(); bps.update(); expd.update(); cchoice.update(); buildbar.update(); inspector.update(); notables.update(); orderbar.update(); digest.update(); book.update(); help.update(); settings.update(); saveSheet.update(); pointers.update();
+        revealer.update(); levels.update(); guide.update(); village.update(); bps.update(); expd.update(); cchoice.update(); buildbar.update(); inspector.update(); notables.update(); orderbar.update(); digest.update(); book.update(); help.update(); settings.update(); saveSheet.update(); endCard.update(); pointers.update();
         slots.popover.style.display = ui.mode === "build" && ui.bpOpen && game.unlocked("blueprints") ? "block" : "none";
         slots.dock.style.display = game.possessed() ? "none" : "flex";
         buildBtn.classList.toggle("on", game.ui.mode === "build");

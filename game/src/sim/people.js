@@ -183,7 +183,7 @@ function graveSpot(sim) {
   return null;
 }
 
-const when = (t) => { if (t < 0) return "before the landing"; const d = dateOf(t); return "year " + d.year + " day " + d.day; };
+const when = (t) => { const d = dateOf(t); return "year " + d.year + " day " + d.day; };
 /** The words on the stone: names, dates, and the best thing the chronicle says about them (a title, else the most notable entry). */
 export function inscription(sim, v, cause) {
   let deed = "";
@@ -193,7 +193,7 @@ export function inscription(sim, v, cause) {
     const pick = es.sort((a, b) => b.sev - a.sev || b.id - a.id)[0];
     if (pick) deed = pick.text.length > 90 ? pick.text.slice(0, 87) + "..." : pick.text;
   }
-  return v.name + ", from " + when(v.born) + " to " + when(sim.tick) + ", died of " + cause + "." + (deed ? " " + deed : "");
+  return v.name + ", " + (v.born < 0 ? "a founder" : "born " + when(v.born)) + ", died " + when(sim.tick) + " of " + cause + "." + (deed ? " " + deed : "");
 }
 
 /** Called by population.kill after the death is written, before the body goes. */

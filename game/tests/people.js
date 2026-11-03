@@ -159,7 +159,7 @@ let friendSim;
   assert.equal(sim.ents.ofKind("grave").length, graves0 + 1, "a grave marker was placed");
   const gr = sim.ents.ofKind("grave").at(-1);
   assert.ok(Math.abs(gr.x - sim.stock.x1) < 25 && sim.world.standZ(gr.x, gr.y) === gr.z, "near the camp, on standable ground: " + gr.x + "," + gr.y);
-  assert.ok(gr.ins.includes(d.name) && /Thornback slayer/.test(gr.ins) && /died of old age/.test(gr.ins), "inscription: " + gr.ins);
+  assert.ok(gr.ins.includes(d.name) && /Thornback slayer/.test(gr.ins) && /died year \d+ day \d+ of old age/.test(gr.ins), "inscription: " + gr.ins);
   const owners = heir.hl.h.length;
   assert.ok(heir.hl && heir.hl.n === nm && heir.hl.h.length === 2 && heir.hl.h[0].n === d.name, "the heirloom passed to the partner with its history: " + JSON.stringify(heir.hl));
   assert.ok(sim.chron.entries.some(e => e.text.includes(nm) && /gave/.test(e.text)), "and the chronicle says so");

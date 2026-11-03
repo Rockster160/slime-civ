@@ -126,6 +126,7 @@ export function setupInput(game, canvas) {
   window.addEventListener("mouseup", (e) => {
     const p = ui.press; ui.press = null; canvas.classList.remove("dragging");
     if (!p || p.btn !== e.button) { ui.box = null; return; }
+    if (p.btn === 0 && Math.hypot(e.clientX - p.x, e.clientY - p.y) > 4) { p.moved = true; ui.box = { x0: p.x, y0: p.y, x1: e.clientX, y1: e.clientY }; }      // a fast drag: the box ends where the button came up, not at the last (coalesced) move
     if (p.fromEl) {
       if (!p.moved) return;                                                        // a click on a chip: the chip's own handler does the rest
       const eat = (c) => { c.stopPropagation(); c.preventDefault(); };                                // a drag that began on a chip is not a click on it

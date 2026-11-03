@@ -1,14 +1,14 @@
 // Founding, birth and death (GDD §08, §11.16, §18). Pairing is slime-village's
 // simple "want a child, find a partner" (game.js bearChild + breed cooldown),
 // weighted by food runway and free beds and never hard-gated.
-import { DAY, DUR_DAY } from "./clock.js";
+import { DAY, DUR_DAY, dateOf } from "./clock.js";
 import { clamp } from "./util.js";
 import { seasonIdx } from "./season.js";
 import { cancelAction } from "./jobstate.js";
 import { newSkills, SKILLS } from "./skills.js";
 import { survey, dropLoose, storeInZone } from "./items.js";
 import { village } from "./board.js";
-import { log } from "./chronicle.js";
+import { log, once } from "./chronicle.js";
 import { afterDeath } from "./knowledge.js";
 import { restricted } from "./lair.js";
 import { initPerson, kinship, grandparents, weakChance, makeWeak, pickPartner, onDeath } from "./people.js";
@@ -176,6 +176,10 @@ export function kill(sim, v, cause) {
   sim.ents.remove(v.id);
   sim.cache.iv++;
   afterDeath(sim, v);                       // the last holder of a craft dying loses it (R11)
+  if (!sim.ents.ofKind("villager").length) {                                          // the last slime: one entry, once (the UI shows the end card from it)
+    const rs = Object.values(sim.chron.recs);
+    once(sim, "end", "END", "The last slime has passed away.", [], { years: dateOf(sim.tick).year, gens: rs.reduce((m, r) => Math.max(m, r.gen), 1), born: rs.length }, 3);
+  }
 }
 
 /** The "why" after a death, in plain words. */

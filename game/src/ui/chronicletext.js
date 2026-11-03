@@ -5,7 +5,7 @@ import { ERA_RANK } from "../sim/phenomena.js";
 import { eraOf } from "../sim/knowledge.js";
 import { ageDays } from "../sim/villager.js";
 
-const when = (t) => { if (t < 0) return "before the landing"; const d = dateOf(t); return "Year " + d.year + ", day " + d.day + " (" + SEASON_NAMES[Math.min(3, Math.floor((d.day - 1) / DAYS_PER_SEASON))] + ")"; };
+const when = (t) => { if (t < 0) return "a founder"; const d = dateOf(t); return "Year " + d.year + ", day " + d.day + " (" + SEASON_NAMES[Math.min(3, Math.floor((d.day - 1) / DAYS_PER_SEASON))] + ")"; };
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 const FIRST_KINDS = new Set(["BUILT_FIRST", "DISCOVERY", "LOSS"]);
 
